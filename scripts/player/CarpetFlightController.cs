@@ -15,10 +15,14 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float GroundProbeHeight { get; set; } = 24.0f;
     [Export] public float GroundProbeDepth { get; set; } = 96.0f;
     [Export] public float FireCooldownSeconds { get; set; } = 0.25f;
+    [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
     [Export] public int PrimarySpellManaCost { get; set; } = 5;
 
     public int Mana { get; private set; } = 40;
     public int Health { get; private set; } = 100;
+    public float Speed => Velocity.Length();
+    public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : GlobalPosition.Y - _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z);
+    public bool IsInvulnerable => _damageInvulnerabilityTimer > 0.0f;
     public string CameraMode => _firstPersonCamera ? "First Person" : "Chase";
     public string StatusMessage { get; private set; } = "Collect mana and destroy the red monsters.";
 
@@ -31,6 +35,7 @@ public partial class CarpetFlightController : CharacterBody3D
     private float _pitch = -0.2f;
     private float _fireCooldown;
     private float _feedbackTimer;
+    private float _damageInvulnerabilityTimer;
     private bool _firstPersonCamera;
 
     public override void _Ready()
@@ -84,6 +89,7 @@ public partial class CarpetFlightController : CharacterBody3D
         float deltaF = (float)delta;
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
         _feedbackTimer = Mathf.Max(0.0f, _feedbackTimer - deltaF);
+        _damageInvulnerabilityTimer = Mathf.Max(0.0f, _damageInvulnerabilityTimer - deltaF);
 
         Rotation = new Vector3(0.0f, _yaw, 0.0f);
         _cameraPivot.Rotation = new Vector3(_pitch, 0.0f, 0.0f);
@@ -124,9 +130,15 @@ public partial class CarpetFlightController : CharacterBody3D
 
     public void ApplyDamage(int amount)
     {
+        if (IsInvulnerable || Health == 0)
+        {
+            return;
+        }
+
         Health = Mathf.Max(0, Health - amount);
         StatusMessage = $"Hit for {amount}";
         _feedbackTimer = 0.35f;
+        _damageInvulnerabilityTimer = DamageInvulnerabilitySeconds;
         _carpetMaterial.AlbedoColor = new Color(1.0f, 0.25f, 0.2f);
 
         if (Health == 0)
@@ -209,7 +221,12 @@ public partial class CarpetFlightController : CharacterBody3D
             _camera.LookAt(_cameraPivot.GlobalPosition, Vector3.Up);
         }
 
-        if (_feedbackTimer <= 0.0f)
+        if (IsInvulnerable)
+        {
+            float pulse = 0.5f + Mathf.Sin(Time.GetTicksMsec() * 0.02f) * 0.5f;
+            _carpetMaterial.AlbedoColor = new Color(1.0f, Mathf.Lerp(0.25f, 0.8f, pulse), Mathf.Lerp(0.2f, 0.95f, pulse));
+        }
+        else if (_feedbackTimer <= 0.0f)
         {
             _carpetMaterial.AlbedoColor = _carpetMaterial.AlbedoColor.Lerp(new Color(0.38f, 0.16f, 0.82f), 10.0f * delta);
         }

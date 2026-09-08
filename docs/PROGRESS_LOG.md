@@ -29,6 +29,9 @@
 - Fixed terrain trapping by clamping flight clearance directly against the heightmap surface.
 - Fixed impact burst and mana drop placement warnings by setting `GlobalPosition` after nodes enter the tree.
 - Fixed terrain visibility by removing transparent water overdraw and using vertex-colored terrain.
+- Added speed and terrain-clearance debug readout to the HUD.
+- Added player damage invulnerability after hits, including HUD state and carpet flash feedback.
+- Added a ranged monster attack with windup telegraph and enemy projectile damage.
 - Verified `dotnet build MagicCarpetRemastered.sln` after each implementation pass.
 
 ### Current Prototype Controls
@@ -47,7 +50,7 @@
 - Godot runtime is tested manually by the user; CLI runtime verification is blocked because `godot` is not on `PATH`.
 - Terrain is procedural but not yet deformable.
 - Flight feel is first-pass and needs tuning from runtime playtesting.
-- Enemies fly directly at the player with no steering, avoidance, roles, or ranged behavior.
+- Enemies fly directly at the player with no steering, avoidance, or distinct roles.
 - Spell system is still one hardcoded primary projectile.
 - Mana loop exists only as pickups, spell costs, and enemy death drops.
 - No castle, mana storage, collector, territory, or enemy wizard systems yet.
@@ -56,8 +59,7 @@
 ### Next Recommended Work
 
 - Tune flight feel in Godot based on playtest feedback.
-- Add speed/altitude debug readout to HUD.
-- Add player damage invulnerability and clearer hit feedback.
 - Add enemy death/impact VFX polish.
+- Add basic audio placeholders for flight, pickup, hit, and spell events.
 - Add first terrain deformation experiment with projectile craters.
 - Add a simple castle placeholder and mana storage target.

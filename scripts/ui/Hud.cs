@@ -27,6 +27,7 @@ public partial class Hud : CanvasLayer
             return;
         }
 
-        _label.Text = $"Health: {_player.Health}   Mana: {_player.Mana}   Camera: {_player.CameraMode}\n{_player.StatusMessage}\nDestroy monsters to recover mana. WASD fly  Space/C ascend/descend  LMB fire ({_player.PrimarySpellManaCost} mana)  V camera  R restart  Esc mouse";
+        string damageState = _player.IsInvulnerable ? "   Invulnerable" : string.Empty;
+        _label.Text = $"Health: {_player.Health}   Mana: {_player.Mana}   Camera: {_player.CameraMode}{damageState}\nSpeed: {_player.Speed:0.0}   Clearance: {_player.AltitudeAboveTerrain:0.0}\n{_player.StatusMessage}\nDestroy monsters to recover mana. WASD fly  Space/C ascend/descend  LMB fire ({_player.PrimarySpellManaCost} mana)  V camera  R restart  Esc mouse";
     }
 }
