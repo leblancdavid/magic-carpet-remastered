@@ -34,6 +34,7 @@
 - Added a ranged monster attack with windup telegraph and enemy projectile damage.
 - Improved combat VFX with configurable impact burst colors, purple enemy projectile impacts, and a larger enemy death burst.
 - Added code-generated placeholder audio for flight hum, spell casting, mana pickup, and hit events.
+- Tuned first-pass flight feel with higher top speed, capped acceleration/deceleration, velocity-based banking, speed-responsive chase camera distance/FOV, and slightly higher terrain clearance.
 - Added `docs/LEARNINGS.md` to preserve durable implementation, playtest, and research lessons.
 - Updated `AGENTS.md` to require documenting reusable lessons in the appropriate `docs/` file.
 - Verified `dotnet build MagicCarpetRemastered.sln` after each implementation pass.
@@ -53,7 +54,7 @@
 
 - Godot runtime is tested manually by the user; CLI runtime verification is blocked because `godot` is not on `PATH`.
 - Terrain is procedural but not yet deformable.
-- Flight feel is first-pass and needs tuning from runtime playtesting.
+- Flight feel has a first tuning pass and needs runtime playtest validation.
 - Enemies fly directly at the player with no steering, avoidance, or distinct roles.
 - Spell system is still one hardcoded primary projectile.
 - Mana loop exists only as pickups, spell costs, and enemy death drops.
@@ -62,6 +63,6 @@
 
 ### Next Recommended Work
 
-- Tune flight feel in Godot based on playtest feedback.
+- Playtest Phase 1 flight/combat in Godot and capture tuning feedback.
 - Add first terrain deformation experiment with projectile craters.
 - Add a simple castle placeholder and mana storage target.

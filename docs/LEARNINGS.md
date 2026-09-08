@@ -18,6 +18,9 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - Godot scene timing matters for generated nodes. For runtime-created VFX, pickups, and projectiles, add the node to the scene tree before setting `GlobalPosition` when global transforms are required.
 - Transparent water over the terrain can hide or flatten terrain readability in the prototype. Opaque/darker water with vertex-colored terrain made the island easier to read.
 - The HUD is currently the fastest tuning surface. Speed, terrain clearance, camera mode, mana, health, status, and invulnerability state give immediate playtest feedback without extra tooling.
+- Flight motion should use capped acceleration/deceleration rather than uncapped interpolation weights. This avoids frame-rate-sensitive overshoot and makes tuning values easier to reason about.
+- Carpet banking reads better when it follows actual local velocity instead of raw input. The visual tilt then reflects drift and deceleration, not just key presses.
+- Speed-responsive camera distance and FOV add useful motion feedback before bespoke art or camera effects exist.
 - Short post-hit invulnerability is necessary once enemies have contact or projectile damage. Without it, overlapping enemies can drain health too quickly and make damage feel unfair.
 - Ranged enemy pressure improves the arena loop even before sophisticated AI. A windup telegraph plus slow projectile gives the player something to dodge while preserving simple enemy movement.
 - VFX should communicate ownership and outcome. Orange player firebolts, purple enemy projectiles, and larger red enemy death bursts make combat events easier to parse.

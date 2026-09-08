@@ -6,13 +6,15 @@ namespace MagicCarpetRemastered.Scripts.Player;
 
 public partial class CarpetFlightController : CharacterBody3D
 {
-    [Export] public float MoveSpeed { get; set; } = 18.0f;
-    [Export] public float VerticalSpeed { get; set; } = 10.0f;
-    [Export] public float Acceleration { get; set; } = 8.0f;
-    [Export] public float Drag { get; set; } = 4.5f;
-    [Export] public float BankDegrees { get; set; } = 18.0f;
+    [Export] public float MoveSpeed { get; set; } = 24.0f;
+    [Export] public float VerticalSpeed { get; set; } = 11.0f;
+    [Export] public float Acceleration { get; set; } = 28.0f;
+    [Export] public float Drag { get; set; } = 9.0f;
+    [Export] public float BankDegrees { get; set; } = 24.0f;
+    [Export] public float CameraSmoothing { get; set; } = 10.0f;
+    [Export] public float BankSmoothing { get; set; } = 8.0f;
     [Export] public float MouseSensitivity { get; set; } = 0.0025f;
-    [Export] public float MinimumAltitude { get; set; } = 1.5f;
+    [Export] public float MinimumAltitude { get; set; } = 2.0f;
     [Export] public float GroundProbeHeight { get; set; } = 24.0f;
     [Export] public float GroundProbeDepth { get; set; } = 96.0f;
     [Export] public float FireCooldownSeconds { get; set; } = 0.25f;
@@ -101,17 +103,18 @@ public partial class CarpetFlightController : CharacterBody3D
         localInput.Z = Input.GetActionStrength("move_back") - Input.GetActionStrength("move_forward");
         localInput.Y = Input.GetActionStrength("ascend") - Input.GetActionStrength("descend");
 
-        Vector3 desiredVelocity = Velocity.MoveToward(Vector3.Zero, Drag * deltaF);
-        if (localInput.LengthSquared() > 0.001f)
+        Vector3 horizontalInput = new(localInput.X, 0.0f, localInput.Z);
+        if (horizontalInput.LengthSquared() > 1.0f)
         {
-            localInput = localInput.Normalized();
-            Vector3 horizontal = (GlobalBasis * new Vector3(localInput.X, 0.0f, localInput.Z)) * MoveSpeed;
-            desiredVelocity = new Vector3(horizontal.X, localInput.Y * VerticalSpeed, horizontal.Z);
+            horizontalInput = horizontalInput.Normalized();
         }
 
-        Velocity = Velocity.Lerp(desiredVelocity, Acceleration * deltaF);
+        Vector3 horizontal = (GlobalBasis * horizontalInput) * MoveSpeed;
+        Vector3 desiredVelocity = new(horizontal.X, localInput.Y * VerticalSpeed, horizontal.Z);
+        bool isAccelerating = horizontalInput.LengthSquared() > 0.001f || Mathf.Abs(localInput.Y) > 0.001f;
+        Velocity = Velocity.MoveToward(desiredVelocity, (isAccelerating ? Acceleration : Drag) * deltaF);
         GameAudio.Instance?.SetFlightIntensity(Mathf.Clamp(Velocity.Length() / MoveSpeed, 0.0f, 1.0f));
-        UpdateCarpetBank(localInput, deltaF);
+        UpdateCarpetBank(deltaF);
         MoveAndSlide();
 
         ClampAboveGround();
@@ -214,9 +217,11 @@ public partial class CarpetFlightController : CharacterBody3D
     {
         Vector3 targetPosition = _firstPersonCamera
             ? new Vector3(0.0f, 0.25f, -0.45f)
-            : new Vector3(0.0f, 2.0f, 8.0f);
+            : new Vector3(0.0f, 2.1f, Mathf.Lerp(7.2f, 9.4f, Mathf.Clamp(Speed / MoveSpeed, 0.0f, 1.0f)));
 
-        _camera.Position = _camera.Position.Lerp(targetPosition, 12.0f * delta);
+        float smoothingWeight = Mathf.Clamp(CameraSmoothing * delta, 0.0f, 1.0f);
+        _camera.Position = _camera.Position.Lerp(targetPosition, smoothingWeight);
+        _camera.Fov = Mathf.Lerp(_camera.Fov, Mathf.Lerp(74.0f, 82.0f, Mathf.Clamp(Speed / MoveSpeed, 0.0f, 1.0f)), smoothingWeight);
         if (_firstPersonCamera)
         {
             _camera.Rotation = Vector3.Zero;
@@ -233,18 +238,20 @@ public partial class CarpetFlightController : CharacterBody3D
         }
         else if (_feedbackTimer <= 0.0f)
         {
-            _carpetMaterial.AlbedoColor = _carpetMaterial.AlbedoColor.Lerp(new Color(0.38f, 0.16f, 0.82f), 10.0f * delta);
+            _carpetMaterial.AlbedoColor = _carpetMaterial.AlbedoColor.Lerp(new Color(0.38f, 0.16f, 0.82f), Mathf.Clamp(10.0f * delta, 0.0f, 1.0f));
         }
     }
 
-    private void UpdateCarpetBank(Vector3 localInput, float delta)
+    private void UpdateCarpetBank(float delta)
     {
-        float targetRoll = Mathf.DegToRad(-localInput.X * BankDegrees);
-        float targetPitch = Mathf.DegToRad(localInput.Z * 7.0f);
+        Vector3 localVelocity = GlobalBasis.Inverse() * Velocity;
+        float targetRoll = Mathf.DegToRad(-Mathf.Clamp(localVelocity.X / MoveSpeed, -1.0f, 1.0f) * BankDegrees);
+        float targetPitch = Mathf.DegToRad(Mathf.Clamp(localVelocity.Z / MoveSpeed, -1.0f, 1.0f) * 9.0f);
+        float smoothingWeight = Mathf.Clamp(BankSmoothing * delta, 0.0f, 1.0f);
         _carpetVisual.Rotation = new Vector3(
-            Mathf.LerpAngle(_carpetVisual.Rotation.X, targetPitch, 8.0f * delta),
+            Mathf.LerpAngle(_carpetVisual.Rotation.X, targetPitch, smoothingWeight),
             0.0f,
-            Mathf.LerpAngle(_carpetVisual.Rotation.Z, targetRoll, 8.0f * delta));
+            Mathf.LerpAngle(_carpetVisual.Rotation.Z, targetRoll, smoothingWeight));
     }
 
     private void AddCarpetVisual()
