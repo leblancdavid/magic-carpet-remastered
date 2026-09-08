@@ -10,15 +10,69 @@ public partial class HeightmapArena : Node3D
     [Export] public float HeightScale { get; set; } = 9.0f;
     [Export] public float WaterHeight { get; set; } = -0.8f;
 
+    private float[,] _heights = null!;
+    private MeshInstance3D? _terrainMesh;
+    private StaticBody3D? _terrainBody;
+
     public override void _Ready()
     {
         AddToGroup("heightmap_arena");
+        GenerateHeightmap();
         BuildTerrain();
         BuildWater();
     }
 
+    public void ApplyCrater(Vector3 worldPosition, float radius = 5.0f, float depth = 2.6f)
+    {
+        ApplyRadialDeformation(worldPosition, radius, -Mathf.Abs(depth));
+    }
+
+    public void RaiseTerrain(Vector3 worldPosition, float radius, float amount)
+    {
+        ApplyRadialDeformation(worldPosition, radius, Mathf.Abs(amount));
+    }
+
+    public void LowerTerrain(Vector3 worldPosition, float radius, float amount)
+    {
+        ApplyRadialDeformation(worldPosition, radius, -Mathf.Abs(amount));
+    }
+
+    public void FlattenTerrain(Vector3 worldPosition, float radius, float targetHeight)
+    {
+        if (_heights == null)
+        {
+            GenerateHeightmap();
+        }
+
+        bool changed = false;
+        for (int z = 0; z <= CellsPerSide; z++)
+        {
+            for (int x = 0; x <= CellsPerSide; x++)
+            {
+                Vector3 vertex = PointAt(x, z);
+                float distance = new Vector2(vertex.X - worldPosition.X, vertex.Z - worldPosition.Z).Length();
+                if (distance > radius)
+                {
+                    continue;
+                }
+
+                float weight = SmoothFalloff(distance / radius);
+                _heights![x, z] = Mathf.Lerp(_heights[x, z], targetHeight, weight);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            RebuildTerrain();
+        }
+    }
+
     private void BuildTerrain()
     {
+        _terrainMesh?.QueueFree();
+        _terrainBody?.QueueFree();
+
         var surface = new SurfaceTool();
         surface.Begin(Mesh.PrimitiveType.Triangles);
 
@@ -41,26 +95,27 @@ public partial class HeightmapArena : Node3D
         surface.GenerateNormals();
         var mesh = surface.Commit();
 
-        var terrainMesh = new MeshInstance3D
+        _terrainMesh = new MeshInstance3D
         {
             Name = "TerrainMesh",
             Mesh = mesh
         };
-        terrainMesh.MaterialOverride = new StandardMaterial3D
+        _terrainMesh.MaterialOverride = new StandardMaterial3D
         {
             AlbedoColor = new Color(0.24f, 0.34f, 0.18f),
             Roughness = 1.0f,
             CullMode = BaseMaterial3D.CullModeEnum.Disabled,
             VertexColorUseAsAlbedo = true
         };
-        AddChild(terrainMesh);
+        AddChild(_terrainMesh);
 
-        var terrainBody = new StaticBody3D { Name = "TerrainCollision" };
-        terrainBody.AddChild(new CollisionShape3D
+        _terrainBody = new StaticBody3D { Name = "TerrainCollision" };
+        _terrainBody.AddToGroup("deformable_terrain");
+        _terrainBody.AddChild(new CollisionShape3D
         {
             Shape = new ConcavePolygonShape3D { Data = collisionTriangles.ToArray() }
         });
-        AddChild(terrainBody);
+        AddChild(_terrainBody);
     }
 
     private void BuildWater()
@@ -85,10 +140,47 @@ public partial class HeightmapArena : Node3D
         float half = CellsPerSide * CellSize * 0.5f;
         float worldX = x * CellSize - half;
         float worldZ = z * CellSize - half;
-        return new Vector3(worldX, HeightAt(worldX, worldZ), worldZ);
+        return new Vector3(worldX, _heights[x, z], worldZ);
     }
 
     public float HeightAt(float x, float z)
+    {
+        if (_heights == null)
+        {
+            GenerateHeightmap();
+        }
+
+        float half = CellsPerSide * CellSize * 0.5f;
+        float gridX = Mathf.Clamp((x + half) / CellSize, 0.0f, CellsPerSide);
+        float gridZ = Mathf.Clamp((z + half) / CellSize, 0.0f, CellsPerSide);
+        int x0 = Mathf.FloorToInt(gridX);
+        int z0 = Mathf.FloorToInt(gridZ);
+        int x1 = Mathf.Min(x0 + 1, CellsPerSide);
+        int z1 = Mathf.Min(z0 + 1, CellsPerSide);
+        float tx = gridX - x0;
+        float tz = gridZ - z0;
+
+        float north = Mathf.Lerp(_heights![x0, z0], _heights[x1, z0], tx);
+        float south = Mathf.Lerp(_heights[x0, z1], _heights[x1, z1], tx);
+        return Mathf.Lerp(north, south, tz);
+    }
+
+    private void GenerateHeightmap()
+    {
+        _heights = new float[CellsPerSide + 1, CellsPerSide + 1];
+        for (int z = 0; z <= CellsPerSide; z++)
+        {
+            for (int x = 0; x <= CellsPerSide; x++)
+            {
+                float half = CellsPerSide * CellSize * 0.5f;
+                float worldX = x * CellSize - half;
+                float worldZ = z * CellSize - half;
+                _heights[x, z] = ProceduralHeightAt(worldX, worldZ);
+            }
+        }
+    }
+
+    private float ProceduralHeightAt(float x, float z)
     {
         float halfWidth = CellsPerSide * CellSize * 0.5f;
         float radial = new Vector2(x, z).Length() / halfWidth;
@@ -96,6 +188,48 @@ public partial class HeightmapArena : Node3D
         float rolling = Mathf.Sin(x * 0.095f) * 0.45f + Mathf.Cos(z * 0.085f) * 0.4f;
         float ridges = Mathf.Sin((x + z) * 0.045f) * 0.7f + Mathf.Cos((x - z) * 0.07f) * 0.35f;
         return WaterHeight + islandMask * (HeightScale + rolling * 2.5f + ridges * 1.75f);
+    }
+
+    private void ApplyRadialDeformation(Vector3 worldPosition, float radius, float amount)
+    {
+        if (_heights == null)
+        {
+            GenerateHeightmap();
+        }
+
+        bool changed = false;
+        for (int z = 0; z <= CellsPerSide; z++)
+        {
+            for (int x = 0; x <= CellsPerSide; x++)
+            {
+                Vector3 vertex = PointAt(x, z);
+                float distance = new Vector2(vertex.X - worldPosition.X, vertex.Z - worldPosition.Z).Length();
+                if (distance > radius)
+                {
+                    continue;
+                }
+
+                float weight = SmoothFalloff(distance / radius);
+                _heights![x, z] = Mathf.Max(WaterHeight - 2.0f, _heights[x, z] + amount * weight);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            RebuildTerrain();
+        }
+    }
+
+    private void RebuildTerrain()
+    {
+        BuildTerrain();
+    }
+
+    private static float SmoothFalloff(float normalizedDistance)
+    {
+        float t = Mathf.Clamp(normalizedDistance, 0.0f, 1.0f);
+        return 1.0f - t * t * (3.0f - 2.0f * t);
     }
 
     private static void AddTriangle(SurfaceTool surface, List<Vector3> collisionTriangles, Vector3 a, Vector3 b, Vector3 c)

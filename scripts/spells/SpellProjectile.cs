@@ -1,6 +1,7 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Player;
+using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Spells;
 
@@ -8,6 +9,8 @@ public partial class SpellProjectile : Area3D
 {
     [Export] public float Speed { get; set; } = 42.0f;
     [Export] public float LifetimeSeconds { get; set; } = 2.0f;
+    [Export] public float TerrainCraterRadius { get; set; } = 4.5f;
+    [Export] public float TerrainCraterDepth { get; set; } = 2.2f;
     [Export] public int Damage { get; set; } = 25;
 
     private Vector3 _direction = Vector3.Forward;
@@ -69,6 +72,11 @@ public partial class SpellProjectile : Area3D
         if (body is SimpleMonster monster)
         {
             monster.ApplyDamage(Damage);
+        }
+
+        if (body.IsInGroup("deformable_terrain") && GetTree().GetFirstNodeInGroup("heightmap_arena") is HeightmapArena arena)
+        {
+            arena.ApplyCrater(GlobalPosition, TerrainCraterRadius, TerrainCraterDepth);
         }
 
         QueueFree();

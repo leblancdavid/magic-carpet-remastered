@@ -31,3 +31,8 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - `dotnet build MagicCarpetRemastered.sln` verifies C# compilation quickly, but it does not prove the Godot scene runs correctly.
 - CLI runtime verification is currently blocked because `godot` is not on `PATH`; runtime testing depends on opening the project in Godot manually.
 - The prototype still favors direct systems over reusable frameworks. Keep new systems small until flight/combat feel is proven.
+
+## Phase 2 Terrain Lessons
+
+- Deformable terrain needs one authoritative stored height grid. Mesh vertices, collision triangles, and `HeightAt()` clearance queries should all read from that grid so visual terrain, physics, and flight safety stay in sync after edits.
+- Full mesh/collision rebuilds are acceptable for the first terrain spell test, but repeated or larger deformations will need chunking, throttling, or deferred rebuilds before they are production-safe.

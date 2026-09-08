@@ -18,8 +18,13 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float GroundProbeHeight { get; set; } = 24.0f;
     [Export] public float GroundProbeDepth { get; set; } = 96.0f;
     [Export] public float FireCooldownSeconds { get; set; } = 0.25f;
+    [Export] public float TerrainSpellCooldownSeconds { get; set; } = 0.75f;
+    [Export] public float TerrainSpellRange { get; set; } = 90.0f;
+    [Export] public float TerrainSpellRadius { get; set; } = 7.0f;
+    [Export] public float TerrainSpellDepth { get; set; } = 3.0f;
     [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
     [Export] public int PrimarySpellManaCost { get; set; } = 5;
+    [Export] public int TerrainSpellManaCost { get; set; } = 12;
 
     public int Mana { get; private set; } = 40;
     public int Health { get; private set; } = 100;
@@ -37,6 +42,7 @@ public partial class CarpetFlightController : CharacterBody3D
     private float _yaw;
     private float _pitch = -0.2f;
     private float _fireCooldown;
+    private float _terrainSpellCooldown;
     private float _feedbackTimer;
     private float _damageInvulnerabilityTimer;
     private bool _firstPersonCamera;
@@ -91,6 +97,7 @@ public partial class CarpetFlightController : CharacterBody3D
     {
         float deltaF = (float)delta;
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
+        _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
         _feedbackTimer = Mathf.Max(0.0f, _feedbackTimer - deltaF);
         _damageInvulnerabilityTimer = Mathf.Max(0.0f, _damageInvulnerabilityTimer - deltaF);
 
@@ -123,6 +130,12 @@ public partial class CarpetFlightController : CharacterBody3D
         {
             _fireCooldown = FireCooldownSeconds;
             CastPrimarySpell();
+        }
+
+        if (Input.IsActionPressed("cast_terrain") && _terrainSpellCooldown <= 0.0f)
+        {
+            _terrainSpellCooldown = TerrainSpellCooldownSeconds;
+            CastTerrainSpell();
         }
     }
 
@@ -174,6 +187,56 @@ public partial class CarpetFlightController : CharacterBody3D
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
         projectile.GlobalPosition = _camera.GlobalPosition + direction * 1.5f;
         projectile.Launch(direction, this);
+    }
+
+    private void CastTerrainSpell()
+    {
+        if (Mana < TerrainSpellManaCost)
+        {
+            StatusMessage = "Not enough mana for crater.";
+            _feedbackTimer = 0.8f;
+            return;
+        }
+
+        _arena ??= GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        if (_arena == null)
+        {
+            return;
+        }
+
+        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
+        Vector3 origin = _camera.GlobalPosition;
+        Vector3 target = origin + direction * TerrainSpellRange;
+        var query = PhysicsRayQueryParameters3D.Create(origin, target);
+        query.Exclude = new Godot.Collections.Array<Rid> { GetRid() };
+        var result = GetWorld3D().DirectSpaceState.IntersectRay(query);
+        if (result.Count == 0 || !result.ContainsKey("position") || result["collider"].As<Node>() is not Node collider || !collider.IsInGroup("deformable_terrain"))
+        {
+            StatusMessage = "Aim at terrain to carve it.";
+            _feedbackTimer = 0.8f;
+            return;
+        }
+
+        Mana -= TerrainSpellManaCost;
+        Vector3 hitPosition = (Vector3)result["position"];
+        _arena.ApplyCrater(hitPosition, TerrainSpellRadius, TerrainSpellDepth);
+        SpawnTerrainSpellBurst(hitPosition);
+        StatusMessage = "Terrain crater";
+        _feedbackTimer = 0.5f;
+        GameAudio.Instance?.PlaySpellCast();
+    }
+
+    private void SpawnTerrainSpellBurst(Vector3 position)
+    {
+        var burst = new Spells.SpellImpactBurst
+        {
+            Name = "TerrainSpellBurst",
+            BurstColor = new Color(0.55f, 0.9f, 1.0f),
+            EmissionColor = new Color(0.25f, 0.75f, 1.0f),
+            EndScale = 4.0f
+        };
+        GetTree().CurrentScene.AddChild(burst);
+        burst.GlobalPosition = position;
     }
 
     private void ClampAboveGround()
