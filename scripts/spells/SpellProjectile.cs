@@ -64,11 +64,23 @@ public partial class SpellProjectile : Area3D
             return;
         }
 
+        SpawnImpactBurst();
+
         if (body is SimpleMonster monster)
         {
             monster.ApplyDamage(Damage);
         }
 
         QueueFree();
+    }
+
+    private void SpawnImpactBurst()
+    {
+        var burst = new SpellImpactBurst
+        {
+            Name = "SpellImpactBurst"
+        };
+        GetTree().CurrentScene.AddChild(burst);
+        burst.GlobalPosition = GlobalPosition;
     }
 }

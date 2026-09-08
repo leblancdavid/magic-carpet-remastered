@@ -43,3 +43,11 @@ Target structure:
 - Separate three tracks: playable prototype, original-game research, and remastered asset creation.
 - Record findings in `docs/` before encoding them as systems.
 - For original game behavior, prefer notes, screenshots, measurements, and manually authored equivalents over direct binary/data conversion.
+
+## Progress Tracking
+
+- Before starting non-trivial work, read `docs/BUILD_ROADMAP.md` and `docs/PROGRESS_LOG.md` to confirm current status and remaining work.
+- During work, keep changes aligned with the active roadmap phase unless the user explicitly redirects scope.
+- After completing work, update `docs/PROGRESS_LOG.md` with what changed, what was verified, new known gaps, and next recommended work.
+- After completing work that changes scope, phase status, or priorities, update `docs/BUILD_ROADMAP.md` as well.
+- Do not leave roadmap/progress docs stale after gameplay, architecture, tooling, or discovery changes.

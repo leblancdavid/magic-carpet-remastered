@@ -8,6 +8,16 @@ namespace MagicCarpetRemastered.Scripts.Game;
 
 public partial class Game : Node3D
 {
+    private HeightmapArena _arena = null!;
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event.IsActionPressed("restart_arena"))
+        {
+            GetTree().ReloadCurrentScene();
+        }
+    }
+
     public override void _Ready()
     {
         CreateLighting();
@@ -43,31 +53,15 @@ public partial class Game : Node3D
 
     private void CreateArena()
     {
-        var groundBody = new StaticBody3D { Name = "ArenaGround" };
-        AddChild(groundBody);
-
-        var groundMesh = new MeshInstance3D
-        {
-            Mesh = new PlaneMesh { Size = new Vector2(120.0f, 120.0f) }
-        };
-        groundMesh.MaterialOverride = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(0.21f, 0.28f, 0.16f),
-            Roughness = 1.0f
-        };
-        groundBody.AddChild(groundMesh);
-
-        groundBody.AddChild(new CollisionShape3D
-        {
-            Shape = new BoxShape3D { Size = new Vector3(120.0f, 0.2f, 120.0f) },
-            Position = new Vector3(0.0f, -0.1f, 0.0f)
-        });
+        _arena = new HeightmapArena { Name = "HeightmapArena" };
+        AddChild(_arena);
 
         for (int i = 0; i < 18; i++)
         {
             float angle = Mathf.Tau * i / 18.0f;
             float radius = 28.0f + (i % 3) * 6.0f;
-            AddPillar(new Vector3(Mathf.Cos(angle) * radius, 1.5f, Mathf.Sin(angle) * radius));
+            Vector3 position = AboveTerrain(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 1.5f);
+            AddPillar(position);
         }
     }
 
@@ -76,7 +70,7 @@ public partial class Game : Node3D
         var player = new CarpetFlightController
         {
             Name = "PlayerCarpet",
-            Position = new Vector3(0.0f, 4.0f, 14.0f)
+            Position = AboveTerrain(0.0f, 14.0f, 9.0f)
         };
         AddChild(player);
     }
@@ -85,11 +79,11 @@ public partial class Game : Node3D
     {
         Vector3[] positions =
         {
-            new(-8.0f, 3.0f, -8.0f),
-            new(8.0f, 5.0f, -10.0f),
-            new(14.0f, 4.0f, 4.0f),
-            new(-16.0f, 6.0f, 8.0f),
-            new(0.0f, 7.0f, -22.0f)
+            AboveTerrain(-8.0f, -8.0f, 4.0f),
+            AboveTerrain(8.0f, -10.0f, 5.0f),
+            AboveTerrain(14.0f, 4.0f, 4.0f),
+            AboveTerrain(-16.0f, 8.0f, 6.0f),
+            AboveTerrain(0.0f, -22.0f, 7.0f)
         };
 
         foreach (Vector3 position in positions)
@@ -106,9 +100,9 @@ public partial class Game : Node3D
     {
         Vector3[] positions =
         {
-            new(0.0f, 3.0f, -18.0f),
-            new(18.0f, 4.0f, -4.0f),
-            new(-18.0f, 5.0f, 2.0f)
+            AboveTerrain(0.0f, -18.0f, 3.0f),
+            AboveTerrain(18.0f, -4.0f, 4.0f),
+            AboveTerrain(-18.0f, 2.0f, 5.0f)
         };
 
         foreach (Vector3 position in positions)
@@ -145,5 +139,10 @@ public partial class Game : Node3D
             Roughness = 1.0f
         };
         pillar.AddChild(mesh);
+    }
+
+    private Vector3 AboveTerrain(float x, float z, float clearance)
+    {
+        return new Vector3(x, _arena.HeightAt(x, z) + clearance, z);
     }
 }

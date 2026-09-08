@@ -1,0 +1,178 @@
+# Build Roadmap
+
+## Direction
+
+Build a modern Godot C# spiritual remaster inspired by Magic Carpet. The project should capture the fantasy of fast carpet flight, spell duels, mana control, terrain deformation, monsters, and castle conflict without copying original proprietary game data or assets.
+
+## Development Tracks
+
+Keep work separated into three tracks:
+
+- playable prototype: clean Godot systems and original content
+- original-game research: observations, screenshots, measurements, and notes from `D:\Games\MagicCarpet`
+- remastered assets: original art, audio, VFX, UI, and prompts
+
+## Phase 1: Flight And Combat Feel
+
+Goal: prove the game is fun at the smallest scale.
+
+Status: in progress. A first procedural 3D arena exists with carpet flight, camera toggle, mana-gated firebolt, pickups, chasing monsters, enemy mana drops, HUD, restart, and terrain clearance.
+
+Core work:
+
+- tuned carpet flight with acceleration, drag, banking, altitude floor, and collision
+- mouse-look, first-person camera, chase camera, and camera toggle
+- one projectile spell with mana cost, cooldown, and hit feedback
+- mana pickups and a visible mana/health HUD
+- one simple chasing enemy with contact damage
+- restartable debug arena
+
+Deliverable: a replayable arena where flying, casting, collecting mana, and surviving already feels promising.
+
+Remaining Phase 1 work:
+
+- tune flight acceleration, drag, banking, camera smoothing, and altitude feel from runtime playtesting
+- add speed/altitude debug readout
+- add player damage invulnerability window
+- improve projectile and enemy death VFX
+- add one enemy attack behavior beyond contact damage
+- add basic audio placeholders for flight, pickup, hit, and spell events
+
+## Phase 2: Terrain System
+
+Goal: make terrain a tactical system, not just scenery.
+
+Status: partially started. The prototype now has a procedural heightmap island, water plane, generated mesh/collision, height-band colors, and direct height clearance. Deformation is not implemented yet.
+
+Core work:
+
+- heightmap terrain grid
+- procedural island/arena generation
+- generated terrain mesh and collision
+- water plane and altitude safety
+- deformation API for craters, raising, lowering, and flattening
+- efficient mesh/collision rebuild path
+
+Deliverable: generated terrain can be flown over and modified by spells.
+
+## Phase 3: Mana Economy
+
+Goal: make mana control the strategic loop.
+
+Status: partially started. Mana pickups, spell costs, and enemy death drops exist. Storage, routing, attraction, wells, and contesting are not implemented yet.
+
+Core work:
+
+- mana orb drops from enemies
+- mana wells or ambient sources
+- pickup attraction and collection rules
+- spell costs and storage limits
+- mana routing to player castle/storage
+- enemy contesting behavior
+
+Deliverable: fights happen because mana is valuable and contested.
+
+## Phase 4: Castle And Territory
+
+Goal: add base building, storage, and strategic conflict.
+
+Core work:
+
+- player castle site and growth stages
+- mana storage and capacity
+- damageable castle structure
+- collector balloon or spirit equivalent
+- enemy castles
+- castle attack/defense objectives
+
+Deliverable: one arena has a player castle, enemy castle, and contested mana flow.
+
+## Phase 5: Enemy Ecosystem
+
+Goal: create systemic pressure rather than only scripted waves.
+
+Core work:
+
+- flying swarm enemy
+- ground beast
+- ranged caster
+- castle attacker
+- mana thief
+- spawn rules by biome and intensity
+- local steering and target priority
+- enemy wizard with flight, spells, mana goals, retreat, and castle interaction
+
+Deliverable: monsters and enemy wizards interact around mana, castles, and player pressure.
+
+## Phase 6: Spell System
+
+Goal: make spells the player's primary expression and progression axis.
+
+Core work:
+
+- spell data model
+- quick slots and loadout
+- mana costs, cooldowns, upgrades, and unlocks
+- projectile damage spell
+- area damage spell
+- terrain deformation spell
+- summoning spell
+- shield or defense spell
+- mobility or utility spell
+
+Deliverable: a small spellbook with meaningful tactical tradeoffs.
+
+## Phase 7: Campaign Structure
+
+Goal: turn arenas into a full game loop.
+
+Core work:
+
+- island/realm level model
+- objective variants
+- biome themes
+- escalating enemy wizard setups
+- persistent unlocks and spell progression
+- win/loss flow
+
+Deliverable: several levels connected by progression and escalating challenge.
+
+## Phase 8: Presentation And Content
+
+Goal: establish the remastered identity.
+
+Core work:
+
+- original stylized fantasy terrain, skies, castles, monsters, and carpets
+- readable spell VFX and combat hit feedback
+- HUD, spell icons, menus, and accessibility options
+- original audio for spells, wind, monsters, castle activity, and music
+- polish passes for performance, controls, and onboarding
+
+Deliverable: a coherent original game that evokes the classic fantasy without relying on copied assets.
+
+## Original Game Research Backlog
+
+Use the DOS install as observation material only.
+
+Research tasks:
+
+- capture short videos of flight, combat, HUD, mana collection, castle building, and terrain deformation
+- document controls and camera behavior
+- document spell list, costs, pacing, and effects
+- document mana balloon behavior and castle growth
+- document enemy and wizard behavior
+- document level objectives and progression rhythm
+- inspect file layout with read-only/local-only tools where legally acceptable
+
+Do not commit original binaries, `.dat`, `.inf`, `.tab`, `.pal`, audio, images, movies, or direct extracted assets unless license/ownership is explicitly cleared.
+
+## Near-Term Milestones
+
+1. Flight prototype: tuned movement, camera modes, spell firing, one enemy, mana pickups.
+2. Terrain prototype: generated heightmap arena and collision.
+3. Mana loop: collect, spend, store, and contest mana.
+4. Castle loop: build, defend, attack, and route mana.
+5. Enemy wizard duel: rival AI with flight, spells, and mana goals.
+6. Vertical slice: one complete level with win/loss, HUD, audio, and polish.
+7. Campaign alpha: multiple levels, several spells, progression, and biome variety.

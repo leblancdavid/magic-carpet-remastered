@@ -72,9 +72,11 @@ The repo now contains a minimal Godot C# setup matching the prior projects:
 - `README.md`
 - `AGENTS.md`
 - `docs/`
+- `scenes/Game.tscn`
+- first-pass C# scripts for game setup, player flight, spell projectile, mana pickups, simple enemies, HUD, and procedural heightmap arena
 
-Remaining setup:
+Remaining setup and validation:
 
 - install or locate Godot .NET and put it on `PATH`, or provide its executable path
 - open/import `project.godot` once so Godot generates `.godot/` and C# metadata
-- create the first `Game.tscn` and controller scripts
+- tune the prototype in the Godot runtime based on playtesting
