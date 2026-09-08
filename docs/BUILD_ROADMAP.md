@@ -16,7 +16,7 @@ Keep work separated into three tracks:
 
 Goal: prove the game is fun at the smallest scale.
 
-Status: in progress. A first procedural 3D arena exists with carpet flight, camera toggle, mana-gated firebolt, pickups, chasing monsters with contact and ranged attacks, enemy mana drops, HUD, restart, terrain clearance, speed/altitude debug readout, and player damage invulnerability.
+Status: in progress. A first procedural 3D arena exists with carpet flight, camera toggle, mana-gated firebolt, pickups, chasing monsters with contact and ranged attacks, enemy mana drops, HUD, restart, terrain clearance, speed/altitude debug readout, player damage invulnerability, first-pass combat VFX, and placeholder audio.
 
 Core work:
 
@@ -32,8 +32,6 @@ Deliverable: a replayable arena where flying, casting, collecting mana, and surv
 Remaining Phase 1 work:
 
 - tune flight acceleration, drag, banking, camera smoothing, and altitude feel from runtime playtesting
-- improve projectile and enemy death VFX
-- add basic audio placeholders for flight, pickup, hit, and spell events
 
 ## Phase 2: Terrain System
 

@@ -32,6 +32,10 @@
 - Added speed and terrain-clearance debug readout to the HUD.
 - Added player damage invulnerability after hits, including HUD state and carpet flash feedback.
 - Added a ranged monster attack with windup telegraph and enemy projectile damage.
+- Improved combat VFX with configurable impact burst colors, purple enemy projectile impacts, and a larger enemy death burst.
+- Added code-generated placeholder audio for flight hum, spell casting, mana pickup, and hit events.
+- Added `docs/LEARNINGS.md` to preserve durable implementation, playtest, and research lessons.
+- Updated `AGENTS.md` to require documenting reusable lessons in the appropriate `docs/` file.
 - Verified `dotnet build MagicCarpetRemastered.sln` after each implementation pass.
 
 ### Current Prototype Controls
@@ -54,12 +58,10 @@
 - Spell system is still one hardcoded primary projectile.
 - Mana loop exists only as pickups, spell costs, and enemy death drops.
 - No castle, mana storage, collector, territory, or enemy wizard systems yet.
-- No original art/audio pass beyond simple procedural meshes/materials.
+- No original art/audio pass beyond simple procedural meshes/materials and synthesized placeholder tones.
 
 ### Next Recommended Work
 
 - Tune flight feel in Godot based on playtest feedback.
-- Add enemy death/impact VFX polish.
-- Add basic audio placeholders for flight, pickup, hit, and spell events.
 - Add first terrain deformation experiment with projectile craters.
 - Add a simple castle placeholder and mana storage target.

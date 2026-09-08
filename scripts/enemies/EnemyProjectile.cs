@@ -77,7 +77,9 @@ public partial class EnemyProjectile : Area3D
     {
         var burst = new SpellImpactBurst
         {
-            Name = "EnemyImpactBurst"
+            Name = "EnemyImpactBurst",
+            BurstColor = new Color(0.48f, 0.18f, 1.0f, 0.85f),
+            EmissionColor = new Color(0.35f, 0.05f, 1.0f)
         };
         GetTree().CurrentScene.AddChild(burst);
         burst.GlobalPosition = GlobalPosition;

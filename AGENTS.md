@@ -50,4 +50,5 @@ Target structure:
 - During work, keep changes aligned with the active roadmap phase unless the user explicitly redirects scope.
 - After completing work, update `docs/PROGRESS_LOG.md` with what changed, what was verified, new known gaps, and next recommended work.
 - After completing work that changes scope, phase status, or priorities, update `docs/BUILD_ROADMAP.md` as well.
+- When implementation, playtesting, research, or debugging reveals a reusable lesson, update or create the appropriate document in `docs/` so the understanding is preserved. Use `docs/LEARNINGS.md` for durable project lessons, `docs/DISCOVERY.md` for original-game observations, and the roadmap/progress docs for status and priorities.
 - Do not leave roadmap/progress docs stale after gameplay, architecture, tooling, or discovery changes.

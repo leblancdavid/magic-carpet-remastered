@@ -1,4 +1,5 @@
 using Godot;
+using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Player;
 using MagicCarpetRemastered.Scripts.Ui;
@@ -21,6 +22,7 @@ public partial class Game : Node3D
     public override void _Ready()
     {
         CreateLighting();
+        AddChild(new GameAudio { Name = "GameAudio" });
         CreateArena();
         CreatePlayer();
         CreateManaPickups();

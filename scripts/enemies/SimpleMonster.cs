@@ -1,5 +1,7 @@
 using Godot;
+using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Player;
+using MagicCarpetRemastered.Scripts.Spells;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Enemies;
@@ -63,9 +65,11 @@ public partial class SimpleMonster : CharacterBody3D
     {
         Health -= damage;
         _hitFlashTimer = 0.12f;
+        GameAudio.Instance?.PlayHit();
         if (Health <= 0)
         {
             DropMana();
+            SpawnDeathBurst();
             QueueFree();
         }
     }
@@ -85,6 +89,21 @@ public partial class SimpleMonster : CharacterBody3D
             GetTree().CurrentScene.AddChild(mana);
             mana.GlobalPosition = GlobalPosition + offset;
         }
+    }
+
+    private void SpawnDeathBurst()
+    {
+        var burst = new SpellImpactBurst
+        {
+            Name = "EnemyDeathBurst",
+            BurstColor = new Color(1.0f, 0.12f, 0.08f, 0.9f),
+            EmissionColor = new Color(1.0f, 0.05f, 0.02f),
+            DurationSeconds = 0.45f,
+            StartScale = 0.8f,
+            EndScale = 3.8f
+        };
+        GetTree().CurrentScene.AddChild(burst);
+        burst.GlobalPosition = GlobalPosition;
     }
 
     private void UpdateRangedAttack(float delta, float distanceToTarget, Vector3 directionToTarget)

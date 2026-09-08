@@ -1,4 +1,5 @@
 using Godot;
+using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Player;
@@ -109,6 +110,7 @@ public partial class CarpetFlightController : CharacterBody3D
         }
 
         Velocity = Velocity.Lerp(desiredVelocity, Acceleration * deltaF);
+        GameAudio.Instance?.SetFlightIntensity(Mathf.Clamp(Velocity.Length() / MoveSpeed, 0.0f, 1.0f));
         UpdateCarpetBank(localInput, deltaF);
         MoveAndSlide();
 
@@ -126,6 +128,7 @@ public partial class CarpetFlightController : CharacterBody3D
         Mana += amount;
         StatusMessage = $"Mana +{amount}";
         _feedbackTimer = 1.0f;
+        GameAudio.Instance?.PlayPickup();
     }
 
     public void ApplyDamage(int amount)
@@ -140,6 +143,7 @@ public partial class CarpetFlightController : CharacterBody3D
         _feedbackTimer = 0.35f;
         _damageInvulnerabilityTimer = DamageInvulnerabilitySeconds;
         _carpetMaterial.AlbedoColor = new Color(1.0f, 0.25f, 0.2f);
+        GameAudio.Instance?.PlayHit();
 
         if (Health == 0)
         {
@@ -159,6 +163,7 @@ public partial class CarpetFlightController : CharacterBody3D
         Mana -= PrimarySpellManaCost;
         StatusMessage = "Firebolt";
         _feedbackTimer = 0.35f;
+        GameAudio.Instance?.PlaySpellCast();
 
         var projectile = new Spells.SpellProjectile();
         GetTree().CurrentScene.AddChild(projectile);
