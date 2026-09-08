@@ -35,4 +35,5 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 ## Phase 2 Terrain Lessons
 
 - Deformable terrain needs one authoritative stored height grid. Mesh vertices, collision triangles, and `HeightAt()` clearance queries should all read from that grid so visual terrain, physics, and flight safety stay in sync after edits.
+- Radius-based terrain edits should convert world-space bounds into grid index bounds before touching vertices. This keeps crater and sculpt operations proportional to effect size instead of arena size.
 - Full mesh/collision rebuilds are acceptable for the first terrain spell test, but repeated or larger deformations will need chunking, throttling, or deferred rebuilds before they are production-safe.

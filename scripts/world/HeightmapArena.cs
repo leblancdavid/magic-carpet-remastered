@@ -10,6 +10,9 @@ public partial class HeightmapArena : Node3D
     [Export] public float HeightScale { get; set; } = 9.0f;
     [Export] public float WaterHeight { get; set; } = -0.8f;
 
+    public int LastEditedVertexCount { get; private set; }
+    public double LastRebuildMilliseconds { get; private set; }
+
     private float[,] _heights = null!;
     private MeshInstance3D? _terrainMesh;
     private StaticBody3D? _terrainBody;
@@ -44,10 +47,12 @@ public partial class HeightmapArena : Node3D
             GenerateHeightmap();
         }
 
-        bool changed = false;
-        for (int z = 0; z <= CellsPerSide; z++)
+        GetGridBounds(worldPosition, radius, out int minX, out int maxX, out int minZ, out int maxZ);
+
+        int editedVertices = 0;
+        for (int z = minZ; z <= maxZ; z++)
         {
-            for (int x = 0; x <= CellsPerSide; x++)
+            for (int x = minX; x <= maxX; x++)
             {
                 Vector3 vertex = PointAt(x, z);
                 float distance = new Vector2(vertex.X - worldPosition.X, vertex.Z - worldPosition.Z).Length();
@@ -58,11 +63,12 @@ public partial class HeightmapArena : Node3D
 
                 float weight = SmoothFalloff(distance / radius);
                 _heights![x, z] = Mathf.Lerp(_heights[x, z], targetHeight, weight);
-                changed = true;
+                editedVertices++;
             }
         }
 
-        if (changed)
+        LastEditedVertexCount = editedVertices;
+        if (editedVertices > 0)
         {
             RebuildTerrain();
         }
@@ -70,6 +76,8 @@ public partial class HeightmapArena : Node3D
 
     private void BuildTerrain()
     {
+        ulong rebuildStartUsec = Time.GetTicksUsec();
+
         _terrainMesh?.QueueFree();
         _terrainBody?.QueueFree();
 
@@ -116,6 +124,8 @@ public partial class HeightmapArena : Node3D
             Shape = new ConcavePolygonShape3D { Data = collisionTriangles.ToArray() }
         });
         AddChild(_terrainBody);
+
+        LastRebuildMilliseconds = (Time.GetTicksUsec() - rebuildStartUsec) / 1000.0;
     }
 
     private void BuildWater()
@@ -197,10 +207,12 @@ public partial class HeightmapArena : Node3D
             GenerateHeightmap();
         }
 
-        bool changed = false;
-        for (int z = 0; z <= CellsPerSide; z++)
+        GetGridBounds(worldPosition, radius, out int minX, out int maxX, out int minZ, out int maxZ);
+
+        int editedVertices = 0;
+        for (int z = minZ; z <= maxZ; z++)
         {
-            for (int x = 0; x <= CellsPerSide; x++)
+            for (int x = minX; x <= maxX; x++)
             {
                 Vector3 vertex = PointAt(x, z);
                 float distance = new Vector2(vertex.X - worldPosition.X, vertex.Z - worldPosition.Z).Length();
@@ -211,11 +223,12 @@ public partial class HeightmapArena : Node3D
 
                 float weight = SmoothFalloff(distance / radius);
                 _heights![x, z] = Mathf.Max(WaterHeight - 2.0f, _heights[x, z] + amount * weight);
-                changed = true;
+                editedVertices++;
             }
         }
 
-        if (changed)
+        LastEditedVertexCount = editedVertices;
+        if (editedVertices > 0)
         {
             RebuildTerrain();
         }
@@ -230,6 +243,15 @@ public partial class HeightmapArena : Node3D
     {
         float t = Mathf.Clamp(normalizedDistance, 0.0f, 1.0f);
         return 1.0f - t * t * (3.0f - 2.0f * t);
+    }
+
+    private void GetGridBounds(Vector3 worldPosition, float radius, out int minX, out int maxX, out int minZ, out int maxZ)
+    {
+        float half = CellsPerSide * CellSize * 0.5f;
+        minX = Mathf.Clamp(Mathf.FloorToInt((worldPosition.X - radius + half) / CellSize), 0, CellsPerSide);
+        maxX = Mathf.Clamp(Mathf.CeilToInt((worldPosition.X + radius + half) / CellSize), 0, CellsPerSide);
+        minZ = Mathf.Clamp(Mathf.FloorToInt((worldPosition.Z - radius + half) / CellSize), 0, CellsPerSide);
+        maxZ = Mathf.Clamp(Mathf.CeilToInt((worldPosition.Z + radius + half) / CellSize), 0, CellsPerSide);
     }
 
     private static void AddTriangle(SurfaceTool surface, List<Vector3> collisionTriangles, Vector3 a, Vector3 b, Vector3 c)
