@@ -16,6 +16,8 @@ public partial class HeightmapArena : Node3D
     private float[,] _heights = null!;
     private MeshInstance3D? _terrainMesh;
     private StaticBody3D? _terrainBody;
+    private int _pendingEditedVertexCount;
+    private bool _rebuildQueued;
 
     public override void _Ready()
     {
@@ -67,11 +69,7 @@ public partial class HeightmapArena : Node3D
             }
         }
 
-        LastEditedVertexCount = editedVertices;
-        if (editedVertices > 0)
-        {
-            RebuildTerrain();
-        }
+        RegisterTerrainEdit(editedVertices);
     }
 
     private void BuildTerrain()
@@ -227,16 +225,38 @@ public partial class HeightmapArena : Node3D
             }
         }
 
-        LastEditedVertexCount = editedVertices;
-        if (editedVertices > 0)
+        RegisterTerrainEdit(editedVertices);
+    }
+
+    private void RegisterTerrainEdit(int editedVertices)
+    {
+        if (editedVertices <= 0)
         {
-            RebuildTerrain();
+            LastEditedVertexCount = 0;
+            return;
         }
+
+        _pendingEditedVertexCount += editedVertices;
+        LastEditedVertexCount = _pendingEditedVertexCount;
+        QueueTerrainRebuild();
+    }
+
+    private void QueueTerrainRebuild()
+    {
+        if (_rebuildQueued)
+        {
+            return;
+        }
+
+        _rebuildQueued = true;
+        CallDeferred(nameof(RebuildTerrain));
     }
 
     private void RebuildTerrain()
     {
+        _rebuildQueued = false;
         BuildTerrain();
+        _pendingEditedVertexCount = 0;
     }
 
     private static float SmoothFalloff(float normalizedDistance)
