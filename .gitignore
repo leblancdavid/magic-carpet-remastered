@@ -1,0 +1,13 @@
+.godot/
+.vs/
+.vscode/
+bin/
+obj/
+*.tmp
+*.log
+**/_staging/
+
+# Keep the original DOS install outside this repo. Extracted research artifacts
+# should live under docs or tools only when they are legally safe to track.
+original-game/
+MagicCarpet/
