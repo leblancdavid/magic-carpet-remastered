@@ -10,6 +10,8 @@ namespace MagicCarpetRemastered.Scripts.Game;
 public partial class Game : Node3D
 {
     private HeightmapArena _arena = null!;
+    private CastleKeep _playerCastle = null!;
+    private CastleKeep _enemyCastle = null!;
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -25,7 +27,9 @@ public partial class Game : Node3D
         AddChild(new GameAudio { Name = "GameAudio" });
         CreateArena();
         CreateManaWell();
+        CreateCastles();
         CreatePlayer();
+        CreateCollectors();
         CreateManaPickups();
         CreateEnemies();
         AddChild(new Hud { Name = "Hud" });
@@ -86,6 +90,42 @@ public partial class Game : Node3D
             Position = AboveTerrain(3.0f, 3.0f, 1.5f)
         };
         AddChild(well);
+    }
+
+    private void CreateCastles()
+    {
+        _playerCastle = new CastleKeep
+        {
+            Name = "PlayerCastle",
+            IsPlayerCastle = true,
+            Position = AboveTerrain(-4.0f, 6.0f, 2.0f)
+        };
+        AddChild(_playerCastle);
+
+        _enemyCastle = new CastleKeep
+        {
+            Name = "EnemyCastle",
+            IsPlayerCastle = false,
+            Position = AboveTerrain(18.0f, -14.0f, 2.0f),
+            InitialStoredMana = 48
+        };
+        AddChild(_enemyCastle);
+    }
+
+    private void CreateCollectors()
+    {
+        AddChild(new ManaCollectorSpirit
+        {
+            Name = "PlayerCollector",
+            Position = AboveTerrain(1.0f, 1.0f, 5.0f)
+        });
+
+        AddChild(new ManaCollectorSpirit
+        {
+            Name = "EnemyCollector",
+            Position = AboveTerrain(14.0f, -10.0f, 5.0f),
+            CarryAmount = 10
+        });
     }
 
     private void CreateManaPickups()

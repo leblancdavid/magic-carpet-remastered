@@ -60,6 +60,10 @@
 - Updated `SimpleMonster` to contest mana near the well, steal mana from storage, and visibly gain mana reserve.
 - Spawned a mana well in the main game scene and surfaced well storage in the HUD.
 - Verified `dotnet build MagicCarpetRemastered.sln` after the Phase 3 implementation pass.
+- Began Phase 4 castle and territory work by adding `CastleKeep` with storage, health, and growth stages.
+- Added `ManaCollectorSpirit` to route mana between the well and castles, creating a visible territory loop.
+- Spawned player and enemy castles in the main scene and surfaced their status in the HUD.
+- Verified `dotnet build MagicCarpetRemastered.sln` after the Phase 4 implementation pass.
 
 ### Current Prototype Controls
 
@@ -88,6 +92,7 @@
 - Mana loop exists only as pickups, spell costs, and enemy death drops.
 - No castle, mana storage, collector, territory, or enemy wizard systems yet.
 - Phase 3 is only a first-pass mana loop; it still needs runtime tuning and playtest validation.
+- Phase 4 is only a first-pass castle layer; it still needs runtime tuning and playtest validation.
 - No original art/audio pass beyond simple procedural meshes/materials and synthesized placeholder tones.
 
 ### Next Recommended Work
@@ -95,3 +100,5 @@
 - Playtest Phase 3 mana economy in Godot and capture tuning feedback.
 - Tune player mana capacity, well storage capacity, ambient regen, pickup attraction, pickup spawn rate, and enemy contesting.
 - Keep Phase 2 and Phase 1 on the playtest backlog for later signoff if further feel issues appear.
+- Playtest Phase 4 castle loop in Godot and capture tuning feedback.
+- Tune castle scale, health, storage capacity, and collector speed/routing if the territory loop feels unclear.

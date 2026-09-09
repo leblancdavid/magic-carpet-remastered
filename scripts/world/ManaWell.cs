@@ -72,6 +72,11 @@ public partial class ManaWell : StaticBody3D
         return stolen;
     }
 
+    public int WithdrawMana(int amount)
+    {
+        return StealMana(amount);
+    }
+
     private void SpawnPickup()
     {
         var pickup = new ManaPickup

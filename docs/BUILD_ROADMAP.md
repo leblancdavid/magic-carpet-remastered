@@ -85,6 +85,8 @@ Remaining Phase 3 work before signoff:
 
 Goal: add base building, storage, and strategic conflict.
 
+Status: implementation in progress. The prototype now has a player castle, enemy castle, castle health/storage/growth, and collector spirits that route mana between the well and castles. Remaining work is runtime tuning and signoff.
+
 Core work:
 
 - player castle site and growth stages
@@ -95,6 +97,12 @@ Core work:
 - castle attack/defense objectives
 
 Deliverable: one arena has a player castle, enemy castle, and contested mana flow.
+
+Remaining Phase 4 work before signoff:
+
+- runtime playtest the castle scale, storage, and routing loop in Godot
+- decide whether castle damage and raiding should be handled by existing combat or a dedicated assault objective
+- add clearer territorial feedback if the current castle silhouettes are too subtle
 
 ## Phase 5: Enemy Ecosystem
 
