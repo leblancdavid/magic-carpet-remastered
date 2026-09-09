@@ -7,8 +7,8 @@ namespace MagicCarpetRemastered.Scripts.Enemies;
 
 public partial class EnemyProjectile : Area3D
 {
-    [Export] public float Speed { get; set; } = 20.0f;
-    [Export] public float LifetimeSeconds { get; set; } = 3.0f;
+    [Export] public float Speed { get; set; } = 28.0f;
+    [Export] public float LifetimeSeconds { get; set; } = 4.0f;
     [Export] public int Damage { get; set; } = 10;
 
     private Vector3 _direction = Vector3.Forward;
@@ -19,22 +19,24 @@ public partial class EnemyProjectile : Area3D
     {
         _lifeRemaining = LifetimeSeconds;
         BodyEntered += OnBodyEntered;
+        Monitoring = true;
+        Monitorable = true;
 
         AddChild(new CollisionShape3D
         {
-            Shape = new SphereShape3D { Radius = 0.3f }
+            Shape = new SphereShape3D { Radius = 0.45f }
         });
 
         var mesh = new MeshInstance3D
         {
-            Mesh = new SphereMesh { Radius = 0.3f, Height = 0.6f }
+            Mesh = new SphereMesh { Radius = 0.45f, Height = 0.9f }
         };
         mesh.MaterialOverride = new StandardMaterial3D
         {
-            AlbedoColor = new Color(0.45f, 0.15f, 1.0f),
+            AlbedoColor = new Color(0.55f, 0.2f, 1.0f),
             EmissionEnabled = true,
-            Emission = new Color(0.35f, 0.05f, 1.0f),
-            EmissionEnergyMultiplier = 2.4f
+            Emission = new Color(0.55f, 0.15f, 1.0f),
+            EmissionEnergyMultiplier = 3.0f
         };
         AddChild(mesh);
     }
@@ -53,7 +55,11 @@ public partial class EnemyProjectile : Area3D
 
     public void Launch(Vector3 direction, Node3D owner)
     {
-        _direction = direction.Normalized();
+        _direction = new Vector3(direction.X, 0.0f, direction.Z).Normalized();
+        if (_direction == Vector3.Zero)
+        {
+            _direction = direction.Normalized();
+        }
         _owner = owner;
     }
 

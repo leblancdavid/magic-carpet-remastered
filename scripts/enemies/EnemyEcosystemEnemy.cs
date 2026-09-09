@@ -37,6 +37,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public int ManaStealAmount { get; set; } = 6;
     [Export] public int RetreatManaThreshold { get; set; } = 18;
     [Export] public float RetreatDistance { get; set; } = 14.0f;
+    [Export] public float PlayerContactCooldownSeconds { get; set; } = 0.8f;
 
     public string RoleText => Role switch
     {
@@ -59,6 +60,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     private float _rangedCooldown = 0.75f;
     private float _rangedWindup;
     private float _hitFlashTimer;
+    private float _playerContactCooldown;
     private float _orbitPhase;
     private Vector3 _wanderDirection = Vector3.Forward;
 
@@ -77,6 +79,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         _rangedCooldown = Mathf.Max(0.0f, _rangedCooldown - deltaF);
         _rangedWindup = Mathf.Max(0.0f, _rangedWindup - deltaF);
         _hitFlashTimer = Mathf.Max(0.0f, _hitFlashTimer - deltaF);
+        _playerContactCooldown = Mathf.Max(0.0f, _playerContactCooldown - deltaF);
 
         _player ??= GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
         _manaWell ??= GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
@@ -159,8 +162,10 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
                 Health = 28;
                 ContactDamage = 4;
                 RangedDamage = 10;
-                RangedMinDistance = 8.0f;
-                RangedMaxDistance = 28.0f;
+                RangedMinDistance = 2.5f;
+                RangedMaxDistance = 40.0f;
+                RangedAttackCooldownSeconds = 1.4f;
+                RangedWindupSeconds = 0.15f;
                 break;
             case EnemyRole.CastleAttacker:
                 MoveSpeed = 7.0f;
@@ -180,8 +185,10 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
                 Health = 36;
                 ContactDamage = 6;
                 RangedDamage = 12;
-                RangedMinDistance = 9.0f;
-                RangedMaxDistance = 30.0f;
+                RangedMinDistance = 4.0f;
+                RangedMaxDistance = 42.0f;
+                RangedAttackCooldownSeconds = 1.8f;
+                RangedWindupSeconds = 0.2f;
                 OrbitalRadius = 10.0f;
                 ManaReserve = 12;
                 break;
@@ -211,8 +218,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         }
 
         Vector3 toTarget = targetPosition - GlobalPosition;
-        float distance = toTarget.Length();
-        Vector3 direction = distance > 0.001f ? toTarget / distance : Vector3.Zero;
+        float distance = HorizontalDistanceTo(targetPosition);
+        Vector3 direction = HorizontalDirectionTo(targetPosition);
 
         return Role switch
         {
@@ -234,6 +241,11 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             Vector3 toPlayer = _player.GlobalPosition - GlobalPosition;
             Vector3 lateral = new Vector3(-toPlayer.Z, 0.0f, toPlayer.X).Normalized();
             orbit = lateral * Mathf.Sin(Time.GetTicksMsec() * 0.003f + GlobalPosition.X * 0.07f) * 4.0f;
+
+            if (distance < AttackRadius * 1.6f)
+            {
+                return (-direction * MoveSpeed * 1.1f) + orbit;
+            }
         }
 
         if (distance > OrbitalRadius)
@@ -283,7 +295,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             return direction * MoveSpeed;
         }
 
-        if (distance < AttackRadius * 1.2f)
+        float ramDistance = AttackRadius + 4.0f;
+        if (distance <= ramDistance)
         {
             return Vector3.Zero;
         }
@@ -446,6 +459,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             TryRamCastle();
         }
 
+        TryDamagePlayerOnContact();
+
         if (ShouldStartRangedAttack())
         {
             _rangedWindup = RangedWindupSeconds;
@@ -470,7 +485,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             return false;
         }
 
-        float distance = GlobalPosition.DistanceTo(_player.GlobalPosition);
+        float distance = HorizontalDistanceTo(_player.GlobalPosition);
         return distance >= RangedMinDistance && distance <= RangedMaxDistance;
     }
 
@@ -495,6 +510,18 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         GetTree().CurrentScene.AddChild(projectile);
         projectile.GlobalPosition = GlobalPosition + direction * 1.3f;
         projectile.Launch(direction, this);
+
+        var launchBurst = new SpellImpactBurst
+        {
+            Name = $"{RoleText}LaunchBurst",
+            BurstColor = new Color(0.6f, 0.25f, 1.0f, 0.8f),
+            EmissionColor = new Color(0.45f, 0.1f, 1.0f),
+            DurationSeconds = 0.2f,
+            StartScale = 0.3f,
+            EndScale = 1.2f
+        };
+        GetTree().CurrentScene.AddChild(launchBurst);
+        launchBurst.GlobalPosition = projectile.GlobalPosition;
     }
 
     private void TryStealMana()
@@ -504,7 +531,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             return;
         }
 
-        if (GlobalPosition.DistanceTo(_manaWell.GlobalPosition) > ManaStealRadius || _attackCooldown > 0.0f)
+        if (HorizontalDistanceTo(_manaWell.GlobalPosition) > ManaStealRadius || _attackCooldown > 0.0f)
         {
             return;
         }
@@ -526,7 +553,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             return;
         }
 
-        if (GlobalPosition.DistanceTo(_playerCastle.GlobalPosition) > AttackRadius)
+        float ramDistance = AttackRadius + 4.0f;
+        if (HorizontalDistanceTo(_playerCastle.GlobalPosition) > ramDistance)
         {
             return;
         }
@@ -542,7 +570,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             return;
         }
 
-        if (GlobalPosition.DistanceTo(_enemyCastle.GlobalPosition) > RetreatDistance)
+        if (HorizontalDistanceTo(_enemyCastle.GlobalPosition) > RetreatDistance)
         {
             return;
         }
@@ -555,6 +583,23 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
         ManaReserve -= deposited;
         _attackCooldown = AttackCooldownSeconds;
+    }
+
+    private void TryDamagePlayerOnContact()
+    {
+        if (_player == null || _player.Health <= 0 || _playerContactCooldown > 0.0f)
+        {
+            return;
+        }
+
+        float contactDistance = Role == EnemyRole.FlyingSwarm ? AttackRadius * 1.5f : AttackRadius;
+        if (HorizontalDistanceTo(_player.GlobalPosition) > contactDistance)
+        {
+            return;
+        }
+
+        _player.ApplyDamage(ContactDamage);
+        _playerContactCooldown = PlayerContactCooldownSeconds;
     }
 
     private void ClampToGroundIfNeeded()
@@ -676,5 +721,23 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             EnemyRole.EnemyWizard => 36,
             _ => 24
         };
+    }
+
+    private float HorizontalDistanceTo(Vector3 target)
+    {
+        Vector2 delta = new Vector2(GlobalPosition.X - target.X, GlobalPosition.Z - target.Z);
+        return delta.Length();
+    }
+
+    private Vector3 HorizontalDirectionTo(Vector3 target)
+    {
+        Vector2 delta = new Vector2(target.X - GlobalPosition.X, target.Z - GlobalPosition.Z);
+        if (delta.LengthSquared() <= 0.0001f)
+        {
+            return Vector3.Zero;
+        }
+
+        Vector2 normal = delta.Normalized();
+        return new Vector3(normal.X, 0.0f, normal.Y);
     }
 }

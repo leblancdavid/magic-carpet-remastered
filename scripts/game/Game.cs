@@ -98,7 +98,7 @@ public partial class Game : Node3D
         {
             Name = "PlayerCastle",
             IsPlayerCastle = true,
-            Position = AboveTerrain(-4.0f, 6.0f, 2.0f)
+            Position = AboveTerrain(-22.0f, 8.0f, 2.0f)
         };
         AddChild(_playerCastle);
 
@@ -106,7 +106,7 @@ public partial class Game : Node3D
         {
             Name = "EnemyCastle",
             IsPlayerCastle = false,
-            Position = AboveTerrain(18.0f, -14.0f, 2.0f),
+            Position = AboveTerrain(22.0f, -12.0f, 2.0f),
             InitialStoredMana = 48
         };
         AddChild(_enemyCastle);

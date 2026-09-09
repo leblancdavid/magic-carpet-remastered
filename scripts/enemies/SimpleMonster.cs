@@ -34,6 +34,7 @@ public partial class SimpleMonster : CharacterBody3D
 
     public override void _Ready()
     {
+        AddToGroup("simple_monster");
         AddCollisionAndVisuals();
     }
 

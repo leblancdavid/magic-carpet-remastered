@@ -76,6 +76,27 @@
 - Adjusted castle-attacker selection so red siege units can actually spawn from the castle ruins zone during playtest.
 - Added an explicit HUD color/role legend to make the phase 5 enemy roles easier to identify in-game.
 - Verified `dotnet build MagicCarpetRemastered.sln` after the phase 5 visibility and combat routing fix.
+- Fixed phase 5 enemy attack checks to use horizontal distance so ranged attacks, thief steals, wizard deposits, and castle rams can trigger reliably in the flying arena.
+- Increased enemy projectile visibility and lifetime so ranged attacks are easier to notice during playtest.
+- Verified `dotnet build MagicCarpetRemastered.sln` after the phase 5 interaction fix.
+- Moved the player and enemy castles to opposite sides of the island so siege pressure has room to play out.
+- Widened ranged enemy firing windows and projectile travel so projectiles are easier to observe in playtest.
+- Closed Phase 5 as functionally complete for the current prototype and deferred detailed enemy tuning until the broader game loop is more complete.
+- Began Phase 6 by adding `SpellDefinition` as a small spell data model for id, display name, kind, mana cost, cooldown, and description.
+- Routed the current firebolt and terrain shaping abilities through spell definitions while preserving the existing mouse controls.
+- Added HUD spell loadout text so the active LMB/RMB spell bindings are visible during playtest.
+- Added `Arcane Burst`, a `Q`-cast area-damage spell that detonates at the aimed point, damages nearby enemies, and shows a larger purple burst VFX.
+- Tagged the legacy `SimpleMonster` enemy group so area damage can affect both old and phase-5 enemy types.
+- Verified `dotnet build MagicCarpetRemastered.sln` after adding the first Phase 6 area spell.
+- Added `Mana Shield`, an `E`-cast defensive spell that spends mana, runs on its own cooldown, briefly reduces incoming damage, and shows cyan shield feedback on the carpet/HUD.
+- Verified the shield spell with a temporary-output `dotnet build` because the normal Godot build DLL was locked by a running `.NET Host` process.
+- Added `Wind Dash`, an `F`-cast mobility spell that spends mana, runs on its own cooldown, boosts the carpet in the aimed direction, and shows a teal movement burst.
+- Verified `Wind Dash` with the same temporary-output `dotnet build` path.
+- Added `Guardian`, a `G`-cast summoning spell that creates a temporary allied orb which seeks and damages nearby ecosystem enemies.
+- Added `SummonedGuardian` as the first friendly summoned unit behavior.
+- Verified `Guardian` with the same temporary-output `dotnet build` path.
+- Added quick-slot behavior: `Tab` cycles the selected quick spell and `LMB` casts the selected spell while direct `Q`/`E`/`F`/`G` hotkeys remain available.
+- Verified quick-slot behavior with the same temporary-output `dotnet build` path.
 
 ### Current Prototype Controls
 
@@ -84,6 +105,11 @@
 - `C`: descend
 - Mouse: look
 - Left mouse: cast primary firebolt
+- `Q`: cast Arcane Burst area damage
+- `E`: cast Mana Shield defense
+- `F`: cast Wind Dash mobility
+- `G`: cast Guardian summon
+- `Tab`: cycle LMB quick spell
 - Right mouse: cast selected terrain mode
 - `1`: terrain crater mode
 - `2`: terrain raise mode
@@ -99,15 +125,13 @@
 - Terrain deformation scans affected vertices, coalesces rebuilds, and rebuilds only affected chunks, but the chunk size is still a tuning tradeoff.
 - Terrain deformation modes are working, but still need runtime tuning and feel validation.
 - Flight feel has a first tuning pass and needs runtime playtest validation.
-- Enemies fly directly at the player with no steering, avoidance, or distinct roles.
-- Spell system is still one hardcoded primary projectile.
-- Mana loop exists only as pickups, spell costs, and enemy death drops.
-- No castle, mana storage, collector, territory, or enemy wizard systems yet.
+- Enemy steering remains simple and will need a later polish pass.
+- Spell system now has a basic data model plus firebolt, Arcane Burst, Mana Shield, Wind Dash, Guardian, terrain shaping modes, and first-pass quick-slot cycling, but still lacks unlocks, upgrades, and runtime validation.
+- Mana economy tuning is deferred until more spells and objectives exist.
 - Phase 3 is only a first-pass mana loop; it still needs runtime tuning and playtest validation.
 - Phase 4 is only a first-pass castle layer; it still needs runtime tuning and playtest validation.
-- Phase 5 is a first-pass enemy ecosystem; it still needs runtime tuning and playtest validation.
-- Phase 5 now has basic role caps and retreat loops, but it still needs runtime tuning and playtest validation.
-- Phase 5 combat readability was improved by fixing damage routing to the new enemy type and adding a HUD color legend, but the mana economy still needs signoff tuning.
+- Phase 5 enemy ecosystem is functionally complete for now; detailed tuning is intentionally deferred.
+- Phase 6 is newly started and needs additional spell types, quick-slot/loadout behavior, and upgrade/unlock rules.
 - No original art/audio pass beyond simple procedural meshes/materials and synthesized placeholder tones.
 
 ### Next Recommended Work
@@ -117,6 +141,6 @@
 - Keep Phase 2 and Phase 1 on the playtest backlog for later signoff if further feel issues appear.
 - Playtest Phase 4 castle loop in Godot and capture tuning feedback.
 - Tune castle scale, health, storage capacity, and collector speed/routing if the territory loop feels unclear.
-- Playtest Phase 5 enemy ecosystem in Godot and capture tuning feedback.
-- Tune enemy spawn pacing, role mix, enemy health/damage, and wizard pressure if the ecosystem feels too sparse or too aggressive.
-- Re-test Phase 5 now that fireballs damage ecosystem enemies and confirm the red caster/wizard mix appears at low-to-mid pressure.
+- Add unlock/upgrade rules after the campaign/objective structure is clearer.
+- Runtime playtest the expanded spell set and quick-slot cycling in Godot.
+- Defer detailed Phase 5 and mana-economy tuning until the spell system gives combat more tactical options.

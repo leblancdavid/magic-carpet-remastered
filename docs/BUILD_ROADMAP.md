@@ -108,7 +108,7 @@ Remaining Phase 4 work before signoff:
 
 Goal: create systemic pressure rather than only scripted waves.
 
-Status: implementation in progress. The prototype now has role-based enemy spawning with swarms, ground beasts, ranged casters, castle attackers, mana thieves, and an enemy wizard archetype. The director now caps each role and the mana thief / wizard roles have a retreat and deposit loop. Player fireballs now damage the ecosystem enemies too. Remaining work is runtime tuning, encounter validation, and signoff.
+Status: functionally complete for the current prototype. The prototype now has role-based enemy spawning with swarms, ground beasts, ranged casters, castle attackers, mana thieves, and an enemy wizard archetype. The director caps each role; mana thief and wizard roles have retreat/deposit loops; player fireballs damage ecosystem enemies; enemy attack checks use horizontal distance so arena altitude does not suppress behavior; and the castles are far enough apart for readable siege pressure. Fine tuning is deferred until the game loop is more complete.
 
 Core work:
 
@@ -123,16 +123,19 @@ Core work:
 
 Deliverable: monsters and enemy wizards interact around mana, castles, and player pressure.
 
-Remaining Phase 5 work before signoff:
+Deferred Phase 5 tuning:
 
 - runtime playtest the enemy mix, spawn pacing, and role behavior in Godot
 - tune intensity ramp, max active enemies, spawn interval, and role health/damage values
-- decide whether enemy wizard retreat and castle interaction need deeper behavior before Phase 6
+- decide whether enemy wizard retreat and castle interaction need deeper behavior after the spell/campaign loops exist
 - confirm red castle attackers and purple wizards appear at readable pressure levels
+- confirm ranged enemy shots and castle rams are now obvious and reliable during playtest
 
 ## Phase 6: Spell System
 
 Goal: make spells the player's primary expression and progression axis.
+
+Status: implementation started. The current firebolt and terrain shaping abilities now have a small spell definition model and visible HUD loadout text. `Arcane Burst` adds area damage on `Q`, `Mana Shield` adds a defensive spell on `E`, `Wind Dash` adds mobility utility on `F`, and `Guardian` adds a temporary summoned ally on `G`. `Tab` now cycles the active quick spell for `LMB`, while direct spell hotkeys remain available. Next work is unlock/upgrade rules and runtime validation.
 
 Core work:
 

@@ -1,5 +1,7 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Audio;
+using MagicCarpetRemastered.Scripts.Enemies;
+using MagicCarpetRemastered.Scripts.Spells;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Player;
@@ -12,6 +14,15 @@ public partial class CarpetFlightController : CharacterBody3D
         Raise,
         Lower,
         Flatten
+    }
+
+    private enum QuickSpellSlot
+    {
+        Firebolt,
+        ArcaneBurst,
+        ManaShield,
+        WindDash,
+        Guardian
     }
 
     [Export] public float MoveSpeed { get; set; } = 24.0f;
@@ -39,6 +50,22 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float ManaDepositRadius { get; set; } = 6.0f;
     [Export] public int PrimarySpellManaCost { get; set; } = 5;
     [Export] public int TerrainSpellManaCost { get; set; } = 0;
+    [Export] public int AreaSpellManaCost { get; set; } = 18;
+    [Export] public float AreaSpellCooldownSeconds { get; set; } = 2.5f;
+    [Export] public float AreaSpellRange { get; set; } = 70.0f;
+    [Export] public float AreaSpellRadius { get; set; } = 8.0f;
+    [Export] public int AreaSpellDamage { get; set; } = 32;
+    [Export] public int ShieldSpellManaCost { get; set; } = 14;
+    [Export] public float ShieldSpellCooldownSeconds { get; set; } = 6.0f;
+    [Export] public float ShieldDurationSeconds { get; set; } = 4.0f;
+    [Export] public float ShieldDamageReduction { get; set; } = 0.65f;
+    [Export] public int MobilitySpellManaCost { get; set; } = 10;
+    [Export] public float MobilitySpellCooldownSeconds { get; set; } = 3.0f;
+    [Export] public float MobilityDashSpeed { get; set; } = 46.0f;
+    [Export] public float MobilityDashLift { get; set; } = 5.0f;
+    [Export] public int SummonSpellManaCost { get; set; } = 24;
+    [Export] public float SummonSpellCooldownSeconds { get; set; } = 8.0f;
+    [Export] public float SummonDistance { get; set; } = 5.0f;
 
     public int Mana { get; private set; } = 40;
     public int Health { get; private set; } = 100;
@@ -46,6 +73,17 @@ public partial class CarpetFlightController : CharacterBody3D
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : GlobalPosition.Y - _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z);
     public bool IsInvulnerable => _damageInvulnerabilityTimer > 0.0f;
     public string CameraMode => _firstPersonCamera ? "First Person" : "Chase";
+    public string PrimarySpellName => GetSelectedQuickSpell()?.DisplayName ?? "Firebolt";
+    public string TerrainSpellName => _terrainSpell?.DisplayName ?? "Terrain Shape";
+    public string AreaSpellName => _areaSpell?.DisplayName ?? "Arcane Burst";
+    public string ShieldSpellName => _shieldSpell?.DisplayName ?? "Mana Shield";
+    public string MobilitySpellName => _mobilitySpell?.DisplayName ?? "Wind Dash";
+    public string SummonSpellName => _summonSpell?.DisplayName ?? "Guardian";
+    public bool IsShielded => _shieldTimer > 0.0f;
+    public string ShieldStatusText => IsShielded ? $"Shield {_shieldTimer:0.0}s" : "Shield ready";
+    public string SpellLoadoutText => _primarySpell == null || _terrainSpell == null || _areaSpell == null || _shieldSpell == null || _mobilitySpell == null || _summonSpell == null
+        ? "Spells: loading"
+        : $"Quick: LMB {GetSelectedQuickSpell()!.DisplayName} ({GetSelectedQuickSpell()!.ManaCost})   Tab cycle   Q {_areaSpell.DisplayName}   E {_shieldSpell.DisplayName}   F {_mobilitySpell.DisplayName}   G {_summonSpell.DisplayName}   RMB {_terrainSpell.DisplayName}";
     public string StatusMessage { get; private set; } = "Collect mana, bank excess at the well, and contest the red monsters.";
     public string TerrainDebugText => _arena == null
         ? "Terrain: unavailable"
@@ -58,7 +96,7 @@ public partial class CarpetFlightController : CharacterBody3D
         TerrainSpellMode.Flatten => "Flatten",
         _ => "Crater"
     };
-    public int TerrainSpellManaCostForCurrentMode => GetTerrainSpellManaCost(_terrainSpellMode);
+    public int TerrainSpellManaCostForCurrentMode => _terrainSpell.ManaCost;
     public string TerrainSpellHelpText => "1 crater  2 raise  3 lower  4 flatten";
 
     private Node3D _cameraPivot = null!;
@@ -70,11 +108,23 @@ public partial class CarpetFlightController : CharacterBody3D
     private float _yaw;
     private float _pitch = -0.2f;
     private float _fireCooldown;
+    private float _areaSpellCooldown;
+    private float _shieldSpellCooldown;
+    private float _mobilitySpellCooldown;
+    private float _summonSpellCooldown;
+    private float _shieldTimer;
     private float _terrainSpellCooldown;
     private float _feedbackTimer;
     private float _damageInvulnerabilityTimer;
     private bool _firstPersonCamera;
     private TerrainSpellMode _terrainSpellMode = TerrainSpellMode.Crater;
+    private QuickSpellSlot _selectedQuickSpell = QuickSpellSlot.Firebolt;
+    private SpellDefinition _primarySpell = null!;
+    private SpellDefinition _areaSpell = null!;
+    private SpellDefinition _shieldSpell = null!;
+    private SpellDefinition _mobilitySpell = null!;
+    private SpellDefinition _summonSpell = null!;
+    private SpellDefinition _terrainSpell = null!;
 
     public override void _Ready()
     {
@@ -82,6 +132,12 @@ public partial class CarpetFlightController : CharacterBody3D
         Input.MouseMode = Input.MouseModeEnum.Captured;
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         _manaWell = GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
+        _primarySpell = new SpellDefinition("firebolt", "Firebolt", SpellKind.Projectile, PrimarySpellManaCost, FireCooldownSeconds, "Fast projectile damage spell.");
+        _areaSpell = new SpellDefinition("arcane-burst", "Arcane Burst", SpellKind.Projectile, AreaSpellManaCost, AreaSpellCooldownSeconds, "Area damage blast at the aimed point.");
+        _shieldSpell = new SpellDefinition("mana-shield", "Mana Shield", SpellKind.Defense, ShieldSpellManaCost, ShieldSpellCooldownSeconds, "Briefly reduces incoming damage.");
+        _mobilitySpell = new SpellDefinition("wind-dash", "Wind Dash", SpellKind.Mobility, MobilitySpellManaCost, MobilitySpellCooldownSeconds, "Dash quickly in the aimed direction.");
+        _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, SummonSpellManaCost, SummonSpellCooldownSeconds, "Summon a temporary ally that attacks nearby enemies.");
+        _terrainSpell = new SpellDefinition("terrain-shape", "Terrain Shape", SpellKind.Terrain, TerrainSpellManaCost, TerrainSpellCooldownSeconds, "Shape terrain using the selected terrain mode.");
 
         _cameraPivot = new Node3D { Name = "CameraPivot" };
         AddChild(_cameraPivot);
@@ -116,6 +172,11 @@ public partial class CarpetFlightController : CharacterBody3D
             _feedbackTimer = 1.2f;
         }
 
+        if (@event.IsActionPressed("cycle_quick_spell"))
+        {
+            CycleQuickSpell();
+        }
+
         if (@event.IsActionPressed("terrain_crater"))
         {
             SetTerrainSpellMode(TerrainSpellMode.Crater);
@@ -147,6 +208,11 @@ public partial class CarpetFlightController : CharacterBody3D
     {
         float deltaF = (float)delta;
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
+        _areaSpellCooldown = Mathf.Max(0.0f, _areaSpellCooldown - deltaF);
+        _shieldSpellCooldown = Mathf.Max(0.0f, _shieldSpellCooldown - deltaF);
+        _mobilitySpellCooldown = Mathf.Max(0.0f, _mobilitySpellCooldown - deltaF);
+        _summonSpellCooldown = Mathf.Max(0.0f, _summonSpellCooldown - deltaF);
+        _shieldTimer = Mathf.Max(0.0f, _shieldTimer - deltaF);
         _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
         _feedbackTimer = Mathf.Max(0.0f, _feedbackTimer - deltaF);
         _damageInvulnerabilityTimer = Mathf.Max(0.0f, _damageInvulnerabilityTimer - deltaF);
@@ -178,15 +244,38 @@ public partial class CarpetFlightController : CharacterBody3D
         ClampAboveGround();
         RouteManaToWell();
 
-        if (Input.IsActionPressed("cast_primary") && _fireCooldown <= 0.0f)
+        if (Input.IsActionPressed("cast_primary"))
         {
-            _fireCooldown = FireCooldownSeconds;
-            CastPrimarySpell();
+            CastSelectedQuickSpell();
+        }
+
+        if (Input.IsActionPressed("cast_area") && _areaSpellCooldown <= 0.0f)
+        {
+            _areaSpellCooldown = _areaSpell.CooldownSeconds;
+            CastAreaSpell();
+        }
+
+        if (Input.IsActionPressed("cast_shield") && _shieldSpellCooldown <= 0.0f)
+        {
+            _shieldSpellCooldown = _shieldSpell.CooldownSeconds;
+            CastShieldSpell();
+        }
+
+        if (Input.IsActionPressed("cast_mobility") && _mobilitySpellCooldown <= 0.0f)
+        {
+            _mobilitySpellCooldown = _mobilitySpell.CooldownSeconds;
+            CastMobilitySpell();
+        }
+
+        if (Input.IsActionPressed("cast_summon") && _summonSpellCooldown <= 0.0f)
+        {
+            _summonSpellCooldown = _summonSpell.CooldownSeconds;
+            CastSummonSpell();
         }
 
         if (Input.IsActionPressed("cast_terrain") && _terrainSpellCooldown <= 0.0f)
         {
-            _terrainSpellCooldown = TerrainSpellCooldownSeconds;
+            _terrainSpellCooldown = _terrainSpell.CooldownSeconds;
             CastTerrainSpell(_terrainSpellMode);
         }
     }
@@ -236,11 +325,12 @@ public partial class CarpetFlightController : CharacterBody3D
             return;
         }
 
-        Health = Mathf.Max(0, Health - amount);
-        StatusMessage = $"Hit for {amount}";
+        int finalAmount = IsShielded ? Mathf.Max(1, Mathf.RoundToInt(amount * (1.0f - ShieldDamageReduction))) : amount;
+        Health = Mathf.Max(0, Health - finalAmount);
+        StatusMessage = IsShielded ? $"Shield absorbed {amount - finalAmount}" : $"Hit for {finalAmount}";
         _feedbackTimer = 0.35f;
         _damageInvulnerabilityTimer = DamageInvulnerabilitySeconds;
-        _carpetMaterial.AlbedoColor = new Color(1.0f, 0.25f, 0.2f);
+        _carpetMaterial.AlbedoColor = IsShielded ? new Color(0.2f, 0.85f, 1.0f) : new Color(1.0f, 0.25f, 0.2f);
         GameAudio.Instance?.PlayHit();
 
         if (Health == 0)
@@ -254,21 +344,94 @@ public partial class CarpetFlightController : CharacterBody3D
         GetTree().ReloadCurrentScene();
     }
 
+    private void CycleQuickSpell()
+    {
+        int next = ((int)_selectedQuickSpell + 1) % 5;
+        _selectedQuickSpell = (QuickSpellSlot)next;
+        StatusMessage = $"Quick spell: {GetSelectedQuickSpell()?.DisplayName ?? "unknown"}";
+        _feedbackTimer = 1.0f;
+    }
+
+    private SpellDefinition? GetSelectedQuickSpell()
+    {
+        return _selectedQuickSpell switch
+        {
+            QuickSpellSlot.Firebolt => _primarySpell,
+            QuickSpellSlot.ArcaneBurst => _areaSpell,
+            QuickSpellSlot.ManaShield => _shieldSpell,
+            QuickSpellSlot.WindDash => _mobilitySpell,
+            QuickSpellSlot.Guardian => _summonSpell,
+            _ => _primarySpell
+        };
+    }
+
+    private void CastSelectedQuickSpell()
+    {
+        switch (_selectedQuickSpell)
+        {
+            case QuickSpellSlot.Firebolt:
+                if (_fireCooldown > 0.0f)
+                {
+                    return;
+                }
+
+                _fireCooldown = _primarySpell.CooldownSeconds;
+                CastPrimarySpell();
+                break;
+            case QuickSpellSlot.ArcaneBurst:
+                if (_areaSpellCooldown > 0.0f)
+                {
+                    return;
+                }
+
+                _areaSpellCooldown = _areaSpell.CooldownSeconds;
+                CastAreaSpell();
+                break;
+            case QuickSpellSlot.ManaShield:
+                if (_shieldSpellCooldown > 0.0f)
+                {
+                    return;
+                }
+
+                _shieldSpellCooldown = _shieldSpell.CooldownSeconds;
+                CastShieldSpell();
+                break;
+            case QuickSpellSlot.WindDash:
+                if (_mobilitySpellCooldown > 0.0f)
+                {
+                    return;
+                }
+
+                _mobilitySpellCooldown = _mobilitySpell.CooldownSeconds;
+                CastMobilitySpell();
+                break;
+            case QuickSpellSlot.Guardian:
+                if (_summonSpellCooldown > 0.0f)
+                {
+                    return;
+                }
+
+                _summonSpellCooldown = _summonSpell.CooldownSeconds;
+                CastSummonSpell();
+                break;
+        }
+    }
+
     private void CastPrimarySpell()
     {
-        if (Mana < PrimarySpellManaCost)
+        if (Mana < _primarySpell.ManaCost)
         {
             StatusMessage = "Not enough mana.";
             _feedbackTimer = 0.8f;
             return;
         }
 
-        SpendMana(PrimarySpellManaCost);
-        StatusMessage = "Firebolt";
+        SpendMana(_primarySpell.ManaCost);
+        StatusMessage = _primarySpell.DisplayName;
         _feedbackTimer = 0.35f;
         GameAudio.Instance?.PlaySpellCast();
 
-        var projectile = new Spells.SpellProjectile();
+        var projectile = new SpellProjectile();
         GetTree().CurrentScene.AddChild(projectile);
 
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
@@ -276,10 +439,93 @@ public partial class CarpetFlightController : CharacterBody3D
         projectile.Launch(direction, this);
     }
 
+    private void CastAreaSpell()
+    {
+        if (Mana < _areaSpell.ManaCost)
+        {
+            StatusMessage = $"Not enough mana for {_areaSpell.DisplayName.ToLowerInvariant()}.";
+            _feedbackTimer = 0.8f;
+            return;
+        }
+
+        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
+        Vector3 origin = _camera.GlobalPosition;
+        Vector3 target = origin + direction * AreaSpellRange;
+        if (!TryFindTerrainHit(origin, target, out Vector3 hitPosition))
+        {
+            hitPosition = target;
+        }
+
+        SpendMana(_areaSpell.ManaCost);
+        int hits = DamageEnemiesInRadius(hitPosition, AreaSpellRadius, AreaSpellDamage);
+        SpawnAreaSpellBurst(hitPosition);
+        StatusMessage = $"{_areaSpell.DisplayName}: {hits} hit";
+        _feedbackTimer = 0.7f;
+        GameAudio.Instance?.PlaySpellCast();
+    }
+
+    private void CastShieldSpell()
+    {
+        if (Mana < _shieldSpell.ManaCost)
+        {
+            StatusMessage = $"Not enough mana for {_shieldSpell.DisplayName.ToLowerInvariant()}.";
+            _feedbackTimer = 0.8f;
+            return;
+        }
+
+        SpendMana(_shieldSpell.ManaCost);
+        _shieldTimer = ShieldDurationSeconds;
+        StatusMessage = $"{_shieldSpell.DisplayName} active";
+        _feedbackTimer = 0.9f;
+        _carpetMaterial.AlbedoColor = new Color(0.2f, 0.85f, 1.0f);
+        SpawnShieldBurst();
+        GameAudio.Instance?.PlaySpellCast();
+    }
+
+    private void CastMobilitySpell()
+    {
+        if (Mana < _mobilitySpell.ManaCost)
+        {
+            StatusMessage = $"Not enough mana for {_mobilitySpell.DisplayName.ToLowerInvariant()}.";
+            _feedbackTimer = 0.8f;
+            return;
+        }
+
+        SpendMana(_mobilitySpell.ManaCost);
+        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
+        Velocity = new Vector3(direction.X * MobilityDashSpeed, Mathf.Max(Velocity.Y, direction.Y * MobilityDashSpeed + MobilityDashLift), direction.Z * MobilityDashSpeed);
+        StatusMessage = _mobilitySpell.DisplayName;
+        _feedbackTimer = 0.6f;
+        SpawnMobilityBurst();
+        GameAudio.Instance?.PlaySpellCast();
+    }
+
+    private void CastSummonSpell()
+    {
+        if (Mana < _summonSpell.ManaCost)
+        {
+            StatusMessage = $"Not enough mana for {_summonSpell.DisplayName.ToLowerInvariant()}.";
+            _feedbackTimer = 0.8f;
+            return;
+        }
+
+        SpendMana(_summonSpell.ManaCost);
+        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
+        var guardian = new SummonedGuardian
+        {
+            Name = "SummonedGuardian"
+        };
+        GetTree().CurrentScene.AddChild(guardian);
+        guardian.GlobalPosition = GlobalPosition + direction * SummonDistance + Vector3.Up * 1.0f;
+        SpawnSummonBurst(guardian.GlobalPosition);
+        StatusMessage = $"Summoned {_summonSpell.DisplayName}";
+        _feedbackTimer = 0.8f;
+        GameAudio.Instance?.PlaySpellCast();
+    }
+
     private void CastTerrainSpell(TerrainSpellMode mode)
     {
-        int manaCost = GetTerrainSpellManaCost(mode);
-        if (Mana < manaCost)
+        if (Mana < _terrainSpell.ManaCost)
         {
             StatusMessage = $"Not enough mana for {TerrainSpellModeText.ToLowerInvariant()}.";
             _feedbackTimer = 0.8f;
@@ -302,7 +548,7 @@ public partial class CarpetFlightController : CharacterBody3D
             return;
         }
 
-        SpendMana(manaCost);
+        SpendMana(_terrainSpell.ManaCost);
         switch (mode)
         {
             case TerrainSpellMode.Crater:
@@ -387,14 +633,9 @@ public partial class CarpetFlightController : CharacterBody3D
         _feedbackTimer = 1.0f;
     }
 
-    private int GetTerrainSpellManaCost(TerrainSpellMode mode)
-    {
-        return TerrainSpellManaCost;
-    }
-
     private void SpawnTerrainSpellBurst(Vector3 position)
     {
-        var burst = new Spells.SpellImpactBurst
+        var burst = new SpellImpactBurst
         {
             Name = "TerrainSpellBurst",
             BurstColor = new Color(0.55f, 0.9f, 1.0f),
@@ -403,6 +644,99 @@ public partial class CarpetFlightController : CharacterBody3D
         };
         GetTree().CurrentScene.AddChild(burst);
         burst.GlobalPosition = position;
+    }
+
+    private void SpawnAreaSpellBurst(Vector3 position)
+    {
+        var burst = new SpellImpactBurst
+        {
+            Name = "AreaSpellBurst",
+            BurstColor = new Color(0.85f, 0.35f, 1.0f, 0.9f),
+            EmissionColor = new Color(0.65f, 0.12f, 1.0f),
+            DurationSeconds = 0.5f,
+            StartScale = 1.2f,
+            EndScale = AreaSpellRadius
+        };
+        GetTree().CurrentScene.AddChild(burst);
+        burst.GlobalPosition = position;
+    }
+
+    private void SpawnShieldBurst()
+    {
+        var burst = new SpellImpactBurst
+        {
+            Name = "ShieldBurst",
+            BurstColor = new Color(0.2f, 0.85f, 1.0f, 0.7f),
+            EmissionColor = new Color(0.05f, 0.65f, 1.0f),
+            DurationSeconds = 0.35f,
+            StartScale = 0.9f,
+            EndScale = 3.0f
+        };
+        GetTree().CurrentScene.AddChild(burst);
+        burst.GlobalPosition = GlobalPosition;
+    }
+
+    private void SpawnMobilityBurst()
+    {
+        var burst = new SpellImpactBurst
+        {
+            Name = "MobilityBurst",
+            BurstColor = new Color(0.7f, 1.0f, 0.95f, 0.75f),
+            EmissionColor = new Color(0.35f, 1.0f, 0.9f),
+            DurationSeconds = 0.28f,
+            StartScale = 0.6f,
+            EndScale = 2.6f
+        };
+        GetTree().CurrentScene.AddChild(burst);
+        burst.GlobalPosition = GlobalPosition;
+    }
+
+    private void SpawnSummonBurst(Vector3 position)
+    {
+        var burst = new SpellImpactBurst
+        {
+            Name = "SummonBurst",
+            BurstColor = new Color(0.25f, 1.0f, 0.55f, 0.85f),
+            EmissionColor = new Color(0.08f, 0.8f, 0.35f),
+            DurationSeconds = 0.4f,
+            StartScale = 0.8f,
+            EndScale = 3.2f
+        };
+        GetTree().CurrentScene.AddChild(burst);
+        burst.GlobalPosition = position;
+    }
+
+    private int DamageEnemiesInRadius(Vector3 center, float radius, int damage)
+    {
+        int hits = 0;
+        foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
+        {
+            if (node is not EnemyEcosystemEnemy enemy || enemy.Health <= 0)
+            {
+                continue;
+            }
+
+            if (enemy.GlobalPosition.DistanceTo(center) > radius)
+            {
+                continue;
+            }
+
+            enemy.ApplyDamage(damage);
+            hits++;
+        }
+
+        foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
+        {
+            if (node is not SimpleMonster monster || monster.GlobalPosition.DistanceTo(center) > radius)
+            {
+                continue;
+            }
+
+            monster.ApplyDamage(damage);
+            hits++;
+        }
+
+        return hits;
     }
 
     private void ClampAboveGround()
@@ -508,6 +842,11 @@ public partial class CarpetFlightController : CharacterBody3D
         {
             float pulse = 0.5f + Mathf.Sin(Time.GetTicksMsec() * 0.02f) * 0.5f;
             _carpetMaterial.AlbedoColor = new Color(1.0f, Mathf.Lerp(0.25f, 0.8f, pulse), Mathf.Lerp(0.2f, 0.95f, pulse));
+        }
+        else if (IsShielded)
+        {
+            float pulse = 0.5f + Mathf.Sin(Time.GetTicksMsec() * 0.018f) * 0.5f;
+            _carpetMaterial.AlbedoColor = new Color(Mathf.Lerp(0.08f, 0.25f, pulse), Mathf.Lerp(0.55f, 0.95f, pulse), 1.0f);
         }
         else if (_feedbackTimer <= 0.0f)
         {
