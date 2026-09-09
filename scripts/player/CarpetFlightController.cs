@@ -6,6 +6,14 @@ namespace MagicCarpetRemastered.Scripts.Player;
 
 public partial class CarpetFlightController : CharacterBody3D
 {
+    private enum TerrainSpellMode
+    {
+        Crater,
+        Raise,
+        Lower,
+        Flatten
+    }
+
     [Export] public float MoveSpeed { get; set; } = 24.0f;
     [Export] public float VerticalSpeed { get; set; } = 11.0f;
     [Export] public float Acceleration { get; set; } = 28.0f;
@@ -22,6 +30,7 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float TerrainSpellRange { get; set; } = 90.0f;
     [Export] public float TerrainSpellRadius { get; set; } = 7.0f;
     [Export] public float TerrainSpellDepth { get; set; } = 3.0f;
+    [Export] public float TerrainSpellHeight { get; set; } = 2.25f;
     [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
     [Export] public int PrimarySpellManaCost { get; set; } = 5;
     [Export] public int TerrainSpellManaCost { get; set; } = 12;
@@ -36,6 +45,15 @@ public partial class CarpetFlightController : CharacterBody3D
     public string TerrainDebugText => _arena == null
         ? "Terrain: unavailable"
         : $"Terrain edit: {_arena.LastEditedVertexCount} verts   Chunks: {_arena.LastRebuiltChunkCount}   Rebuild: {_arena.LastRebuildMilliseconds:0.00} ms";
+    public string TerrainSpellModeText => _terrainSpellMode switch
+    {
+        TerrainSpellMode.Crater => "Crater",
+        TerrainSpellMode.Raise => "Raise",
+        TerrainSpellMode.Lower => "Lower",
+        TerrainSpellMode.Flatten => "Flatten",
+        _ => "Crater"
+    };
+    public string TerrainSpellHelpText => "1 crater  2 raise  3 lower  4 flatten";
 
     private Node3D _cameraPivot = null!;
     private Camera3D _camera = null!;
@@ -49,6 +67,7 @@ public partial class CarpetFlightController : CharacterBody3D
     private float _feedbackTimer;
     private float _damageInvulnerabilityTimer;
     private bool _firstPersonCamera;
+    private TerrainSpellMode _terrainSpellMode = TerrainSpellMode.Crater;
 
     public override void _Ready()
     {
@@ -87,6 +106,26 @@ public partial class CarpetFlightController : CharacterBody3D
             _firstPersonCamera = !_firstPersonCamera;
             StatusMessage = $"Camera: {CameraMode}";
             _feedbackTimer = 1.2f;
+        }
+
+        if (@event.IsActionPressed("terrain_crater"))
+        {
+            SetTerrainSpellMode(TerrainSpellMode.Crater);
+        }
+
+        if (@event.IsActionPressed("terrain_raise"))
+        {
+            SetTerrainSpellMode(TerrainSpellMode.Raise);
+        }
+
+        if (@event.IsActionPressed("terrain_lower"))
+        {
+            SetTerrainSpellMode(TerrainSpellMode.Lower);
+        }
+
+        if (@event.IsActionPressed("terrain_flatten"))
+        {
+            SetTerrainSpellMode(TerrainSpellMode.Flatten);
         }
 
         if (@event is InputEventMouseMotion motion && Input.MouseMode == Input.MouseModeEnum.Captured)
@@ -138,7 +177,7 @@ public partial class CarpetFlightController : CharacterBody3D
         if (Input.IsActionPressed("cast_terrain") && _terrainSpellCooldown <= 0.0f)
         {
             _terrainSpellCooldown = TerrainSpellCooldownSeconds;
-            CastTerrainSpell();
+            CastTerrainSpell(_terrainSpellMode);
         }
     }
 
@@ -192,11 +231,12 @@ public partial class CarpetFlightController : CharacterBody3D
         projectile.Launch(direction, this);
     }
 
-    private void CastTerrainSpell()
+    private void CastTerrainSpell(TerrainSpellMode mode)
     {
-        if (Mana < TerrainSpellManaCost)
+        int manaCost = GetTerrainSpellManaCost(mode);
+        if (Mana < manaCost)
         {
-            StatusMessage = "Not enough mana for crater.";
+            StatusMessage = $"Not enough mana for {TerrainSpellModeText.ToLowerInvariant()}.";
             _feedbackTimer = 0.8f;
             return;
         }
@@ -215,18 +255,52 @@ public partial class CarpetFlightController : CharacterBody3D
         var result = GetWorld3D().DirectSpaceState.IntersectRay(query);
         if (result.Count == 0 || !result.ContainsKey("position") || result["collider"].As<Node>() is not Node collider || !collider.IsInGroup("deformable_terrain"))
         {
-            StatusMessage = "Aim at terrain to carve it.";
+            StatusMessage = "Aim at terrain to shape it.";
             _feedbackTimer = 0.8f;
             return;
         }
 
-        Mana -= TerrainSpellManaCost;
         Vector3 hitPosition = (Vector3)result["position"];
-        _arena.ApplyCrater(hitPosition, TerrainSpellRadius, TerrainSpellDepth);
+        Mana -= manaCost;
+        switch (mode)
+        {
+            case TerrainSpellMode.Crater:
+                _arena.ApplyCrater(hitPosition, TerrainSpellRadius, TerrainSpellDepth);
+                break;
+            case TerrainSpellMode.Raise:
+                _arena.RaiseTerrain(hitPosition, TerrainSpellRadius, TerrainSpellHeight);
+                break;
+            case TerrainSpellMode.Lower:
+                _arena.LowerTerrain(hitPosition, TerrainSpellRadius, TerrainSpellHeight);
+                break;
+            case TerrainSpellMode.Flatten:
+                _arena.FlattenTerrain(hitPosition, TerrainSpellRadius, hitPosition.Y);
+                break;
+        }
+
         SpawnTerrainSpellBurst(hitPosition);
-        StatusMessage = $"Terrain crater ({_arena.LastEditedVertexCount} verts)";
+        StatusMessage = $"Terrain {TerrainSpellModeText.ToLowerInvariant()} ({_arena.LastEditedVertexCount} verts)";
         _feedbackTimer = 0.5f;
         GameAudio.Instance?.PlaySpellCast();
+    }
+
+    private void SetTerrainSpellMode(TerrainSpellMode mode)
+    {
+        _terrainSpellMode = mode;
+        StatusMessage = $"Terrain mode: {TerrainSpellModeText}";
+        _feedbackTimer = 1.0f;
+    }
+
+    private int GetTerrainSpellManaCost(TerrainSpellMode mode)
+    {
+        return mode switch
+        {
+            TerrainSpellMode.Crater => TerrainSpellManaCost,
+            TerrainSpellMode.Raise => TerrainSpellManaCost,
+            TerrainSpellMode.Lower => TerrainSpellManaCost,
+            TerrainSpellMode.Flatten => TerrainSpellManaCost + 2,
+            _ => TerrainSpellManaCost
+        };
     }
 
     private void SpawnTerrainSpellBurst(Vector3 position)

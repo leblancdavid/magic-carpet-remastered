@@ -37,7 +37,7 @@ Remaining Phase 1 work before signoff:
 
 Goal: make terrain a tactical system, not just scenery.
 
-Status: active implementation. The prototype now has a procedural heightmap island, water plane, chunked/generated mesh-collision terrain, height-band colors, direct height clearance, a stored height grid, bounded radial deformation APIs, deferred/coalesced chunk rebuilds, firebolt terrain craters, right-mouse crater test spell, and HUD edit/rebuild diagnostics. Richer terrain spell shapes are not implemented yet.
+Status: active implementation. The prototype now has a procedural heightmap island, water plane, chunked/generated mesh-collision terrain, height-band colors, direct height clearance, a stored height grid, bounded radial deformation APIs, deferred/coalesced chunk rebuilds, firebolt terrain craters, player-facing crater/raise/lower/flatten terrain modes, and HUD edit/rebuild diagnostics. The remaining work is runtime tuning and playtest validation.
 
 Core work:
 
@@ -47,6 +47,7 @@ Core work:
 - water plane and altitude safety
 - deformation API for craters, raising, lowering, and flattening
 - efficient mesh/collision rebuild path
+- player-facing spell modes for crater, raise, lower, and flatten
 
 Deliverable: generated terrain can be flown over and modified by spells.
 

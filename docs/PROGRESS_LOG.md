@@ -47,6 +47,10 @@
 - Split the terrain mesh/collision into reusable chunks and now rebuild only the chunks touched by deformation edits.
 - Expanded HUD terrain diagnostics to include the number of rebuilt chunks.
 - Verified `dotnet build MagicCarpetRemastered.sln` after each implementation pass.
+- Added terrain spell mode switching for crater, raise, lower, and flatten using `1` through `4`.
+- Routed right mouse terrain casting through the selected terrain mode instead of crater-only behavior.
+- Added terrain mode and control hints to the HUD.
+- Verified `dotnet build MagicCarpetRemastered.sln` after the terrain mode implementation.
 
 ### Current Prototype Controls
 
@@ -55,7 +59,11 @@
 - `C`: descend
 - Mouse: look
 - Left mouse: cast primary firebolt
-- Right mouse: cast terrain crater
+ - Right mouse: cast selected terrain mode
+ - `1`: terrain crater mode
+ - `2`: terrain raise mode
+ - `3`: terrain lower mode
+ - `4`: terrain flatten mode
 - `V`: toggle chase/first-person camera
 - `R`: restart arena
 - `Esc`: capture/release mouse
@@ -64,7 +72,7 @@
 
 - Godot runtime is tested manually by the user; CLI runtime verification is blocked because `godot` is not on `PATH`.
 - Terrain deformation scans affected vertices, coalesces rebuilds, and rebuilds only affected chunks, but the chunk size is still a tuning tradeoff.
-- Terrain deformation currently has crater gameplay only; raising/lowering/flattening APIs exist but are not exposed through distinct spells yet.
+- Terrain deformation modes are exposed, but raise/lower/flatten still need runtime tuning and feel validation.
 - Flight feel has a first tuning pass and needs runtime playtest validation.
 - Enemies fly directly at the player with no steering, avoidance, or distinct roles.
 - Spell system is still one hardcoded primary projectile.
@@ -75,6 +83,6 @@
 ### Next Recommended Work
 
 - Playtest Phase 1 flight/combat in Godot and capture tuning feedback.
-- Playtest terrain crater spell and firebolt craters in Godot, then tune crater radius/depth/mana cost.
-- Tune chunk size after runtime playtesting if crater frequency or large spells make rebuilds too expensive.
+- Playtest terrain modes in Godot and tune crater radius/depth, raise/lower height, flatten target behavior, mana cost, and cooldown.
+- Tune chunk size after runtime playtesting if terrain edits make rebuilds too expensive.
 - Add a simple castle placeholder and mana storage target.
