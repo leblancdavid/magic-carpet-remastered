@@ -4,6 +4,8 @@
 
 Build a modern Godot C# spiritual remaster inspired by Magic Carpet. The project should capture the fantasy of fast carpet flight, spell duels, mana control, terrain deformation, monsters, and castle conflict without copying original proprietary game data or assets.
 
+Use `docs/ORIGINAL_MECHANICS_REFERENCE.md` as the condensed system-design reference for original-style mechanics and priorities.
+
 ## Development Tracks
 
 Keep work separated into three tracks:
@@ -62,7 +64,7 @@ Remaining Phase 2 work before signoff:
 
 Goal: make mana control the strategic loop.
 
-Status: implementation in progress. Mana pickups, spell costs, enemy death drops, a player mana capacity, a mana well/storage node, pickup attraction/routing, excess mana banking, and basic enemy mana contesting now exist. Remaining work is runtime tuning and signoff.
+Status: implementation in progress with the original-style direction now started. Mana pickups, spell costs, enemy death drops, a player mana capacity, a mana well/storage node, pickup attraction/routing, castle storage, and basic enemy mana contesting exist. The player now has claimed mana as a long-term owned pool; current mana capacity follows claimed mana; current mana regenerates from claimed mana; pickups claim mana instead of only refilling current mana; and player-castle deposits add to claimed mana. Remaining work is deeper possession/balloon behavior and enemy ownership contesting.
 
 Core work:
 
@@ -72,14 +74,21 @@ Core work:
 - spell costs and storage limits
 - mana routing to player castle/storage
 - enemy contesting behavior
+- claimed/possessed mana that increases the player's long-term mana pool
+- passive mana regeneration derived from claimed mana and castle/storage state
 
 Deliverable: fights happen because mana is valuable and contested.
 
 Remaining Phase 3 work before signoff:
 
-- runtime playtest the mana well, pickup routing, and enemy contesting loop in Godot
-- tune player mana capacity, well storage capacity, ambient regen, pickup spawn rate, and contest drain
-- decide whether the well should be a later castle subsystem or remain the phase-3 storage anchor
+- replace the remaining neutral-well source behavior with claimable world mana ownership
+- add explicit neutral/player/enemy mana ownership colors and a possession action/spell
+- make collector/balloon units visibly haul claimed loose mana to castle storage
+- connect enemy thieves/wizards to claimed mana ownership, not just well/castle storage theft
+- track finite world mana and castle-stored quota progress as the eventual level objective
+- runtime playtest the mana well, pickup routing, and enemy contesting loop in Godot after the claimed-mana pass
+- defer detailed capacity, regen, pickup rate, and contest-drain tuning until the claimed-mana loop is in place
+- decide whether the current well remains a neutral source or becomes a temporary stand-in for original-style mana possession and balloon hauling
 
 ## Phase 4: Castle And Territory
 
@@ -103,6 +112,8 @@ Remaining Phase 4 work before signoff:
 - runtime playtest the castle scale, storage, and routing loop in Godot
 - decide whether castle damage and raiding should be handled by existing combat or a dedicated assault objective
 - add clearer territorial feedback if the current castle silhouettes are too subtle
+- add castle sanctuary/respawn behavior after the mana loop is stable
+- add castle damage regression and stored-mana spillage once castle combat is readable
 
 ## Phase 5: Enemy Ecosystem
 
@@ -135,19 +146,23 @@ Deferred Phase 5 tuning:
 
 Goal: make spells the player's primary expression and progression axis.
 
-Status: implementation started. The current firebolt and terrain shaping abilities now have a small spell definition model and visible HUD loadout text. `Arcane Burst` adds area damage on `Q`, `Mana Shield` adds a defensive spell on `E`, `Wind Dash` adds mobility utility on `F`, and `Guardian` adds a temporary summoned ally on `G`. `Tab` now cycles the active quick spell for `LMB`, while direct spell hotkeys remain available. Next work is unlock/upgrade rules and runtime validation.
+Status: first-pass spell variety is implemented. The current firebolt and terrain shaping abilities now have a small spell definition model and visible HUD loadout text. `Arcane Burst` adds area damage on `Q`, `Mana Shield` adds a defensive spell on `E`, `Wind Dash` adds mobility utility on `F`, and `Guardian` adds a temporary summoned ally on `G`. `Tab` now cycles the active quick spell for `LMB`, while direct spell hotkeys remain available. The original-style claimed/regenerating mana base now exists, so further spell tuning, unlock/upgrade rules, and runtime validation can resume once the claimed-mana loop is playtested.
 
 Core work:
 
 - spell data model
 - quick slots and loadout
+- two active hand/button bindings with fast reassignment
 - mana costs, cooldowns, upgrades, and unlocks
+- spell pickups or unlock discoveries tied to exploration
+- light auto-targeting/homing rules for appropriate offensive spells
 - projectile damage spell
 - area damage spell
 - terrain deformation spell
 - summoning spell
 - shield or defense spell
 - mobility or utility spell
+- economy/trap spells such as possession, mana stealing, and fake mana
 
 Deliverable: a small spellbook with meaningful tactical tradeoffs.
 
@@ -159,6 +174,7 @@ Core work:
 
 - island/realm level model
 - objective variants
+- finite world mana and equilibrium quota win condition
 - biome themes
 - escalating enemy wizard setups
 - persistent unlocks and spell progression
@@ -175,6 +191,7 @@ Core work:
 - original stylized fantasy terrain, skies, castles, monsters, and carpets
 - readable spell VFX and combat hit feedback
 - HUD, spell icons, menus, and accessibility options
+- All-Seeing Eye/minimap and full-world map for mana, castles, balloons, threats, and ownership state
 - original audio for spells, wind, monsters, castle activity, and music
 - polish passes for performance, controls, and onboarding
 

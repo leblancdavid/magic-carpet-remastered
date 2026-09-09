@@ -64,3 +64,72 @@ No local GPT-6 Astra tool is available in this environment. If access exists els
 - create test cases from observed mechanics
 
 The actual game should still be built from clean, original Godot systems.
+
+## Original Gameplay Research Notes
+
+Public references and the local DOSBox package inventory support these high-level mechanics for a legally safe remaster target:
+
+- See `docs/ORIGINAL_MECHANICS_REFERENCE.md` for the condensed design reference and implementation priority order.
+- Each world has a fixed total mana supply and the objective is to restore equilibrium by securing enough of that mana.
+- Mana is not just ammunition. It is a strategic resource that must be possessed/claimed, collected, stored, and defended.
+- Mana appears freely in the world and is also produced by destroying monsters or enemy wizard infrastructure.
+- Claimed mana is hauled by balloons to the player's castle; unclaimed or enemy-claimed mana should not simply become player power.
+- Castle storage and growth are central to progression. A larger/stronger castle supports more resource collection, defense, recovery, and spell use.
+- The player's castle is also a home base: it supports health/mana recovery and prevents a death from immediately ending the level while it remains intact.
+- Enemy wizards compete over the same mana economy by claiming mana and attacking/leveling castles.
+- The player has a small equipped spell set rather than a giant always-active bar; quick access and meaningful tradeoffs matter.
+- Carpet flight should remain forgiving: free 3D movement with obstacle/terrain avoidance instead of crash simulation.
+
+Implication for this prototype: the current pickup-refill mana model should be revised into a claimed-mana pool with passive regeneration before detailed spell/enemy tuning. Pickups should eventually contribute to long-term owned mana through possession/castle routing, not only refill current mana.
+
+## 2026-09-09 Gameplay Reference Attempt
+
+Reference link provided by user: `https://www.youtube.com/watch?v=eFMQYfudF_o`.
+
+- Page metadata was reachable and identifies the video as `Magic Carpet (PC) Gameplay`.
+- Automated transcript access was blocked/unavailable through the available tools.
+- `yt-dlp` was installed locally and used to download a low-resolution reference copy to temp storage only: `C:\Users\lblan\AppData\Local\Temp\opencode\magic-carpet-gameplay-240p.mp4`.
+- `ffmpeg` was used to sample frames into temp storage for observation. No video frames or downloaded media were copied into the repo.
+- Exact timings still need manual review at higher resolution for HUD numbers, spell list order, castle growth thresholds, balloon timing, and mana regeneration rates.
+
+Observed from sampled frames/contact sheet:
+
+- The HUD is dominated by a top strip: circular minimap at upper-left, player status/spell/resource elements across the top, and spell icons toward the right.
+- Mana/resource state appears visually persistent in the HUD rather than being treated as incidental pickup ammo.
+- White balloon-like collectors are prominent and visibly travel through the world carrying/collecting mana.
+- Castles are large, bright, tiered structures placed in the world/water area, not small token bases; multiple visible structures imply expansion/growth or stronghold complexity.
+- Golden mana pearls/orbs are large, readable world objects and often appear around combat/water/shoreline activity.
+- Combat creates large bright yellow/orange fireballs and explosions with high screen readability.
+- Enemy/creature silhouettes are often black/dark and airborne or near water/shoreline; the player fights while moving quickly rather than stopping for arena duels.
+- The minimap appears important for locating mana/castles/entities and should not be treated as optional polish.
+- Several frames show the player near castles/balloons/mana in the same moment, reinforcing that flight combat and economy are intertwined.
+
+Design takeaways for the prototype:
+
+- Mana objects should be large and readable in the 3D world.
+- Collector balloons/spirits should be central to the mana loop and visible from a distance.
+- Castle growth should become visually substantial, not just a small scale/color change.
+- The HUD should expose owned/claimed mana, current mana, castle storage/growth, and active spells in a compact top-band style.
+- The minimap/radar should eventually show castles, mana, and threats.
+- Spell VFX should remain large/readable, with fireball and explosion silhouettes that can be understood at speed.
+
+## Current Prototype Mana Scan
+
+The current Godot prototype still diverges from the original mana loop in these concrete ways:
+
+- `CarpetFlightController` has fixed `ManaCapacity` and `Mana`; pickups call `AddMana()` to refill current mana only.
+- There is no `ClaimedMana`, owned mana pool, or passive player mana regeneration from owned/castle mana.
+- `ManaPickup` homes directly to the player if the player is not full, otherwise to `ManaWell`; this skips original-style possession/claiming and balloon hauling.
+- `ManaWell` acts as a neutral storage/spawner with ambient regen, not as claimed mana in the world.
+- `ManaCollectorSpirit` shuttles from `ManaWell` to castles, but this is source-to-castle routing rather than claiming loose mana pearls and returning them to storage.
+- `CastleKeep` stores mana and grows by stored mana, but player current mana is not regenerated from castle/claimed storage.
+- Enemy thieves and wizards steal/deposit from well/castle storage, but they do not yet contest ownership of world mana.
+
+Recommended implementation delta:
+
+- Add a player-owned claimed mana pool separate from current mana.
+- Regenerate current mana up to a cap derived from claimed/castle mana.
+- Convert collected/returned mana into claimed mana instead of only current mana.
+- Reframe the well as a temporary mana source until world mana possession/balloons exist.
+- Make collector spirits/balloons collect claimed loose mana rather than only withdrawing from the well.
+- Make enemy thieves/wizards contest claimed/stored mana so resource control becomes the strategic conflict.

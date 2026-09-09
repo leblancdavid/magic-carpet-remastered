@@ -38,3 +38,8 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - Radius-based terrain edits should convert world-space bounds into grid index bounds before touching vertices. This keeps crater and sculpt operations proportional to effect size instead of arena size.
 - Terrain deformation can safely update the authoritative height grid immediately and defer visual/physics mesh rebuilding. Coalescing rebuild requests avoids duplicate terrain work when multiple spells edit terrain in one frame.
 - Chunked terrain rebuilds are the right next step once deferred rebuilds still feel too expensive. The chunk size becomes a gameplay/performance tuning knob, not just an implementation detail.
+
+## Original-Spirit Design Lessons
+
+- Mana should not behave like ordinary shooter ammunition. The original game's strategic identity comes from mana being claimed, hauled, stored, stolen, and converted into long-term power through the castle. Current mana should regenerate from the player's owned/claimed pool so spending spells creates temporary pressure without forcing constant pickup scavenging.
+- The underlying design is an embodied RTS economy disguised as first-person aerial spell combat. Prioritize systems where flight, spell choice, mana ownership, balloons, castles, rivals, and terrain deformation interact without scripted events.

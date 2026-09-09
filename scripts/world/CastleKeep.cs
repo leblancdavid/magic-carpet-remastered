@@ -1,4 +1,5 @@
 using Godot;
+using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
@@ -46,6 +47,7 @@ public partial class CastleKeep : StaticBody3D
 
         StoredMana += accepted;
         UpdateGrowth();
+        ClaimPlayerManaFromDeposit(accepted);
         return accepted;
     }
 
@@ -90,6 +92,17 @@ public partial class CastleKeep : StaticBody3D
         }
 
         UpdateVisualState();
+    }
+
+    private void ClaimPlayerManaFromDeposit(int amount)
+    {
+        if (!IsPlayerCastle || amount <= 0)
+        {
+            return;
+        }
+
+        CarpetFlightController? player = GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
+        player?.ClaimMana(amount);
     }
 
     private void UpdateCastleScale()

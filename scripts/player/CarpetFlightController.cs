@@ -46,6 +46,10 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float TerrainFollowStrength { get; set; } = 4.5f;
     [Export] public float TerrainFollowMaxLiftSpeed { get; set; } = 10.0f;
     [Export] public int ManaCapacity { get; set; } = 80;
+    [Export] public int InitialClaimedMana { get; set; } = 80;
+    [Export] public int MaxClaimedMana { get; set; } = 400;
+    [Export] public float ManaRegenPerClaimedManaPerSecond { get; set; } = 0.04f;
+    [Export] public float ImmediatePickupRefillFraction { get; set; } = 0.3f;
     [Export] public int ManaDepositReserve { get; set; } = 20;
     [Export] public float ManaDepositRadius { get; set; } = 6.0f;
     [Export] public int PrimarySpellManaCost { get; set; } = 5;
@@ -68,6 +72,8 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float SummonDistance { get; set; } = 5.0f;
 
     public int Mana { get; private set; } = 40;
+    public int ClaimedMana { get; private set; }
+    public bool CanClaimMana => ClaimedMana < MaxClaimedMana;
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : GlobalPosition.Y - _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z);
@@ -116,6 +122,7 @@ public partial class CarpetFlightController : CharacterBody3D
     private float _terrainSpellCooldown;
     private float _feedbackTimer;
     private float _damageInvulnerabilityTimer;
+    private float _manaRegenAccumulator;
     private bool _firstPersonCamera;
     private TerrainSpellMode _terrainSpellMode = TerrainSpellMode.Crater;
     private QuickSpellSlot _selectedQuickSpell = QuickSpellSlot.Firebolt;
@@ -132,6 +139,9 @@ public partial class CarpetFlightController : CharacterBody3D
         Input.MouseMode = Input.MouseModeEnum.Captured;
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         _manaWell = GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
+        ClaimedMana = Mathf.Clamp(Mathf.Max(InitialClaimedMana, ManaCapacity), 1, MaxClaimedMana);
+        ManaCapacity = ClaimedMana;
+        Mana = Mathf.Clamp(Mana, 0, ManaCapacity);
         _primarySpell = new SpellDefinition("firebolt", "Firebolt", SpellKind.Projectile, PrimarySpellManaCost, FireCooldownSeconds, "Fast projectile damage spell.");
         _areaSpell = new SpellDefinition("arcane-burst", "Arcane Burst", SpellKind.Projectile, AreaSpellManaCost, AreaSpellCooldownSeconds, "Area damage blast at the aimed point.");
         _shieldSpell = new SpellDefinition("mana-shield", "Mana Shield", SpellKind.Defense, ShieldSpellManaCost, ShieldSpellCooldownSeconds, "Briefly reduces incoming damage.");
@@ -216,6 +226,7 @@ public partial class CarpetFlightController : CharacterBody3D
         _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
         _feedbackTimer = Mathf.Max(0.0f, _feedbackTimer - deltaF);
         _damageInvulnerabilityTimer = Mathf.Max(0.0f, _damageInvulnerabilityTimer - deltaF);
+        RegenerateMana(deltaF);
 
         Rotation = new Vector3(0.0f, _yaw, 0.0f);
         _cameraPivot.Rotation = new Vector3(_pitch, 0.0f, 0.0f);
@@ -242,8 +253,6 @@ public partial class CarpetFlightController : CharacterBody3D
         MoveAndSlide();
 
         ClampAboveGround();
-        RouteManaToWell();
-
         if (Input.IsActionPressed("cast_primary"))
         {
             CastSelectedQuickSpell();
@@ -282,28 +291,32 @@ public partial class CarpetFlightController : CharacterBody3D
 
     public int AddMana(int amount)
     {
-        if (amount <= 0)
+        return ClaimMana(amount, ImmediatePickupRefillFraction);
+    }
+
+    public int ClaimMana(int amount, float immediateRefillFraction = 0.0f)
+    {
+        if (amount <= 0 || ClaimedMana >= MaxClaimedMana)
         {
             return 0;
         }
 
-        int before = Mana;
-        Mana = Mathf.Min(ManaCapacity, Mana + amount);
-        int accepted = Mana - before;
+        int claimed = Mathf.Min(amount, MaxClaimedMana - ClaimedMana);
+        ClaimedMana += claimed;
+        ManaCapacity = ClaimedMana;
 
-        if (accepted > 0)
+        int immediateRefill = Mathf.RoundToInt(claimed * Mathf.Clamp(immediateRefillFraction, 0.0f, 1.0f));
+        if (immediateRefill > 0)
         {
-            StatusMessage = accepted == amount ? $"Mana +{accepted}" : $"Mana +{accepted} (full)";
-            _feedbackTimer = 1.0f;
-            GameAudio.Instance?.PlayPickup();
-        }
-        else
-        {
-            StatusMessage = "Mana full.";
-            _feedbackTimer = 0.8f;
+            Mana = Mathf.Min(ManaCapacity, Mana + immediateRefill);
         }
 
-        return accepted;
+        StatusMessage = immediateRefill > 0
+            ? $"Claimed {claimed} mana (+{immediateRefill})"
+            : $"Claimed {claimed} mana";
+        _feedbackTimer = 1.0f;
+        GameAudio.Instance?.PlayPickup();
+        return claimed;
     }
 
     public int SpendMana(int amount)
@@ -316,6 +329,24 @@ public partial class CarpetFlightController : CharacterBody3D
         int spent = Mathf.Min(Mana, amount);
         Mana -= spent;
         return spent;
+    }
+
+    private void RegenerateMana(float delta)
+    {
+        if (Mana >= ManaCapacity || ClaimedMana <= 0 || ManaRegenPerClaimedManaPerSecond <= 0.0f)
+        {
+            return;
+        }
+
+        _manaRegenAccumulator += ClaimedMana * ManaRegenPerClaimedManaPerSecond * delta;
+        int regenerated = Mathf.FloorToInt(_manaRegenAccumulator);
+        if (regenerated <= 0)
+        {
+            return;
+        }
+
+        _manaRegenAccumulator -= regenerated;
+        Mana = Mathf.Min(ManaCapacity, Mana + regenerated);
     }
 
     public void ApplyDamage(int amount)

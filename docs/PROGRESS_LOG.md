@@ -1,5 +1,76 @@
 # Progress Log
 
+## 2026-09-09
+
+### Completed
+
+- Condensed the user's mechanics research into `docs/ORIGINAL_MECHANICS_REFERENCE.md` as a clean system-design reference.
+- Updated `docs/BUILD_ROADMAP.md` so Phase 3 through Phase 8 explicitly track possession, owned mana, balloon logistics, castle regression, equilibrium quotas, two-hand spell loadouts, spell discovery, auto-targeting, and map/radar needs.
+- Linked `docs/DISCOVERY.md` to the new mechanics reference and added an original-spirit lesson in `docs/LEARNINGS.md`.
+- Researched the original mana economy at a high level from the local DOSBox package inventory and public references.
+- Updated the plan so original-style claimed mana and passive regeneration are the next active priority before further spell/enemy tuning.
+- Scanned the current mana/castle/collector code and confirmed the prototype still uses fixed player mana, direct pickup refills, neutral well storage, and source-to-castle collector routing rather than original-style claimed mana ownership.
+- Tried to inspect the provided YouTube gameplay reference, but automated transcript/frame access was blocked and `yt-dlp` is not installed in this environment.
+- Installed `yt-dlp`, downloaded a low-resolution copy of the provided gameplay reference into temp storage only, sampled frames with `ffmpeg`, and documented observed HUD/mana/castle/balloon takeaways in `docs/DISCOVERY.md`.
+- Began the original-style claimed mana implementation: added player `ClaimedMana`, passive regeneration from claimed mana, claimed-mana growth from pickups, and HUD display for claimed mana.
+- Changed player castle deposits to add to the player's claimed mana pool, so collector deliveries now increase long-term player mana power.
+- Stopped auto-banking current player mana into the neutral well because current mana now regenerates from claimed mana instead of acting as overflow cargo.
+- Verified the claimed-mana pass with a temporary-output `dotnet build` path.
+- Rebased the progress log into per-day sections so the 2026-09-08 implementation passes and the 2026-09-09 research/claimed-mana/doc work are recorded separately.
+
+### Current Prototype Controls
+
+- `WASD`: fly horizontally
+- `Space`: ascend
+- `C`: descend
+- Mouse: look
+- Left mouse: cast selected quick spell
+- `Q`: cast Arcane Burst area damage
+- `E`: cast Mana Shield defense
+- `F`: cast Wind Dash mobility
+- `G`: cast Guardian summon
+- `Tab`: cycle LMB quick spell
+- Right mouse: cast selected terrain mode
+- `1`: terrain crater mode
+- `2`: terrain raise mode
+- `3`: terrain lower mode
+- `4`: terrain flatten mode
+- `V`: toggle chase/first-person camera
+- `R`: restart arena
+- `Esc`: capture/release mouse
+
+### Known Gaps
+
+- Godot runtime is tested manually by the user; CLI runtime verification is blocked because `godot` is not on `PATH`.
+- Flight feel has a first tuning pass and needs runtime playtest validation.
+- Terrain deformation modes are working, but still need runtime tuning and feel validation; chunk size is still a tuning tradeoff.
+- Enemy steering remains simple and will need a later polish pass.
+- Mana ownership is not yet visually distinct. Pickups claim into the player pool or deposit to the neutral well; there are no neutral/player/enemy claim states, colors, or a possession action/spell yet.
+- Collector spirits still shuttle from the well to castles. True balloon-style hauling of owned loose mana is not implemented.
+- No finite world mana budget or equilibrium quota tracking yet, so the eventual level objective is not gated on stored mana.
+- Spell system now has a basic data model plus firebolt, Arcane Burst, Mana Shield, Wind Dash, Guardian, terrain shaping modes, and first-pass quick-slot cycling, but still lacks unlocks, upgrades, two-hand loadout behavior, and runtime validation.
+- No minimap/radar or full-world map yet; ownership and threats are not shown on a tactical display.
+- Exact original timings for mana claiming, balloon hauling, castle growth, and regeneration still need higher-resolution/manual video observation, but first-pass visual references confirm balloons, large mana pearls, castle scale, minimap importance, and top-strip HUD priority.
+- Phase 3 is only a first-pass mana loop; it still needs runtime tuning and playtest validation.
+- Phase 4 is only a first-pass castle layer; it still needs runtime tuning, sanctuary/respawn behavior, and damage regression with mana spillage.
+- Phase 5 enemy ecosystem is functionally complete for now; detailed tuning is intentionally deferred.
+- Phase 6 is a first-pass spell set and needs the broader loadout/discovery systems before it can be signed off.
+- No original art/audio pass beyond simple procedural meshes/materials and synthesized placeholder tones.
+
+### Next Recommended Work
+
+- Playtest claimed mana regeneration and spell sustainability in Godot and capture tuning feedback.
+- Tune player mana capacity, regen, pickup values, and enemy contesting around the claimed-mana pool.
+- Implement loose mana ownership with neutral/player/enemy states and a possession action/spell.
+- Convert collector spirits into balloons that visibly haul owned loose mana back to castle storage.
+- Connect enemy thieves/wizards to claimed mana ownership so resource control creates strategic pressure.
+- Track finite world mana and castle-stored quota progress toward an equilibrium win condition.
+- Add castle sanctuary/respawn behavior and damage regression with stored-mana spillage.
+- Add two active hand/button loadout bindings with fast reassignment.
+- Add a minimap/radar showing mana, castles, balloons, threats, and ownership colors.
+- Keep Phase 2 and Phase 1 on the playtest backlog for later signoff if further feel issues appear.
+- Defer detailed Phase 5 enemy tuning and Phase 6 spell tuning until the claimed-mana loop is in place.
+
 ## 2026-09-08
 
 ### Completed
@@ -97,50 +168,3 @@
 - Verified `Guardian` with the same temporary-output `dotnet build` path.
 - Added quick-slot behavior: `Tab` cycles the selected quick spell and `LMB` casts the selected spell while direct `Q`/`E`/`F`/`G` hotkeys remain available.
 - Verified quick-slot behavior with the same temporary-output `dotnet build` path.
-
-### Current Prototype Controls
-
-- `WASD`: fly horizontally
-- `Space`: ascend
-- `C`: descend
-- Mouse: look
-- Left mouse: cast primary firebolt
-- `Q`: cast Arcane Burst area damage
-- `E`: cast Mana Shield defense
-- `F`: cast Wind Dash mobility
-- `G`: cast Guardian summon
-- `Tab`: cycle LMB quick spell
-- Right mouse: cast selected terrain mode
-- `1`: terrain crater mode
-- `2`: terrain raise mode
-- `3`: terrain lower mode
-- `4`: terrain flatten mode
-- `V`: toggle chase/first-person camera
-- `R`: restart arena
-- `Esc`: capture/release mouse
-
-### Known Gaps
-
-- Godot runtime is tested manually by the user; CLI runtime verification is blocked because `godot` is not on `PATH`.
-- Terrain deformation scans affected vertices, coalesces rebuilds, and rebuilds only affected chunks, but the chunk size is still a tuning tradeoff.
-- Terrain deformation modes are working, but still need runtime tuning and feel validation.
-- Flight feel has a first tuning pass and needs runtime playtest validation.
-- Enemy steering remains simple and will need a later polish pass.
-- Spell system now has a basic data model plus firebolt, Arcane Burst, Mana Shield, Wind Dash, Guardian, terrain shaping modes, and first-pass quick-slot cycling, but still lacks unlocks, upgrades, and runtime validation.
-- Mana economy tuning is deferred until more spells and objectives exist.
-- Phase 3 is only a first-pass mana loop; it still needs runtime tuning and playtest validation.
-- Phase 4 is only a first-pass castle layer; it still needs runtime tuning and playtest validation.
-- Phase 5 enemy ecosystem is functionally complete for now; detailed tuning is intentionally deferred.
-- Phase 6 is newly started and needs additional spell types, quick-slot/loadout behavior, and upgrade/unlock rules.
-- No original art/audio pass beyond simple procedural meshes/materials and synthesized placeholder tones.
-
-### Next Recommended Work
-
-- Playtest Phase 3 mana economy in Godot and capture tuning feedback.
-- Tune player mana capacity, well storage capacity, ambient regen, pickup attraction, pickup spawn rate, and enemy contesting.
-- Keep Phase 2 and Phase 1 on the playtest backlog for later signoff if further feel issues appear.
-- Playtest Phase 4 castle loop in Godot and capture tuning feedback.
-- Tune castle scale, health, storage capacity, and collector speed/routing if the territory loop feels unclear.
-- Add unlock/upgrade rules after the campaign/objective structure is clearer.
-- Runtime playtest the expanded spell set and quick-slot cycling in Godot.
-- Defer detailed Phase 5 and mana-economy tuning until the spell system gives combat more tactical options.

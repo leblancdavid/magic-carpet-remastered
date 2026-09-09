@@ -92,7 +92,7 @@ public partial class ManaPickup : Area3D
         Node3D? target = null;
         float bestDistance = float.MaxValue;
 
-        if (_player != null && _player.Mana < _player.ManaCapacity)
+        if (_player != null && (_player.Mana < _player.ManaCapacity || _player.CanClaimMana))
         {
             float distanceToPlayer = GlobalPosition.DistanceTo(_player.GlobalPosition);
             if (distanceToPlayer <= AttractionRadius)
