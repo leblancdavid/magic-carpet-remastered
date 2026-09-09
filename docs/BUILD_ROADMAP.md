@@ -37,7 +37,7 @@ Remaining Phase 1 work before signoff:
 
 Goal: make terrain a tactical system, not just scenery.
 
-Status: active implementation. The prototype now has a procedural heightmap island, water plane, chunked/generated mesh-collision terrain, height-band colors, direct height clearance, a stored height grid, bounded radial deformation APIs, deferred/coalesced chunk rebuilds, firebolt terrain craters, player-facing crater/raise/lower/flatten terrain modes, and HUD edit/rebuild diagnostics. The remaining work is runtime tuning and playtest validation.
+Status: implementation-complete pending runtime tuning and signoff. The prototype now has a procedural heightmap island, water plane, chunked/generated mesh-collision terrain, height-band colors, direct height clearance, a stored height grid, bounded radial deformation APIs, deferred/coalesced chunk rebuilds, firebolt terrain craters, player-facing crater/raise/lower/flatten terrain modes, HUD edit/rebuild diagnostics, and a heightmap fallback for terrain targeting. The remaining work is runtime tuning and playtest validation.
 
 Core work:
 
@@ -48,14 +48,21 @@ Core work:
 - deformation API for craters, raising, lowering, and flattening
 - efficient mesh/collision rebuild path
 - player-facing spell modes for crater, raise, lower, and flatten
+- reliable terrain targeting path for deformation
 
 Deliverable: generated terrain can be flown over and modified by spells.
+
+Remaining Phase 2 work before signoff:
+
+- runtime playtest terrain modes in Godot
+- tune crater radius/depth, raise/lower height, flatten behavior, mana cost, and cooldown
+- tune chunk size if terrain edits are too expensive or too slow
 
 ## Phase 3: Mana Economy
 
 Goal: make mana control the strategic loop.
 
-Status: partially started. Mana pickups, spell costs, and enemy death drops exist. Storage, routing, attraction, wells, and contesting are not implemented yet.
+Status: implementation in progress. Mana pickups, spell costs, enemy death drops, a player mana capacity, a mana well/storage node, pickup attraction/routing, excess mana banking, and basic enemy mana contesting now exist. Remaining work is runtime tuning and signoff.
 
 Core work:
 
@@ -67,6 +74,12 @@ Core work:
 - enemy contesting behavior
 
 Deliverable: fights happen because mana is valuable and contested.
+
+Remaining Phase 3 work before signoff:
+
+- runtime playtest the mana well, pickup routing, and enemy contesting loop in Godot
+- tune player mana capacity, well storage capacity, ambient regen, pickup spawn rate, and contest drain
+- decide whether the well should be a later castle subsystem or remain the phase-3 storage anchor
 
 ## Phase 4: Castle And Territory
 

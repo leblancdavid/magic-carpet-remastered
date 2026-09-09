@@ -51,7 +51,15 @@
 - Routed right mouse terrain casting through the selected terrain mode instead of crater-only behavior.
 - Added terrain mode and control hints to the HUD.
 - Set terrain casting mana cost to zero so terrain mode testing is not blocked by mana.
+- Added a terrain-height fallback for RMB casting so deformation works even when physics ray hits are flaky.
+- Increased default terrain edit radius, crater depth, and raise/lower height to make deformation easier to see.
 - Verified `dotnet build MagicCarpetRemastered.sln` after the terrain mode implementation.
+- Began Phase 3 mana economy work by adding a player mana capacity, spend helper, and excess-mana routing to a mana well.
+- Added `scripts/world/ManaWell.cs` as a storage source with ambient regeneration, pickup spawning, and mana deposit/steal APIs.
+- Updated `ManaPickup` to home toward the player or well and to let monsters absorb mana.
+- Updated `SimpleMonster` to contest mana near the well, steal mana from storage, and visibly gain mana reserve.
+- Spawned a mana well in the main game scene and surfaced well storage in the HUD.
+- Verified `dotnet build MagicCarpetRemastered.sln` after the Phase 3 implementation pass.
 
 ### Current Prototype Controls
 
@@ -73,17 +81,17 @@
 
 - Godot runtime is tested manually by the user; CLI runtime verification is blocked because `godot` is not on `PATH`.
 - Terrain deformation scans affected vertices, coalesces rebuilds, and rebuilds only affected chunks, but the chunk size is still a tuning tradeoff.
-- Terrain deformation modes are exposed, but raise/lower/flatten still need runtime tuning and feel validation.
+- Terrain deformation modes are working, but still need runtime tuning and feel validation.
 - Flight feel has a first tuning pass and needs runtime playtest validation.
 - Enemies fly directly at the player with no steering, avoidance, or distinct roles.
 - Spell system is still one hardcoded primary projectile.
 - Mana loop exists only as pickups, spell costs, and enemy death drops.
 - No castle, mana storage, collector, territory, or enemy wizard systems yet.
+- Phase 3 is only a first-pass mana loop; it still needs runtime tuning and playtest validation.
 - No original art/audio pass beyond simple procedural meshes/materials and synthesized placeholder tones.
 
 ### Next Recommended Work
 
-- Playtest Phase 1 flight/combat in Godot and capture tuning feedback.
-- Playtest terrain modes in Godot and tune crater radius/depth, raise/lower height, flatten target behavior, mana cost, and cooldown.
-- Tune chunk size after runtime playtesting if terrain edits make rebuilds too expensive.
-- Add a simple castle placeholder and mana storage target.
+- Playtest Phase 3 mana economy in Godot and capture tuning feedback.
+- Tune player mana capacity, well storage capacity, ambient regen, pickup attraction, pickup spawn rate, and enemy contesting.
+- Keep Phase 2 and Phase 1 on the playtest backlog for later signoff if further feel issues appear.

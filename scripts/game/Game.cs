@@ -24,6 +24,7 @@ public partial class Game : Node3D
         CreateLighting();
         AddChild(new GameAudio { Name = "GameAudio" });
         CreateArena();
+        CreateManaWell();
         CreatePlayer();
         CreateManaPickups();
         CreateEnemies();
@@ -75,6 +76,16 @@ public partial class Game : Node3D
             Position = AboveTerrain(0.0f, 14.0f, 9.0f)
         };
         AddChild(player);
+    }
+
+    private void CreateManaWell()
+    {
+        var well = new ManaWell
+        {
+            Name = "ManaWell",
+            Position = AboveTerrain(3.0f, 3.0f, 1.5f)
+        };
+        AddChild(well);
     }
 
     private void CreateManaPickups()

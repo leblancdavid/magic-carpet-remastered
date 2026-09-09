@@ -32,6 +32,9 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float TerrainSpellDepth { get; set; } = 5.0f;
     [Export] public float TerrainSpellHeight { get; set; } = 4.0f;
     [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
+    [Export] public int ManaCapacity { get; set; } = 80;
+    [Export] public int ManaDepositReserve { get; set; } = 20;
+    [Export] public float ManaDepositRadius { get; set; } = 6.0f;
     [Export] public int PrimarySpellManaCost { get; set; } = 5;
     [Export] public int TerrainSpellManaCost { get; set; } = 0;
 
@@ -41,7 +44,7 @@ public partial class CarpetFlightController : CharacterBody3D
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : GlobalPosition.Y - _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z);
     public bool IsInvulnerable => _damageInvulnerabilityTimer > 0.0f;
     public string CameraMode => _firstPersonCamera ? "First Person" : "Chase";
-    public string StatusMessage { get; private set; } = "Collect mana and destroy the red monsters.";
+    public string StatusMessage { get; private set; } = "Collect mana, bank excess at the well, and contest the red monsters.";
     public string TerrainDebugText => _arena == null
         ? "Terrain: unavailable"
         : $"Terrain edit: {_arena.LastEditedVertexCount} verts   Chunks: {_arena.LastRebuiltChunkCount}   Rebuild: {_arena.LastRebuildMilliseconds:0.00} ms";
@@ -61,6 +64,7 @@ public partial class CarpetFlightController : CharacterBody3D
     private MeshInstance3D _carpetVisual = null!;
     private StandardMaterial3D _carpetMaterial = null!;
     private HeightmapArena? _arena;
+    private ManaWell? _manaWell;
     private float _yaw;
     private float _pitch = -0.2f;
     private float _fireCooldown;
@@ -75,6 +79,7 @@ public partial class CarpetFlightController : CharacterBody3D
         AddToGroup("player");
         Input.MouseMode = Input.MouseModeEnum.Captured;
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        _manaWell = GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
 
         _cameraPivot = new Node3D { Name = "CameraPivot" };
         AddChild(_cameraPivot);
@@ -168,6 +173,7 @@ public partial class CarpetFlightController : CharacterBody3D
         MoveAndSlide();
 
         ClampAboveGround();
+        RouteManaToWell();
 
         if (Input.IsActionPressed("cast_primary") && _fireCooldown <= 0.0f)
         {
@@ -182,12 +188,42 @@ public partial class CarpetFlightController : CharacterBody3D
         }
     }
 
-    public void AddMana(int amount)
+    public int AddMana(int amount)
     {
-        Mana += amount;
-        StatusMessage = $"Mana +{amount}";
-        _feedbackTimer = 1.0f;
-        GameAudio.Instance?.PlayPickup();
+        if (amount <= 0)
+        {
+            return 0;
+        }
+
+        int before = Mana;
+        Mana = Mathf.Min(ManaCapacity, Mana + amount);
+        int accepted = Mana - before;
+
+        if (accepted > 0)
+        {
+            StatusMessage = accepted == amount ? $"Mana +{accepted}" : $"Mana +{accepted} (full)";
+            _feedbackTimer = 1.0f;
+            GameAudio.Instance?.PlayPickup();
+        }
+        else
+        {
+            StatusMessage = "Mana full.";
+            _feedbackTimer = 0.8f;
+        }
+
+        return accepted;
+    }
+
+    public int SpendMana(int amount)
+    {
+        if (amount <= 0)
+        {
+            return 0;
+        }
+
+        int spent = Mathf.Min(Mana, amount);
+        Mana -= spent;
+        return spent;
     }
 
     public void ApplyDamage(int amount)
@@ -224,7 +260,7 @@ public partial class CarpetFlightController : CharacterBody3D
             return;
         }
 
-        Mana -= PrimarySpellManaCost;
+        SpendMana(PrimarySpellManaCost);
         StatusMessage = "Firebolt";
         _feedbackTimer = 0.35f;
         GameAudio.Instance?.PlaySpellCast();
@@ -263,7 +299,7 @@ public partial class CarpetFlightController : CharacterBody3D
             return;
         }
 
-        Mana -= manaCost;
+        SpendMana(manaCost);
         switch (mode)
         {
             case TerrainSpellMode.Crater:
@@ -401,6 +437,31 @@ public partial class CarpetFlightController : CharacterBody3D
 
         GlobalPosition = new Vector3(GlobalPosition.X, minimumY, GlobalPosition.Z);
         Velocity = new Vector3(Velocity.X, Mathf.Max(0.0f, Velocity.Y), Velocity.Z);
+    }
+
+    private void RouteManaToWell()
+    {
+        _manaWell ??= GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
+        if (_manaWell == null || Mana <= ManaDepositReserve)
+        {
+            return;
+        }
+
+        if (GlobalPosition.DistanceTo(_manaWell.GlobalPosition) > ManaDepositRadius)
+        {
+            return;
+        }
+
+        int depositAmount = Mana - ManaDepositReserve;
+        int deposited = _manaWell.DepositMana(depositAmount);
+        if (deposited <= 0)
+        {
+            return;
+        }
+
+        Mana -= deposited;
+        StatusMessage = $"Banked {deposited} mana";
+        _feedbackTimer = 0.6f;
     }
 
     private void UpdateCamera(float delta)
