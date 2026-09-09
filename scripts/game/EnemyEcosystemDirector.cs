@@ -142,9 +142,14 @@ public partial class EnemyEcosystemDirector : Node
 
         if (zone.Name == "Castle Ruins")
         {
+            if (zonePressure < 0.45f)
+            {
+                return Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker;
+            }
+
             return zonePressure < 0.7f
-                ? Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker
-                : Enemies.EnemyEcosystemEnemy.EnemyRole.EnemyWizard;
+                ? Enemies.EnemyEcosystemEnemy.EnemyRole.EnemyWizard
+                : Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker;
         }
 
         if (zone.Name == "Lowland Shore")

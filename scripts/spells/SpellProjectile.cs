@@ -74,6 +74,11 @@ public partial class SpellProjectile : Area3D
             monster.ApplyDamage(Damage);
         }
 
+        if (body is EnemyEcosystemEnemy ecosystemEnemy)
+        {
+            ecosystemEnemy.ApplyDamage(Damage);
+        }
+
         if (body.IsInGroup("deformable_terrain") && GetTree().GetFirstNodeInGroup("heightmap_arena") is HeightmapArena arena)
         {
             arena.ApplyCrater(GlobalPosition, TerrainCraterRadius, TerrainCraterDepth);

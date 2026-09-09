@@ -72,6 +72,10 @@
 - Tuned the phase 5 ecosystem by adding per-role population caps, a gentler intensity ramp, and better spawn fallback logic.
 - Added retreat-and-deposit behavior for mana thieves and enemy wizards so they can carry pressure back to the enemy castle.
 - Verified `dotnet build MagicCarpetRemastered.sln` after the phase 5 tuning pass.
+- Fixed player fireballs so they damage the new phase 5 ecosystem enemies as well as the earlier `SimpleMonster`.
+- Adjusted castle-attacker selection so red siege units can actually spawn from the castle ruins zone during playtest.
+- Added an explicit HUD color/role legend to make the phase 5 enemy roles easier to identify in-game.
+- Verified `dotnet build MagicCarpetRemastered.sln` after the phase 5 visibility and combat routing fix.
 
 ### Current Prototype Controls
 
@@ -103,6 +107,7 @@
 - Phase 4 is only a first-pass castle layer; it still needs runtime tuning and playtest validation.
 - Phase 5 is a first-pass enemy ecosystem; it still needs runtime tuning and playtest validation.
 - Phase 5 now has basic role caps and retreat loops, but it still needs runtime tuning and playtest validation.
+- Phase 5 combat readability was improved by fixing damage routing to the new enemy type and adding a HUD color legend, but the mana economy still needs signoff tuning.
 - No original art/audio pass beyond simple procedural meshes/materials and synthesized placeholder tones.
 
 ### Next Recommended Work
@@ -114,3 +119,4 @@
 - Tune castle scale, health, storage capacity, and collector speed/routing if the territory loop feels unclear.
 - Playtest Phase 5 enemy ecosystem in Godot and capture tuning feedback.
 - Tune enemy spawn pacing, role mix, enemy health/damage, and wizard pressure if the ecosystem feels too sparse or too aggressive.
+- Re-test Phase 5 now that fireballs damage ecosystem enemies and confirm the red caster/wizard mix appears at low-to-mid pressure.
