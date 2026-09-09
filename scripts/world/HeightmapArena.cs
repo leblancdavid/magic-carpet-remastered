@@ -6,16 +6,19 @@ namespace MagicCarpetRemastered.Scripts.World;
 public partial class HeightmapArena : Node3D
 {
     [Export] public int CellsPerSide { get; set; } = 72;
+    [Export] public int ChunkCells { get; set; } = 12;
     [Export] public float CellSize { get; set; } = 2.0f;
     [Export] public float HeightScale { get; set; } = 9.0f;
     [Export] public float WaterHeight { get; set; } = -0.8f;
 
     public int LastEditedVertexCount { get; private set; }
+    public int LastRebuiltChunkCount { get; private set; }
     public double LastRebuildMilliseconds { get; private set; }
 
     private float[,] _heights = null!;
-    private MeshInstance3D? _terrainMesh;
-    private StaticBody3D? _terrainBody;
+    private readonly Dictionary<Vector2I, TerrainChunk> _chunks = new();
+    private readonly HashSet<Vector2I> _pendingChunks = new();
+    private StandardMaterial3D? _terrainMaterial;
     private int _pendingEditedVertexCount;
     private bool _rebuildQueued;
 
@@ -69,60 +72,24 @@ public partial class HeightmapArena : Node3D
             }
         }
 
-        RegisterTerrainEdit(editedVertices);
+        RegisterTerrainEdit(editedVertices, minX, maxX, minZ, maxZ);
     }
 
     private void BuildTerrain()
     {
         ulong rebuildStartUsec = Time.GetTicksUsec();
 
-        _terrainMesh?.QueueFree();
-        _terrainBody?.QueueFree();
-
-        var surface = new SurfaceTool();
-        surface.Begin(Mesh.PrimitiveType.Triangles);
-
-        var collisionTriangles = new List<Vector3>();
-
-        for (int z = 0; z < CellsPerSide; z++)
+        EnsureTerrainMaterial();
+        int chunkCount = Mathf.CeilToInt((float)CellsPerSide / ChunkCells);
+        for (int chunkZ = 0; chunkZ < chunkCount; chunkZ++)
         {
-            for (int x = 0; x < CellsPerSide; x++)
+            for (int chunkX = 0; chunkX < chunkCount; chunkX++)
             {
-                Vector3 a = PointAt(x, z);
-                Vector3 b = PointAt(x + 1, z);
-                Vector3 c = PointAt(x, z + 1);
-                Vector3 d = PointAt(x + 1, z + 1);
-
-                AddTriangle(surface, collisionTriangles, a, c, b);
-                AddTriangle(surface, collisionTriangles, b, c, d);
+                RebuildChunk(new Vector2I(chunkX, chunkZ));
             }
         }
 
-        surface.GenerateNormals();
-        var mesh = surface.Commit();
-
-        _terrainMesh = new MeshInstance3D
-        {
-            Name = "TerrainMesh",
-            Mesh = mesh
-        };
-        _terrainMesh.MaterialOverride = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(0.24f, 0.34f, 0.18f),
-            Roughness = 1.0f,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-            VertexColorUseAsAlbedo = true
-        };
-        AddChild(_terrainMesh);
-
-        _terrainBody = new StaticBody3D { Name = "TerrainCollision" };
-        _terrainBody.AddToGroup("deformable_terrain");
-        _terrainBody.AddChild(new CollisionShape3D
-        {
-            Shape = new ConcavePolygonShape3D { Data = collisionTriangles.ToArray() }
-        });
-        AddChild(_terrainBody);
-
+        LastRebuiltChunkCount = chunkCount * chunkCount;
         LastRebuildMilliseconds = (Time.GetTicksUsec() - rebuildStartUsec) / 1000.0;
     }
 
@@ -225,10 +192,10 @@ public partial class HeightmapArena : Node3D
             }
         }
 
-        RegisterTerrainEdit(editedVertices);
+        RegisterTerrainEdit(editedVertices, minX, maxX, minZ, maxZ);
     }
 
-    private void RegisterTerrainEdit(int editedVertices)
+    private void RegisterTerrainEdit(int editedVertices, int minX, int maxX, int minZ, int maxZ)
     {
         if (editedVertices <= 0)
         {
@@ -238,6 +205,7 @@ public partial class HeightmapArena : Node3D
 
         _pendingEditedVertexCount += editedVertices;
         LastEditedVertexCount = _pendingEditedVertexCount;
+        QueueAffectedChunks(minX, maxX, minZ, maxZ);
         QueueTerrainRebuild();
     }
 
@@ -254,9 +222,90 @@ public partial class HeightmapArena : Node3D
 
     private void RebuildTerrain()
     {
+        ulong rebuildStartUsec = Time.GetTicksUsec();
+        int rebuiltChunks = 0;
+
         _rebuildQueued = false;
-        BuildTerrain();
+        foreach (Vector2I chunkKey in _pendingChunks)
+        {
+            RebuildChunk(chunkKey);
+            rebuiltChunks++;
+        }
+
+        _pendingChunks.Clear();
         _pendingEditedVertexCount = 0;
+        LastRebuiltChunkCount = rebuiltChunks;
+        LastRebuildMilliseconds = (Time.GetTicksUsec() - rebuildStartUsec) / 1000.0;
+    }
+
+    private void RebuildChunk(Vector2I chunkKey)
+    {
+        EnsureTerrainMaterial();
+
+        int startX = chunkKey.X * ChunkCells;
+        int startZ = chunkKey.Y * ChunkCells;
+        int endX = Mathf.Min(startX + ChunkCells, CellsPerSide);
+        int endZ = Mathf.Min(startZ + ChunkCells, CellsPerSide);
+        if (startX >= CellsPerSide || startZ >= CellsPerSide)
+        {
+            return;
+        }
+
+        TerrainChunk chunk = GetOrCreateChunk(chunkKey);
+        var surface = new SurfaceTool();
+        surface.Begin(Mesh.PrimitiveType.Triangles);
+
+        var collisionTriangles = new List<Vector3>();
+        for (int z = startZ; z < endZ; z++)
+        {
+            for (int x = startX; x < endX; x++)
+            {
+                Vector3 a = PointAt(x, z);
+                Vector3 b = PointAt(x + 1, z);
+                Vector3 c = PointAt(x, z + 1);
+                Vector3 d = PointAt(x + 1, z + 1);
+
+                AddTriangle(surface, collisionTriangles, a, c, b);
+                AddTriangle(surface, collisionTriangles, b, c, d);
+            }
+        }
+
+        surface.GenerateNormals();
+        chunk.Mesh.Mesh = surface.Commit();
+        chunk.Mesh.MaterialOverride = _terrainMaterial;
+        chunk.Collision.Shape = new ConcavePolygonShape3D { Data = collisionTriangles.ToArray() };
+    }
+
+    private TerrainChunk GetOrCreateChunk(Vector2I chunkKey)
+    {
+        if (_chunks.TryGetValue(chunkKey, out TerrainChunk? existingChunk))
+        {
+            return existingChunk;
+        }
+
+        var mesh = new MeshInstance3D { Name = $"TerrainMesh_{chunkKey.X}_{chunkKey.Y}" };
+        AddChild(mesh);
+
+        var body = new StaticBody3D { Name = $"TerrainCollision_{chunkKey.X}_{chunkKey.Y}" };
+        body.AddToGroup("deformable_terrain");
+        var collision = new CollisionShape3D { Name = "CollisionShape3D" };
+        body.AddChild(collision);
+        AddChild(body);
+
+        var chunk = new TerrainChunk(mesh, collision);
+        _chunks[chunkKey] = chunk;
+        return chunk;
+    }
+
+    private void EnsureTerrainMaterial()
+    {
+        _terrainMaterial ??= new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.24f, 0.34f, 0.18f),
+            Roughness = 1.0f,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+            VertexColorUseAsAlbedo = true
+        };
     }
 
     private static float SmoothFalloff(float normalizedDistance)
@@ -272,6 +321,22 @@ public partial class HeightmapArena : Node3D
         maxX = Mathf.Clamp(Mathf.CeilToInt((worldPosition.X + radius + half) / CellSize), 0, CellsPerSide);
         minZ = Mathf.Clamp(Mathf.FloorToInt((worldPosition.Z - radius + half) / CellSize), 0, CellsPerSide);
         maxZ = Mathf.Clamp(Mathf.CeilToInt((worldPosition.Z + radius + half) / CellSize), 0, CellsPerSide);
+    }
+
+    private void QueueAffectedChunks(int minX, int maxX, int minZ, int maxZ)
+    {
+        int minCellX = Mathf.Max(0, minX - 1);
+        int maxCellX = Mathf.Min(CellsPerSide - 1, maxX);
+        int minCellZ = Mathf.Max(0, minZ - 1);
+        int maxCellZ = Mathf.Min(CellsPerSide - 1, maxZ);
+
+        for (int chunkZ = minCellZ / ChunkCells; chunkZ <= maxCellZ / ChunkCells; chunkZ++)
+        {
+            for (int chunkX = minCellX / ChunkCells; chunkX <= maxCellX / ChunkCells; chunkX++)
+            {
+                _pendingChunks.Add(new Vector2I(chunkX, chunkZ));
+            }
+        }
     }
 
     private static void AddTriangle(SurfaceTool surface, List<Vector3> collisionTriangles, Vector3 a, Vector3 b, Vector3 c)
@@ -307,4 +372,6 @@ public partial class HeightmapArena : Node3D
             ? new Color(0.32f, 0.48f, 0.22f)
             : new Color(0.44f, 0.42f, 0.35f);
     }
+
+    private sealed record TerrainChunk(MeshInstance3D Mesh, CollisionShape3D Collision);
 }

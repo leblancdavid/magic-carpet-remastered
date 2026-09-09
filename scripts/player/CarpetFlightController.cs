@@ -35,7 +35,7 @@ public partial class CarpetFlightController : CharacterBody3D
     public string StatusMessage { get; private set; } = "Collect mana and destroy the red monsters.";
     public string TerrainDebugText => _arena == null
         ? "Terrain: unavailable"
-        : $"Terrain edit: {_arena.LastEditedVertexCount} verts   Rebuild: {_arena.LastRebuildMilliseconds:0.00} ms";
+        : $"Terrain edit: {_arena.LastEditedVertexCount} verts   Chunks: {_arena.LastRebuiltChunkCount}   Rebuild: {_arena.LastRebuildMilliseconds:0.00} ms";
 
     private Node3D _cameraPivot = null!;
     private Camera3D _camera = null!;

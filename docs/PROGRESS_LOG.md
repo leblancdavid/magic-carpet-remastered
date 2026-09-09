@@ -44,6 +44,8 @@
 - Optimized terrain deformation edits to scan only the affected height-grid bounds instead of every vertex in the arena.
 - Added HUD terrain diagnostics showing the most recent edited vertex count and terrain rebuild time.
 - Changed terrain edits to update the height grid immediately while deferring and coalescing mesh/collision rebuilds to one rebuild per frame.
+- Split the terrain mesh/collision into reusable chunks and now rebuild only the chunks touched by deformation edits.
+- Expanded HUD terrain diagnostics to include the number of rebuilt chunks.
 - Verified `dotnet build MagicCarpetRemastered.sln` after each implementation pass.
 
 ### Current Prototype Controls
@@ -61,7 +63,7 @@
 ### Known Gaps
 
 - Godot runtime is tested manually by the user; CLI runtime verification is blocked because `godot` is not on `PATH`.
-- Terrain deformation scans affected vertices and coalesces rebuilds, but still rebuilds the full mesh/collision instead of partial chunks.
+- Terrain deformation scans affected vertices, coalesces rebuilds, and rebuilds only affected chunks, but the chunk size is still a tuning tradeoff.
 - Terrain deformation currently has crater gameplay only; raising/lowering/flattening APIs exist but are not exposed through distinct spells yet.
 - Flight feel has a first tuning pass and needs runtime playtest validation.
 - Enemies fly directly at the player with no steering, avoidance, or distinct roles.
@@ -74,5 +76,5 @@
 
 - Playtest Phase 1 flight/combat in Godot and capture tuning feedback.
 - Playtest terrain crater spell and firebolt craters in Godot, then tune crater radius/depth/mana cost.
-- Replace full terrain rebuilds with a chunked rebuild path if deformation remains too expensive after runtime playtesting.
+- Tune chunk size after runtime playtesting if crater frequency or large spells make rebuilds too expensive.
 - Add a simple castle placeholder and mana storage target.
