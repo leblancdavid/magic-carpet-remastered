@@ -31,7 +31,7 @@ public partial class Game : Node3D
         CreatePlayer();
         CreateCollectors();
         CreateManaPickups();
-        CreateEnemies();
+        CreateEnemyEcosystem();
         AddChild(new Hud { Name = "Hud" });
     }
 
@@ -149,23 +149,9 @@ public partial class Game : Node3D
         }
     }
 
-    private void CreateEnemies()
+    private void CreateEnemyEcosystem()
     {
-        Vector3[] positions =
-        {
-            AboveTerrain(0.0f, -18.0f, 3.0f),
-            AboveTerrain(18.0f, -4.0f, 4.0f),
-            AboveTerrain(-18.0f, 2.0f, 5.0f)
-        };
-
-        foreach (Vector3 position in positions)
-        {
-            AddChild(new SimpleMonster
-            {
-                Name = "SimpleMonster",
-                Position = position
-            });
-        }
+        AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector" });
     }
 
     private void AddPillar(Vector3 position)

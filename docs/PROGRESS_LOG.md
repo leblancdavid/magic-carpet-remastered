@@ -64,6 +64,14 @@
 - Added `ManaCollectorSpirit` to route mana between the well and castles, creating a visible territory loop.
 - Spawned player and enemy castles in the main scene and surfaced their status in the HUD.
 - Verified `dotnet build MagicCarpetRemastered.sln` after the Phase 4 implementation pass.
+- Began Phase 5 enemy ecosystem work by adding role-based enemy archetypes for flying swarms, ground beasts, ranged casters, castle attackers, mana thieves, and an enemy wizard.
+- Added `EnemyEcosystemDirector` to control biome/intensity-based spawning and initial wave setup.
+- Routed enemy projectiles into castle damage so siege units can pressure territory as well as the player.
+- Expanded the HUD with ecosystem pressure and role population readout.
+- Verified `dotnet build MagicCarpetRemastered.sln` after the Phase 5 implementation pass.
+- Tuned the phase 5 ecosystem by adding per-role population caps, a gentler intensity ramp, and better spawn fallback logic.
+- Added retreat-and-deposit behavior for mana thieves and enemy wizards so they can carry pressure back to the enemy castle.
+- Verified `dotnet build MagicCarpetRemastered.sln` after the phase 5 tuning pass.
 
 ### Current Prototype Controls
 
@@ -93,6 +101,8 @@
 - No castle, mana storage, collector, territory, or enemy wizard systems yet.
 - Phase 3 is only a first-pass mana loop; it still needs runtime tuning and playtest validation.
 - Phase 4 is only a first-pass castle layer; it still needs runtime tuning and playtest validation.
+- Phase 5 is a first-pass enemy ecosystem; it still needs runtime tuning and playtest validation.
+- Phase 5 now has basic role caps and retreat loops, but it still needs runtime tuning and playtest validation.
 - No original art/audio pass beyond simple procedural meshes/materials and synthesized placeholder tones.
 
 ### Next Recommended Work
@@ -102,3 +112,5 @@
 - Keep Phase 2 and Phase 1 on the playtest backlog for later signoff if further feel issues appear.
 - Playtest Phase 4 castle loop in Godot and capture tuning feedback.
 - Tune castle scale, health, storage capacity, and collector speed/routing if the territory loop feels unclear.
+- Playtest Phase 5 enemy ecosystem in Godot and capture tuning feedback.
+- Tune enemy spawn pacing, role mix, enemy health/damage, and wizard pressure if the ecosystem feels too sparse or too aggressive.

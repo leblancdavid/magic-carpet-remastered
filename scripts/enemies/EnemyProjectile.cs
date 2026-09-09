@@ -1,6 +1,7 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Player;
 using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Enemies;
 
@@ -68,6 +69,11 @@ public partial class EnemyProjectile : Area3D
         if (body is CarpetFlightController player)
         {
             player.ApplyDamage(Damage);
+        }
+
+        if (body is CastleKeep castle)
+        {
+            castle.ApplyDamage(Damage);
         }
 
         QueueFree();

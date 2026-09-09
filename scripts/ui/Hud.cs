@@ -1,4 +1,5 @@
 using Godot;
+using MagicCarpetRemastered.Scripts.Game;
 using MagicCarpetRemastered.Scripts.Player;
 using MagicCarpetRemastered.Scripts.World;
 
@@ -11,6 +12,7 @@ public partial class Hud : CanvasLayer
     private ManaWell? _well;
     private CastleKeep? _playerCastle;
     private CastleKeep? _enemyCastle;
+    private EnemyEcosystemDirector? _enemyEcosystem;
 
     public override void _Ready()
     {
@@ -29,6 +31,7 @@ public partial class Hud : CanvasLayer
         _well ??= GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
         _playerCastle ??= GetTree().GetFirstNodeInGroup("player_castle") as CastleKeep;
         _enemyCastle ??= GetTree().GetFirstNodeInGroup("enemy_castle") as CastleKeep;
+        _enemyEcosystem ??= GetTree().GetFirstNodeInGroup("enemy_ecosystem_director") as EnemyEcosystemDirector;
         if (_player == null)
         {
             return;
@@ -38,6 +41,7 @@ public partial class Hud : CanvasLayer
         string wellText = _well == null ? "Well: unavailable" : $"Well: {_well.StoredMana}/{_well.StorageCapacity}";
         string playerCastleText = _playerCastle == null ? "Player castle: unavailable" : _playerCastle.GetStatusText();
         string enemyCastleText = _enemyCastle == null ? "Enemy castle: unavailable" : _enemyCastle.GetStatusText();
-        _label.Text = $"Health: {_player.Health}   Mana: {_player.Mana}/{_player.ManaCapacity}   Camera: {_player.CameraMode}{damageState}\nSpeed: {_player.Speed:0.0}   Clearance: {_player.AltitudeAboveTerrain:0.0}   {wellText}\n{playerCastleText}\n{enemyCastleText}\nTerrain mode: {_player.TerrainSpellModeText} ({_player.TerrainSpellManaCostForCurrentMode} mana)\n{_player.TerrainDebugText}\n{_player.StatusMessage}\nBank excess mana at the well. Route mana to your castle. Destroy or raid the enemy castle. WASD fly  Space/C ascend/descend  LMB fire ({_player.PrimarySpellManaCost} mana)  RMB cast terrain  {_player.TerrainSpellHelpText}  V camera  R restart  Esc mouse";
+        string ecosystemText = _enemyEcosystem == null ? "Ecosystem: unavailable" : _enemyEcosystem.StatusText;
+        _label.Text = $"Health: {_player.Health}   Mana: {_player.Mana}/{_player.ManaCapacity}   Camera: {_player.CameraMode}{damageState}\nSpeed: {_player.Speed:0.0}   Clearance: {_player.AltitudeAboveTerrain:0.0}   {wellText}\n{playerCastleText}\n{enemyCastleText}\n{ecosystemText}\nTerrain mode: {_player.TerrainSpellModeText} ({_player.TerrainSpellManaCostForCurrentMode} mana)\n{_player.TerrainDebugText}\n{_player.StatusMessage}\nBank excess mana at the well. Route mana to your castle. Clear swarms, thieves, beasts, and wizards. WASD fly  Space/C ascend/descend  LMB fire ({_player.PrimarySpellManaCost} mana)  RMB cast terrain  {_player.TerrainSpellHelpText}  V camera  R restart  Esc mouse";
     }
 }

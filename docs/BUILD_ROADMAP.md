@@ -108,6 +108,8 @@ Remaining Phase 4 work before signoff:
 
 Goal: create systemic pressure rather than only scripted waves.
 
+Status: implementation in progress. The prototype now has role-based enemy spawning with swarms, ground beasts, ranged casters, castle attackers, mana thieves, and an enemy wizard archetype. The director now caps each role and the mana thief / wizard roles have a retreat and deposit loop. Remaining work is runtime tuning, encounter validation, and signoff.
+
 Core work:
 
 - flying swarm enemy
@@ -120,6 +122,12 @@ Core work:
 - enemy wizard with flight, spells, mana goals, retreat, and castle interaction
 
 Deliverable: monsters and enemy wizards interact around mana, castles, and player pressure.
+
+Remaining Phase 5 work before signoff:
+
+- runtime playtest the enemy mix, spawn pacing, and role behavior in Godot
+- tune intensity ramp, max active enemies, spawn interval, and role health/damage values
+- decide whether enemy wizard retreat and castle interaction need deeper behavior before Phase 6
 
 ## Phase 6: Spell System
 

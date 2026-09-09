@@ -32,6 +32,8 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float TerrainSpellDepth { get; set; } = 5.0f;
     [Export] public float TerrainSpellHeight { get; set; } = 4.0f;
     [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
+    [Export] public float TerrainFollowStrength { get; set; } = 4.5f;
+    [Export] public float TerrainFollowMaxLiftSpeed { get; set; } = 10.0f;
     [Export] public int ManaCapacity { get; set; } = 80;
     [Export] public int ManaDepositReserve { get; set; } = 20;
     [Export] public float ManaDepositRadius { get; set; } = 6.0f;
@@ -166,6 +168,7 @@ public partial class CarpetFlightController : CharacterBody3D
 
         Vector3 horizontal = (GlobalBasis * horizontalInput) * MoveSpeed;
         Vector3 desiredVelocity = new(horizontal.X, localInput.Y * VerticalSpeed, horizontal.Z);
+        ApplyTerrainFollow(ref desiredVelocity);
         bool isAccelerating = horizontalInput.LengthSquared() > 0.001f || Mathf.Abs(localInput.Y) > 0.001f;
         Velocity = Velocity.MoveToward(desiredVelocity, (isAccelerating ? Acceleration : Drag) * deltaF);
         GameAudio.Instance?.SetFlightIntensity(Mathf.Clamp(Velocity.Length() / MoveSpeed, 0.0f, 1.0f));
@@ -437,6 +440,25 @@ public partial class CarpetFlightController : CharacterBody3D
 
         GlobalPosition = new Vector3(GlobalPosition.X, minimumY, GlobalPosition.Z);
         Velocity = new Vector3(Velocity.X, Mathf.Max(0.0f, Velocity.Y), Velocity.Z);
+    }
+
+    private void ApplyTerrainFollow(ref Vector3 desiredVelocity)
+    {
+        _arena ??= GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        if (_arena == null)
+        {
+            return;
+        }
+
+        float targetAltitude = _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z) + MinimumAltitude;
+        float altitudeError = targetAltitude - GlobalPosition.Y;
+        if (altitudeError <= 0.0f)
+        {
+            return;
+        }
+
+        float terrainLift = Mathf.Min(altitudeError * TerrainFollowStrength, TerrainFollowMaxLiftSpeed);
+        desiredVelocity.Y = Mathf.Max(desiredVelocity.Y, terrainLift);
     }
 
     private void RouteManaToWell()
