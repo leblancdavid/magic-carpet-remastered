@@ -28,12 +28,12 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float FireCooldownSeconds { get; set; } = 0.25f;
     [Export] public float TerrainSpellCooldownSeconds { get; set; } = 0.75f;
     [Export] public float TerrainSpellRange { get; set; } = 90.0f;
-    [Export] public float TerrainSpellRadius { get; set; } = 7.0f;
-    [Export] public float TerrainSpellDepth { get; set; } = 3.0f;
-    [Export] public float TerrainSpellHeight { get; set; } = 2.25f;
+    [Export] public float TerrainSpellRadius { get; set; } = 10.0f;
+    [Export] public float TerrainSpellDepth { get; set; } = 5.0f;
+    [Export] public float TerrainSpellHeight { get; set; } = 4.0f;
     [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
     [Export] public int PrimarySpellManaCost { get; set; } = 5;
-    [Export] public int TerrainSpellManaCost { get; set; } = 12;
+    [Export] public int TerrainSpellManaCost { get; set; } = 0;
 
     public int Mana { get; private set; } = 40;
     public int Health { get; private set; } = 100;
@@ -53,6 +53,7 @@ public partial class CarpetFlightController : CharacterBody3D
         TerrainSpellMode.Flatten => "Flatten",
         _ => "Crater"
     };
+    public int TerrainSpellManaCostForCurrentMode => GetTerrainSpellManaCost(_terrainSpellMode);
     public string TerrainSpellHelpText => "1 crater  2 raise  3 lower  4 flatten";
 
     private Node3D _cameraPivot = null!;
@@ -205,8 +206,13 @@ public partial class CarpetFlightController : CharacterBody3D
 
         if (Health == 0)
         {
-            GetTree().ReloadCurrentScene();
+            CallDeferred(nameof(ReloadSceneDeferred));
         }
+    }
+
+    private void ReloadSceneDeferred()
+    {
+        GetTree().ReloadCurrentScene();
     }
 
     private void CastPrimarySpell()
@@ -250,17 +256,13 @@ public partial class CarpetFlightController : CharacterBody3D
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
         Vector3 origin = _camera.GlobalPosition;
         Vector3 target = origin + direction * TerrainSpellRange;
-        var query = PhysicsRayQueryParameters3D.Create(origin, target);
-        query.Exclude = new Godot.Collections.Array<Rid> { GetRid() };
-        var result = GetWorld3D().DirectSpaceState.IntersectRay(query);
-        if (result.Count == 0 || !result.ContainsKey("position") || result["collider"].As<Node>() is not Node collider || !collider.IsInGroup("deformable_terrain"))
+        if (!TryFindTerrainHit(origin, target, out Vector3 hitPosition))
         {
             StatusMessage = "Aim at terrain to shape it.";
             _feedbackTimer = 0.8f;
             return;
         }
 
-        Vector3 hitPosition = (Vector3)result["position"];
         Mana -= manaCost;
         switch (mode)
         {
@@ -284,6 +286,61 @@ public partial class CarpetFlightController : CharacterBody3D
         GameAudio.Instance?.PlaySpellCast();
     }
 
+    private bool TryFindTerrainHit(Vector3 origin, Vector3 target, out Vector3 hitPosition)
+    {
+        var query = PhysicsRayQueryParameters3D.Create(origin, target);
+        query.Exclude = new Godot.Collections.Array<Rid> { GetRid() };
+
+        for (int i = 0; i < 8; i++)
+        {
+            var result = GetWorld3D().DirectSpaceState.IntersectRay(query);
+            if (result.Count == 0 || !result.ContainsKey("position") || !result.ContainsKey("collider"))
+            {
+                break;
+            }
+
+            hitPosition = (Vector3)result["position"];
+            if (result["collider"].As<Node>() is Node collider && collider.IsInGroup("deformable_terrain"))
+            {
+                return true;
+            }
+
+            if (result["collider"].As<Node>() is CollisionObject3D collisionObject)
+            {
+                query.Exclude.Add(collisionObject.GetRid());
+                continue;
+            }
+
+            break;
+        }
+
+        if (_arena != null)
+        {
+            Vector3 ray = target - origin;
+            float rayLength = ray.Length();
+            if (rayLength > 0.001f)
+            {
+                Vector3 stepDirection = ray / rayLength;
+                const int steps = 96;
+                float stepLength = rayLength / steps;
+                for (int i = 0; i <= steps; i++)
+                {
+                    float distance = stepLength * i;
+                    Vector3 point = origin + stepDirection * distance;
+                    float terrainHeight = _arena.HeightAt(point.X, point.Z);
+                    if (point.Y <= terrainHeight)
+                    {
+                        hitPosition = new Vector3(point.X, terrainHeight, point.Z);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        hitPosition = default;
+        return false;
+    }
+
     private void SetTerrainSpellMode(TerrainSpellMode mode)
     {
         _terrainSpellMode = mode;
@@ -293,14 +350,7 @@ public partial class CarpetFlightController : CharacterBody3D
 
     private int GetTerrainSpellManaCost(TerrainSpellMode mode)
     {
-        return mode switch
-        {
-            TerrainSpellMode.Crater => TerrainSpellManaCost,
-            TerrainSpellMode.Raise => TerrainSpellManaCost,
-            TerrainSpellMode.Lower => TerrainSpellManaCost,
-            TerrainSpellMode.Flatten => TerrainSpellManaCost + 2,
-            _ => TerrainSpellManaCost
-        };
+        return TerrainSpellManaCost;
     }
 
     private void SpawnTerrainSpellBurst(Vector3 position)

@@ -50,6 +50,7 @@
 - Added terrain spell mode switching for crater, raise, lower, and flatten using `1` through `4`.
 - Routed right mouse terrain casting through the selected terrain mode instead of crater-only behavior.
 - Added terrain mode and control hints to the HUD.
+- Set terrain casting mana cost to zero so terrain mode testing is not blocked by mana.
 - Verified `dotnet build MagicCarpetRemastered.sln` after the terrain mode implementation.
 
 ### Current Prototype Controls
@@ -59,11 +60,11 @@
 - `C`: descend
 - Mouse: look
 - Left mouse: cast primary firebolt
- - Right mouse: cast selected terrain mode
- - `1`: terrain crater mode
- - `2`: terrain raise mode
- - `3`: terrain lower mode
- - `4`: terrain flatten mode
+- Right mouse: cast selected terrain mode
+- `1`: terrain crater mode
+- `2`: terrain raise mode
+- `3`: terrain lower mode
+- `4`: terrain flatten mode
 - `V`: toggle chase/first-person camera
 - `R`: restart arena
 - `Esc`: capture/release mouse
