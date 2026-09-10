@@ -45,8 +45,26 @@ public partial class SpellProjectile : Area3D
     public override void _PhysicsProcess(double delta)
     {
         float deltaF = (float)delta;
+        Vector3 previous = GlobalPosition;
         GlobalPosition += _direction * Speed * deltaF;
         _lifeRemaining -= deltaF;
+
+        float stepDistance = GlobalPosition.DistanceTo(previous);
+        foreach (Node node in GetTree().GetNodesInGroup("balloon"))
+        {
+            if (node is not ManaBalloon balloon)
+            {
+                continue;
+            }
+
+            if (GlobalPosition.DistanceTo(balloon.GlobalPosition) <= stepDistance + 0.6f)
+            {
+                balloon.ApplyDamage(Damage);
+                SpawnImpactBurst();
+                QueueFree();
+                return;
+            }
+        }
 
         if (_lifeRemaining <= 0.0f)
         {

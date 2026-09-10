@@ -64,7 +64,7 @@ Remaining Phase 2 work before signoff:
 
 Goal: make mana control the strategic loop.
 
-Status: implementation in progress with the original-style direction now started. Mana pickups, spell costs, enemy death drops, a player mana capacity, a mana well/storage node, pickup attraction/routing, castle storage, and basic enemy mana contesting exist. The player now has claimed mana as a long-term owned pool; current mana capacity follows claimed mana; current mana regenerates from claimed mana; pickups claim mana instead of only refilling current mana; and player-castle deposits add to claimed mana. Remaining work is deeper possession/balloon behavior and enemy ownership contesting.
+Status: implementation substantially advanced with the original-style direction in place. Mana pickups now carry explicit `Neutral`/`Player`/`Enemy` ownership with distinct colors; claimed/possessed mana grows the player's long-term pool; the well is a finite neutral landmark that seeds a claimable orb field instead of regenerating; a `Possess` economy spell (sixth `Tab` slot) converts aim-weighted neutral/rival loose mana into player-owned orbs; and player-owned orbs home naturally to the player. `ManaBalloon` replaces the old collector spirit and visibly hauls owned loose mana back to castle storage, popping on damage to spill neutral orbs; enemy thieves/wizards acquire and absorb loose orbs and drop rival-owned orbs on death. A world-mana tracker sums loose + castle + transit mana and exposes a 50% equilibrium quota on the HUD. Remaining work is runtime playtest tuning and gating the win/loss objective on quota state.
 
 Core work:
 
@@ -81,27 +81,26 @@ Deliverable: fights happen because mana is valuable and contested.
 
 Remaining Phase 3 work before signoff:
 
-- replace the remaining neutral-well source behavior with claimable world mana ownership
-- add explicit neutral/player/enemy mana ownership colors and a possession action/spell
-- make collector/balloon units visibly haul claimed loose mana to castle storage
-- connect enemy thieves/wizards to claimed mana ownership, not just well/castle storage theft
-- track finite world mana and castle-stored quota progress as the eventual level objective
-- runtime playtest the mana well, pickup routing, and enemy contesting loop in Godot after the claimed-mana pass
-- defer detailed capacity, regen, pickup rate, and contest-drain tuning until the claimed-mana loop is in place
-- decide whether the current well remains a neutral source or becomes a temporary stand-in for original-style mana possession and balloon hauling
+- runtime playtest possession aim selection, cost/cooldown, and ownership colors in Godot
+- runtime playtest balloon scoop/return/dock pacing and pop-spill behavior
+- tune enemy thief/wizard orb acquisition, absorb amounts, and retreat thresholds around the claimed-mana loop
+- validate world-mana totals and equilibrium-quota progress, then gate the win/loss objective on quota state
+- decide director response to quota state (spawn pressure shifts as the player approaches equilibrium)
+- defer detailed capacity, regen, pickup rate, and contest-drain tuning until the claimed-mana loop is playtested
+- drive the well forward from its finite neutral landmark role (visual landmark + initial field) as balloon/possession behavior matures
 
 ## Phase 4: Castle And Territory
 
 Goal: add base building, storage, and strategic conflict.
 
-Status: implementation in progress. The prototype now has a player castle, enemy castle, castle health/storage/growth, and collector spirits that route mana between the well and castles. Remaining work is runtime tuning and signoff.
+Status: implementation in progress. The prototype now has a player castle, enemy castle, castle health/storage/growth, and `ManaBalloon` haulers that visibly carry owned loose mana between the field and castles. Remaining work is runtime tuning and signoff.
 
 Core work:
 
 - player castle site and growth stages
 - mana storage and capacity
 - damageable castle structure
-- collector balloon or spirit equivalent
+- collector balloon or spirit equivalent (now owned `ManaBalloon` haulers)
 - enemy castles
 - castle attack/defense objectives
 
@@ -146,7 +145,7 @@ Deferred Phase 5 tuning:
 
 Goal: make spells the player's primary expression and progression axis.
 
-Status: first-pass spell variety is implemented. The current firebolt and terrain shaping abilities now have a small spell definition model and visible HUD loadout text. `Arcane Burst` adds area damage on `Q`, `Mana Shield` adds a defensive spell on `E`, `Wind Dash` adds mobility utility on `F`, and `Guardian` adds a temporary summoned ally on `G`. `Tab` now cycles the active quick spell for `LMB`, while direct spell hotkeys remain available. The original-style claimed/regenerating mana base now exists, so further spell tuning, unlock/upgrade rules, and runtime validation can resume once the claimed-mana loop is playtested.
+Status: first-pass spell variety is implemented. The current firebolt and terrain shaping abilities now have a small spell definition model and visible HUD loadout text. `Arcane Burst` adds area damage on `Q`, `Mana Shield` adds a defensive spell on `E`, `Wind Dash` adds mobility utility on `F`, and `Guardian` adds a temporary summoned ally on `G`. `Possess` is the first `Economy`-kind spell, cycling as the sixth `Tab` quick slot to claim loose neutral/rival mana as player-owned. `Tab` now cycles the active quick spell for `LMB`, while direct spell hotkeys remain available. The original-style claimed/regenerating mana base now exists, so further spell tuning, unlock/upgrade rules, and runtime validation can resume once the claimed-mana loop is playtested.
 
 Core work:
 

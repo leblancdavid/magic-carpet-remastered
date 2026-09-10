@@ -38,6 +38,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public int RetreatManaThreshold { get; set; } = 18;
     [Export] public float RetreatDistance { get; set; } = 14.0f;
     [Export] public float PlayerContactCooldownSeconds { get; set; } = 0.8f;
+    [Export] public float ManaTargetAcquireInterval { get; set; } = 0.6f;
+    [Export] public float MaxOrbSeekRadius { get; set; } = 42.0f;
 
     public string RoleText => Role switch
     {
@@ -51,10 +53,11 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     };
 
     private CarpetFlightController? _player;
-    private ManaWell? _manaWell;
     private CastleKeep? _playerCastle;
     private CastleKeep? _enemyCastle;
     private HeightmapArena? _arena;
+    private ManaPickup? _targetOrb;
+    private float _targetOrbCooldown;
     private StandardMaterial3D _material = null!;
     private float _attackCooldown;
     private float _rangedCooldown = 0.75f;
@@ -82,10 +85,10 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         _playerContactCooldown = Mathf.Max(0.0f, _playerContactCooldown - deltaF);
 
         _player ??= GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
-        _manaWell ??= GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
         _playerCastle ??= GetTree().GetFirstNodeInGroup("player_castle") as CastleKeep;
         _enemyCastle ??= GetTree().GetFirstNodeInGroup("enemy_castle") as CastleKeep;
         _arena ??= GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        _targetOrbCooldown = Mathf.Max(0.0f, _targetOrbCooldown - deltaF);
 
         if (Health <= 0)
         {
@@ -304,32 +307,46 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         return direction * MoveSpeed;
     }
 
-    private Vector3 MoveManaThief(Vector3 direction, float distance)
+private Vector3 MoveManaThief(Vector3 direction, float distance)
     {
-        if (_manaWell != null && _manaWell.StoredMana > 0)
+        if (ManaReserve >= 12)
+        {
+            return GetRetreatVector();
+        }
+
+        if (_targetOrb != null && IsInstanceValid(_targetOrb))
         {
             if (distance > ManaStealRadius)
             {
                 return direction * (MoveSpeed * 1.15f);
             }
 
-            if (ManaReserve >= 12)
-            {
-                return GetRetreatVector();
-            }
-
             return Vector3.Zero;
+        }
+
+        _targetOrb = null;
+
+        if (_playerCastle != null)
+        {
+            return direction * (MoveSpeed * 0.55f);
         }
 
         return direction * (MoveSpeed * 0.7f);
     }
 
-    private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
+private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
     {
-        if (_manaWell != null && ManaReserve < RetreatManaThreshold)
+        if (_targetOrb != null && IsInstanceValid(_targetOrb) && ManaReserve < RetreatManaThreshold)
         {
-            return distance > 8.0f ? direction * (MoveSpeed * 1.05f) + Vector3.Up * 0.4f : Vector3.Up * 0.35f;
+            if (distance > 8.0f)
+            {
+                return direction * (MoveSpeed * 1.05f) + Vector3.Up * 0.4f;
+            }
+
+            return Vector3.Up * 0.35f;
         }
+
+        _targetOrb = null;
 
         if (_playerCastle != null && _playerCastle.IsDestroyed == false)
         {
@@ -405,9 +422,10 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
                 }
                 break;
             case EnemyRole.ManaThief:
-                if (_manaWell != null && _manaWell.StoredMana > 0)
+                AcquireTargetOrb(preferPlayerOwned: true);
+                if (_targetOrb != null && IsInstanceValid(_targetOrb))
                 {
-                    return _manaWell.GlobalPosition;
+                    return _targetOrb.GlobalPosition;
                 }
                 if (_playerCastle != null)
                 {
@@ -415,9 +433,13 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
                 }
                 break;
             case EnemyRole.EnemyWizard:
-                if (_manaWell != null && ManaReserve < 18 && _manaWell.StoredMana > 0)
+                if (ManaReserve < RetreatManaThreshold)
                 {
-                    return _manaWell.GlobalPosition;
+                    AcquireTargetOrb(preferPlayerOwned: false);
+                    if (_targetOrb != null && IsInstanceValid(_targetOrb))
+                    {
+                        return _targetOrb.GlobalPosition;
+                    }
                 }
                 if (_playerCastle != null && !_playerCastle.IsDestroyed)
                 {
@@ -446,7 +468,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
         if (Role == EnemyRole.ManaThief)
         {
-            TryStealMana();
+            TryAbsorbLooseMana();
         }
 
         if (Role == EnemyRole.EnemyWizard)
@@ -524,26 +546,86 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         launchBurst.GlobalPosition = projectile.GlobalPosition;
     }
 
-    private void TryStealMana()
+private void TryAbsorbLooseMana()
     {
-        if (_manaWell == null || _manaWell.StoredMana <= 0)
+        if (_targetOrb == null || !IsInstanceValid(_targetOrb))
         {
             return;
         }
 
-        if (HorizontalDistanceTo(_manaWell.GlobalPosition) > ManaStealRadius || _attackCooldown > 0.0f)
+        if (HorizontalDistanceTo(_targetOrb.GlobalPosition) > ManaStealRadius || _attackCooldown > 0.0f)
         {
             return;
         }
 
-        int stolen = _manaWell.StealMana(ManaStealAmount);
-        if (stolen <= 0)
-        {
-            return;
-        }
-
-        AbsorbMana(stolen);
+        ManaPickup orb = _targetOrb;
+        AbsorbMana(orb.ManaAmount);
+        orb.QueueFree();
+        _targetOrb = null;
         _attackCooldown = AttackCooldownSeconds;
+    }
+
+    private void AcquireTargetOrb(bool preferPlayerOwned)
+    {
+        if (_targetOrbCooldown > 0.0f)
+        {
+            return;
+        }
+
+        _targetOrbCooldown = ManaTargetAcquireInterval;
+
+        if (_targetOrb != null && IsInstanceValid(_targetOrb))
+        {
+            bool stillValid = preferPlayerOwned
+                ? _targetOrb.Ownership == ManaOwnership.Player || _targetOrb.Ownership == ManaOwnership.Neutral
+                : _targetOrb.Ownership == ManaOwnership.Neutral;
+            if (stillValid)
+            {
+                return;
+            }
+
+            _targetOrb = null;
+        }
+
+        ManaPickup? bestPlayer = null;
+        ManaPickup? bestNeutral = null;
+        float bestPlayerDistance = float.MaxValue;
+        float bestNeutralDistance = float.MaxValue;
+
+        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+        {
+            if (node is not ManaPickup pickup || pickup.IsCarried)
+            {
+                continue;
+            }
+
+            float distance = GlobalPosition.DistanceTo(pickup.GlobalPosition);
+            if (distance > MaxOrbSeekRadius)
+            {
+                continue;
+            }
+
+            if (pickup.Ownership == ManaOwnership.Player && distance < bestPlayerDistance)
+            {
+                bestPlayerDistance = distance;
+                bestPlayer = pickup;
+            }
+
+            if (pickup.Ownership == ManaOwnership.Neutral && distance < bestNeutralDistance)
+            {
+                bestNeutralDistance = distance;
+                bestNeutral = pickup;
+            }
+        }
+
+        if (preferPlayerOwned)
+        {
+            _targetOrb = bestPlayer ?? bestNeutral ?? null;
+        }
+        else
+        {
+            _targetOrb = bestNeutral ?? null;
+        }
     }
 
     private void TryRamCastle()
@@ -693,6 +775,9 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
         int drops = Mathf.Clamp(ManaReserve / 6, 1, 4);
         int amountPerDrop = Mathf.Max(1, ManaReserve / drops);
+        ManaOwnership dropOwnership = Role is EnemyRole.ManaThief or EnemyRole.EnemyWizard
+            ? ManaOwnership.Enemy
+            : ManaOwnership.Neutral;
         for (int i = 0; i < drops; i++)
         {
             float angle = Mathf.Tau * i / drops;
@@ -700,7 +785,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             var pickup = new ManaPickup
             {
                 Name = "EnemyManaDrop",
-                ManaAmount = amountPerDrop
+                ManaAmount = amountPerDrop,
+                Ownership = dropOwnership
             };
             GetTree().CurrentScene.AddChild(pickup);
             pickup.GlobalPosition = GlobalPosition + offset;

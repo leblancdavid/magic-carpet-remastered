@@ -29,9 +29,10 @@ public partial class Game : Node3D
         CreateManaWell();
         CreateCastles();
         CreatePlayer();
-        CreateCollectors();
+        CreateBalloons();
         CreateManaPickups();
         CreateEnemyEcosystem();
+        AddChild(new WorldManaTracker { Name = "WorldManaTracker" });
         AddChild(new Hud { Name = "Hud" });
     }
 
@@ -112,41 +113,58 @@ public partial class Game : Node3D
         AddChild(_enemyCastle);
     }
 
-    private void CreateCollectors()
+    private void CreateBalloons()
     {
-        AddChild(new ManaCollectorSpirit
+        AddChild(new ManaBalloon
         {
-            Name = "PlayerCollector",
-            Position = AboveTerrain(1.0f, 1.0f, 5.0f)
+            Name = "PlayerBalloon",
+            UsePlayerMana = true,
+            Position = AboveTerrain(-16.0f, 4.0f, 5.0f)
         });
 
-        AddChild(new ManaCollectorSpirit
+        AddChild(new ManaBalloon
         {
-            Name = "EnemyCollector",
-            Position = AboveTerrain(14.0f, -10.0f, 5.0f),
-            CarryAmount = 10
+            Name = "EnemyBalloon",
+            UsePlayerMana = false,
+            Position = AboveTerrain(16.0f, -8.0f, 5.0f)
         });
     }
 
     private void CreateManaPickups()
     {
-        Vector3[] positions =
+        Vector3[] wellClusters =
         {
-            AboveTerrain(-8.0f, -8.0f, 4.0f),
-            AboveTerrain(8.0f, -10.0f, 5.0f),
-            AboveTerrain(14.0f, 4.0f, 4.0f),
-            AboveTerrain(-16.0f, 8.0f, 6.0f),
-            AboveTerrain(0.0f, -22.0f, 7.0f)
+            AboveTerrain(-10.0f, -3.0f, 4.0f),
+            AboveTerrain(9.0f, -13.0f, 5.0f),
+            AboveTerrain(13.0f, 7.0f, 4.0f),
+            AboveTerrain(-18.0f, 6.0f, 6.0f)
         };
 
-        foreach (Vector3 position in positions)
+        for (int cluster = 0; cluster < wellClusters.Length; cluster++)
         {
-            AddChild(new ManaPickup
+            int orbCount = 3 + cluster % 2;
+            for (int i = 0; i < orbCount; i++)
             {
-                Name = "ManaPickup",
-                Position = position
-            });
+                float angle = Mathf.Tau * i / orbCount + GD.Randf() * 0.6f;
+                float radius = 3.0f + GD.Randf() * 4.0f;
+                Vector3 offset = new Vector3(Mathf.Cos(angle) * radius, GD.Randf() * 2.0f, Mathf.Sin(angle) * radius);
+                AddChild(new ManaPickup
+                {
+                    Name = "LooseMana",
+                    ManaAmount = 8,
+                    Ownership = ManaOwnership.Neutral,
+                    Position = wellClusters[cluster] + offset
+                });
+            }
         }
+
+        AddChild(new ManaPickup
+        {
+            Name = "NeutralBeacon",
+            ManaAmount = 30,
+            Ownership = ManaOwnership.Neutral,
+            Position = AboveTerrain(2.0f, 10.0f, 7.0f)
+        });
     }
 
     private void CreateEnemyEcosystem()

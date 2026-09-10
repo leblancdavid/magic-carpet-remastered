@@ -4,18 +4,37 @@ using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
+public enum ManaOwnership
+{
+    Neutral,
+    Player,
+    Enemy
+}
+
 public partial class ManaPickup : Area3D
 {
     [Export] public int ManaAmount { get; set; } = 10;
-    [Export] public float AttractionRadius { get; set; } = 18.0f;
-    [Export] public float CollectionRadius { get; set; } = 1.2f;
-    [Export] public float HomingSpeed { get; set; } = 14.0f;
+    [Export] public ManaOwnership Ownership { get; set; } = ManaOwnership.Neutral;
+    [Export] public float CollectionRadius { get; set; } = 1.4f;
+    [Export] public float PlayerHomingRadius { get; set; } = 8.0f;
+    [Export] public float HomingSpeed { get; set; } = 13.0f;
+    [Export] public float BobHeight { get; set; } = 0.5f;
+    [Export] public float BobSpeed { get; set; } = 1.7f;
+
+    public Node3D? Hauler { get; private set; }
+    public bool IsCarried => Hauler != null;
 
     private CarpetFlightController? _player;
-    private ManaWell? _well;
+    private MeshInstance3D _mesh = null!;
+    private StandardMaterial3D _material = null!;
+    private Vector3 _carryOffset;
+    private Vector3 _homePosition;
+    private float _bobPhase;
+    private bool _homePositionInitialized;
 
     public override void _Ready()
     {
+        AddToGroup("loose_mana");
         BodyEntered += OnBodyEntered;
 
         var collision = new CollisionShape3D
@@ -24,53 +43,52 @@ public partial class ManaPickup : Area3D
         };
         AddChild(collision);
 
-        var mesh = new MeshInstance3D
+        _mesh = new MeshInstance3D
         {
             Mesh = new SphereMesh { Radius = 0.45f, Height = 0.9f }
         };
-        mesh.MaterialOverride = new StandardMaterial3D
+        _material = new StandardMaterial3D
         {
-            AlbedoColor = new Color(0.15f, 0.8f, 1.0f),
-            EmissionEnabled = true,
-            Emission = new Color(0.05f, 0.6f, 1.0f),
-            EmissionEnergyMultiplier = 1.5f
+            Roughness = 0.3f
         };
-        AddChild(mesh);
+        _mesh.MaterialOverride = _material;
+        AddChild(_mesh);
 
+        ApplyOwnershipVisual();
         SetPhysicsProcess(true);
     }
 
     public override void _PhysicsProcess(double delta)
     {
         float deltaF = (float)delta;
-        RotateY(deltaF * 2.0f);
+
+        if (!_homePositionInitialized)
+        {
+            _homePosition = GlobalPosition;
+            _homePositionInitialized = true;
+        }
+
+        if (IsCarried && Hauler != null)
+        {
+            GlobalPosition = Hauler.GlobalPosition + _carryOffset;
+            return;
+        }
+
+        _bobPhase += deltaF * BobSpeed;
+        float bob = Mathf.Sin(_bobPhase) * BobHeight * 0.5f;
+        GlobalPosition = _homePosition + Vector3.Up * bob;
 
         _player ??= GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
-        _well ??= GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
-
-        Node3D? target = SelectTarget();
-        if (target == null)
+        if (Ownership != ManaOwnership.Player || _player == null)
         {
             return;
         }
 
-        Vector3 toTarget = target.GlobalPosition - GlobalPosition;
-        float distance = toTarget.Length();
+        Vector3 toPlayer = _player.GlobalPosition - GlobalPosition;
+        float distance = toPlayer.Length();
         if (distance <= CollectionRadius)
         {
-            TryTransferToTarget(target);
-            return;
-        }
-
-        Vector3 direction = distance > 0.001f ? toTarget / distance : Vector3.Zero;
-        GlobalPosition += direction * HomingSpeed * deltaF;
-    }
-
-    private void OnBodyEntered(Node3D body)
-    {
-        if (body is CarpetFlightController player)
-        {
-            int accepted = player.AddMana(ManaAmount);
+            int accepted = _player.ClaimMana(ManaAmount);
             ManaAmount -= accepted;
             if (ManaAmount <= 0)
             {
@@ -80,68 +98,65 @@ public partial class ManaPickup : Area3D
             return;
         }
 
-        if (body is SimpleMonster monster)
+        if (distance <= PlayerHomingRadius)
+        {
+            Vector3 direction = distance > 0.001f ? toPlayer / distance : Vector3.Zero;
+            GlobalPosition += direction * HomingSpeed * deltaF;
+        }
+    }
+
+    public void BeginCarry(Node3D hauler, Vector3 carryOffset)
+    {
+        Hauler = hauler;
+        _carryOffset = carryOffset;
+    }
+
+    public void EndCarry()
+    {
+        Hauler = null;
+    }
+
+    public void SpillAt(Vector3 position)
+    {
+        Hauler = null;
+        _homePosition = position;
+        GlobalPosition = position;
+        _homePositionInitialized = true;
+    }
+
+    public void ReassignOwnership(ManaOwnership ownership)
+    {
+        Ownership = ownership;
+        ApplyOwnershipVisual();
+    }
+
+    private void OnBodyEntered(Node3D body)
+    {
+        if (body is SimpleMonster monster && Ownership == ManaOwnership.Neutral && !IsCarried)
         {
             monster.AbsorbMana(ManaAmount);
             QueueFree();
         }
     }
 
-    private Node3D? SelectTarget()
+    private void ApplyOwnershipVisual()
     {
-        Node3D? target = null;
-        float bestDistance = float.MaxValue;
-
-        if (_player != null && (_player.Mana < _player.ManaCapacity || _player.CanClaimMana))
+        if (_material == null)
         {
-            float distanceToPlayer = GlobalPosition.DistanceTo(_player.GlobalPosition);
-            if (distanceToPlayer <= AttractionRadius)
-            {
-                target = _player;
-                bestDistance = distanceToPlayer;
-            }
-        }
-
-        if (_well != null && _well.HasSpace)
-        {
-            float distanceToWell = GlobalPosition.DistanceTo(_well.GlobalPosition);
-            if (distanceToWell <= AttractionRadius && distanceToWell < bestDistance)
-            {
-                target = _well;
-                bestDistance = distanceToWell;
-            }
-        }
-
-        return target;
-    }
-
-    private void TryTransferToTarget(Node3D target)
-    {
-        if (target is CarpetFlightController player)
-        {
-            int accepted = player.AddMana(ManaAmount);
-            ManaAmount -= accepted;
-            if (ManaAmount <= 0)
-            {
-                QueueFree();
-                return;
-            }
-
-            if (_well != null)
-            {
-                int deposited = _well.DepositMana(ManaAmount);
-                if (deposited > 0)
-                {
-                    QueueFree();
-                }
-            }
-
             return;
         }
 
-        if (target is ManaWell well && well.DepositMana(ManaAmount) > 0)
+        (Color albedo, Color emission) palette = Ownership switch
         {
-            QueueFree();
-        }
+            ManaOwnership.Neutral => (new Color(0.85f, 0.85f, 0.9f), new Color(0.55f, 0.55f, 0.65f)),
+            ManaOwnership.Player => (new Color(0.15f, 0.8f, 1.0f), new Color(0.05f, 0.6f, 1.0f)),
+            ManaOwnership.Enemy => (new Color(0.95f, 0.28f, 0.4f), new Color(0.85f, 0.15f, 0.3f)),
+            _ => (new Color(0.85f, 0.85f, 0.9f), new Color(0.55f, 0.55f, 0.65f))
+        };
+
+        _material.AlbedoColor = palette.albedo;
+        _material.EmissionEnabled = true;
+        _material.Emission = palette.emission;
+        _material.EmissionEnergyMultiplier = 1.5f;
     }
 }

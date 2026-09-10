@@ -43,3 +43,12 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 
 - Mana should not behave like ordinary shooter ammunition. The original game's strategic identity comes from mana being claimed, hauled, stored, stolen, and converted into long-term power through the castle. Current mana should regenerate from the player's owned/claimed pool so spending spells creates temporary pressure without forcing constant pickup scavenging.
 - The underlying design is an embodied RTS economy disguised as first-person aerial spell combat. Prioritize systems where flight, spell choice, mana ownership, balloons, castles, rivals, and terrain deformation interact without scripted events.
+
+## Mana Ownership Loop Lessons
+
+- Make loose mana a first-class owned object rather than a consumable. A `Neutral`/`Player`/`Enemy` ownership state per orb, distinct colors, and a shared group turn possession, hauling, and contesting into simple queries (`GetNodesInGroup("loose_mana")`) instead of bespoke per-system bookkeeping.
+- Ownership should gate behavior at the source. Player-owned orbs home and auto-collect to the player; neutral and rival orbs should not auto-claim on contact or they bypass the possession spell and the contesting loop entirely.
+- An economy spell should be cheap and fast (low mana, short cooldown) because it kicks off a longer ownership chain. Aim-weighted selection avoids a manual targeting cursor while still rewarding intent; skip carried orbs so balloons cannot be strip-mined mid-flight.
+- When a unit hauls owned mana, carry the same `ManaPickup` nodes rather than destroying them on scoop. That keeps one source of truth for amount and ownership, and makes "pop to spill" a reassignment, not an oracle that must reconstruct orbs.
+- Emerging finite-resource systems benefit from a single tally node. Summing loose mana, castle storage, and in-transit reserves in one `WorldManaTracker` keeps the equilibrium quota readable without pushing accounting logic into every subsystem; treat monster-drop growth (infinite monster spawning) as a known world-total drift.
+- When ownership is transferred on death, revert to neutral except where the enemy is the explicit contesting agent (thieves/wizards). Player-only collection pressure comes from neutral drops; rival drops must be possessed, which creates the targeted incentive to contest, not just blast everything.

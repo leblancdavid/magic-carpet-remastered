@@ -17,6 +17,15 @@
 - Stopped auto-banking current player mana into the neutral well because current mana now regenerates from claimed mana instead of acting as overflow cargo.
 - Verified the claimed-mana pass with a temporary-output `dotnet build` path.
 - Rebased the progress log into per-day sections so the 2026-09-08 implementation passes and the 2026-09-09 research/claimed-mana/doc work are recorded separately.
+- Implemented a full loose-mana ownership model on `ManaPickup` with `Neutral`/`Player`/`Enemy` states, per-owner colors (gray/cyan/red), the `loose_mana` group, carry semantics for haulers, and ownership-gated homing so only player-owned orbs fly to the player.
+- Converted `ManaWell` into a finite neutral landmark: it seeds a small neutral orb field on `_Ready`, holds no stored mana, and no longer infinitely regenerates or spawns pickups; the old ambient loop is removed.
+- Converted `ManaCollectorSpirit` into `ManaBalloon`: an owned flying hauler that seeks its side's loose orbs (player or enemy), scoops up to `CarryCapacity`, returns to its castle, deposits (player deposits still grow claimed mana), and pops on damage to spill carried orbs back into the world as neutral.
+- Added a `Possess` economy spell on the reworked quick-slot enum: `Tab` now cycles Firebolt/Burst/Shield/Dash/Guardian/Possess, and `LMB` claims aim-weighted neutral-or-enemy loose mana as player-owned at a cost of 2 mana with a reusable cooldown.
+- Wired balloon damage into both `SpellProjectile` (firebolt proximity hit) and the player's `DamageEnemiesInRadius` (Arcane Burst), so enemy balloons can be popped to recapture their haul.
+- Rewired enemy `ManaThief` and `EnemyWizard` to acquire and absorb loose mana orbs instead of stealing from the well: thieves prefer player-owned orbs, wizards prefer neutral, both retreat/deposit at the enemy castle, and thieves/wizards now drop enemy-owned orbs on death so the player must possess them.
+- Added `WorldManaTracker`, a first-pass finite-world-mana tracker: it tallies neutral/player/enemy loose orbs, castle storage, and ecosystem transit (`ManaReserve`), exposes a `PlayerShare01` and a 50% equilibrium quota, and the HUD now shows a quota line plus an ownership legend and updated well/loadout text.
+- Seeded `Game.cs` with four neutral loose-mana clusters plus a larger neutral beacon orb and one balloon per side, replacing the old ambient well + collector setup.
+- Verified the full mana-ownership pass with `dotnet build MagicCarpetRemastered.sln` (clean build, 0 warnings).
 
 ### Current Prototype Controls
 
@@ -45,9 +54,9 @@
 - Flight feel has a first tuning pass and needs runtime playtest validation.
 - Terrain deformation modes are working, but still need runtime tuning and feel validation; chunk size is still a tuning tradeoff.
 - Enemy steering remains simple and will need a later polish pass.
-- Mana ownership is not yet visually distinct. Pickups claim into the player pool or deposit to the neutral well; there are no neutral/player/enemy claim states, colors, or a possession action/spell yet.
-- Collector spirits still shuttle from the well to castles. True balloon-style hauling of owned loose mana is not implemented.
-- No finite world mana budget or equilibrium quota tracking yet, so the eventual level objective is not gated on stored mana.
+- Mana ownership is visually distinct now, but the `/loose mana/` loop is first-pass and needs runtime validation: possession aim selection, balloon scoop/return pacing, and ownership color readability all need playtest feedback.
+- Collector spirits were replaced by true balloons that visibly haul owned loose mana; balloon movement, scoop radius, capacity, and pop spill behavior still need runtime tuning.
+- Finite world mana and the 50% equilibrium quota are tracked and displayed, but the win/loss objective still needs runtime validation and a director-driven response to quota state.
 - Spell system now has a basic data model plus firebolt, Arcane Burst, Mana Shield, Wind Dash, Guardian, terrain shaping modes, and first-pass quick-slot cycling, but still lacks unlocks, upgrades, two-hand loadout behavior, and runtime validation.
 - No minimap/radar or full-world map yet; ownership and threats are not shown on a tactical display.
 - Exact original timings for mana claiming, balloon hauling, castle growth, and regeneration still need higher-resolution/manual video observation, but first-pass visual references confirm balloons, large mana pearls, castle scale, minimap importance, and top-strip HUD priority.
@@ -59,17 +68,16 @@
 
 ### Next Recommended Work
 
-- Playtest claimed mana regeneration and spell sustainability in Godot and capture tuning feedback.
-- Tune player mana capacity, regen, pickup values, and enemy contesting around the claimed-mana pool.
-- Implement loose mana ownership with neutral/player/enemy states and a possession action/spell.
-- Convert collector spirits into balloons that visibly haul owned loose mana back to castle storage.
-- Connect enemy thieves/wizards to claimed mana ownership so resource control creates strategic pressure.
-- Track finite world mana and castle-stored quota progress toward an equilibrium win condition.
+- Playtest claimed mana regeneration, possession, and balloon hauling in Godot and capture tuning feedback.
+- Tune possession radius/cost/cooldown, player-owned homing collection radius, and balloon scoop/return/dock pacing around playtest feel.
+- Tune enemy thief/wizard orb acquisition intervals, steal radius, absorb amounts, and retreat thresholds so resource control creates strategic pressure without trivializing mana.
+- Validate finite-world-mana totals and the equilibrium quota HUD; decide how the director and win/loss respond to quota state.
+- Fix the residual visual gap: balloons carrying orbs do not yet show the cargo visually, and carried-orb spill on pop still needs an ownership/position sanity check.
 - Add castle sanctuary/respawn behavior and damage regression with stored-mana spillage.
 - Add two active hand/button loadout bindings with fast reassignment.
 - Add a minimap/radar showing mana, castles, balloons, threats, and ownership colors.
 - Keep Phase 2 and Phase 1 on the playtest backlog for later signoff if further feel issues appear.
-- Defer detailed Phase 5 enemy tuning and Phase 6 spell tuning until the claimed-mana loop is in place.
+- Defer detailed Phase 5 enemy tuning and Phase 6 spell tuning until the claimed-mana loop is playtested.
 
 ## 2026-09-08
 

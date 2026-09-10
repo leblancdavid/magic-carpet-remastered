@@ -6,7 +6,8 @@ public enum SpellKind
     Terrain,
     Defense,
     Mobility,
-    Summoning
+    Summoning,
+    Economy
 }
 
 public sealed class SpellDefinition

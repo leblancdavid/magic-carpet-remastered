@@ -6,41 +6,19 @@ public partial class ManaWell : StaticBody3D
 {
     [Export] public int StorageCapacity { get; set; } = 160;
     [Export] public int InitialStoredMana { get; set; } = 60;
-    [Export] public int AmbientRegenPerSecond { get; set; } = 4;
-    [Export] public int PickupSpawnAmount { get; set; } = 8;
-    [Export] public float PickupSpawnIntervalSeconds { get; set; } = 4.0f;
     [Export] public float PickupSpawnRadius { get; set; } = 2.2f;
     [Export] public float PickupSpawnHeight { get; set; } = 2.8f;
-    [Export] public float ContestRadius { get; set; } = 15.0f;
+    [Export] public int SeedOrbCount { get; set; } = 6;
 
     public int StoredMana { get; private set; }
     public bool HasSpace => StoredMana < StorageCapacity;
 
-    private float _spawnTimer;
-
     public override void _Ready()
     {
         AddToGroup("mana_well");
-        StoredMana = Mathf.Clamp(InitialStoredMana, 0, StorageCapacity);
-
+        StoredMana = 0;
         AddCollisionAndVisuals();
-    }
-
-    public override void _PhysicsProcess(double delta)
-    {
-        float deltaF = (float)delta;
-        if (StoredMana < StorageCapacity && AmbientRegenPerSecond > 0)
-        {
-            StoredMana = Mathf.Min(StorageCapacity, StoredMana + Mathf.CeilToInt(AmbientRegenPerSecond * deltaF));
-        }
-
-        _spawnTimer -= deltaF;
-        if (_spawnTimer <= 0.0f && StoredMana >= PickupSpawnAmount)
-        {
-            SpawnPickup();
-            StoredMana -= PickupSpawnAmount;
-            _spawnTimer = PickupSpawnIntervalSeconds;
-        }
+        SeedNeutralField();
     }
 
     public int DepositMana(int amount)
@@ -77,18 +55,24 @@ public partial class ManaWell : StaticBody3D
         return StealMana(amount);
     }
 
-    private void SpawnPickup()
+    private void SeedNeutralField()
     {
-        var pickup = new ManaPickup
+        int amountPerOrb = Mathf.Max(2, InitialStoredMana / SeedOrbCount);
+        for (int i = 0; i < SeedOrbCount; i++)
         {
-            Name = "WellMana",
-            ManaAmount = PickupSpawnAmount
-        };
-        GetTree().CurrentScene.AddChild(pickup);
+            float angle = Mathf.Tau * i / SeedOrbCount + GD.Randf() * 0.5f;
+            float radius = 2.0f + GD.Randf() * 2.0f;
+            Vector3 offset = new Vector3(Mathf.Cos(angle) * radius, 0.0f, Mathf.Sin(angle) * radius);
 
-        float angle = Mathf.Tau * GD.Randf();
-        Vector3 offset = new Vector3(Mathf.Cos(angle), 0.0f, Mathf.Sin(angle)) * PickupSpawnRadius;
-        pickup.GlobalPosition = GlobalPosition + offset + Vector3.Up * PickupSpawnHeight;
+            var orb = new ManaPickup
+            {
+                Name = "WellMana",
+                ManaAmount = amountPerOrb,
+                Ownership = ManaOwnership.Neutral
+            };
+            GetTree().CurrentScene.AddChild(orb);
+            orb.GlobalPosition = GlobalPosition + offset + Vector3.Up * PickupSpawnHeight;
+        }
     }
 
     private void AddCollisionAndVisuals()
