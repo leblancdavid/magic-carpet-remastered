@@ -77,6 +77,8 @@ private enum QuickSpellSlot
 
     public int Mana { get; private set; } = 40;
     public int ClaimedMana { get; private set; }
+    // Physical world mana absorbed from orbs; castle storage is tallied separately.
+    public int CollectedWorldMana { get; private set; }
     public bool CanClaimMana => ClaimedMana < MaxClaimedMana;
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
@@ -96,6 +98,7 @@ public string SummonSpellName => _summonSpell?.DisplayName ?? "Guardian";
         ? "Spells: loading"
         : $"Quick: LMB {GetSelectedQuickSpell()!.DisplayName} ({GetSelectedQuickSpell()!.ManaCost})   Tab: Firebolt/Burst/Shield/Dash/Guardian/Possess   Q {_areaSpell.DisplayName}   E {_shieldSpell.DisplayName}   F {_mobilitySpell.DisplayName}   G {_summonSpell.DisplayName}   RMB {_terrainSpell.DisplayName}";
     public string StatusMessage { get; private set; } = "Collect mana, bank excess at the well, and contest the red monsters.";
+    public string ActiveFeedbackMessage => _feedbackTimer > 0.0f ? StatusMessage : string.Empty;
     public string TerrainDebugText => _arena == null
         ? "Terrain: unavailable"
         : $"Terrain edit: {_arena.LastEditedVertexCount} verts   Chunks: {_arena.LastRebuiltChunkCount}   Rebuild: {_arena.LastRebuildMilliseconds:0.00} ms";
@@ -300,7 +303,14 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
 
     public int AddMana(int amount)
     {
-        return ClaimMana(amount, ImmediatePickupRefillFraction);
+        return CollectWorldMana(amount, ImmediatePickupRefillFraction);
+    }
+
+    public int CollectWorldMana(int amount, float immediateRefillFraction = 0.0f)
+    {
+        int accepted = ClaimMana(amount, immediateRefillFraction);
+        CollectedWorldMana += accepted;
+        return accepted;
     }
 
     public int ClaimMana(int amount, float immediateRefillFraction = 0.0f)
@@ -605,7 +615,7 @@ GameAudio.Instance?.PlaySpellCast();
         float bestScore = -1.0f;
         foreach (ManaPickup pickup in GetTree().GetNodesInGroup("loose_mana"))
         {
-            if (pickup.Ownership == ManaOwnership.Player || pickup.IsCarried)
+            if (pickup.Ownership == ManaOwnership.Player || !pickup.IsAvailable)
             {
                 continue;
             }

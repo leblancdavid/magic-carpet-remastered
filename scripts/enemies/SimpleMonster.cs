@@ -21,6 +21,7 @@ public partial class SimpleMonster : CharacterBody3D
     [Export] public float ManaContestRadius { get; set; } = 14.0f;
     [Export] public float ManaContestIntervalSeconds { get; set; } = 1.0f;
     [Export] public int ManaContestAmount { get; set; } = 4;
+    public int ManaReserve => _manaReserve;
 
     private CarpetFlightController? _target;
     private ManaWell? _manaWell;
@@ -35,6 +36,7 @@ public partial class SimpleMonster : CharacterBody3D
     public override void _Ready()
     {
         AddToGroup("simple_monster");
+        _manaReserve = Mathf.Max(0, ManaDroppedOnDeath);
         AddCollisionAndVisuals();
     }
 
@@ -87,6 +89,11 @@ public partial class SimpleMonster : CharacterBody3D
 
     public void ApplyDamage(int damage)
     {
+        if (damage <= 0 || Health <= 0)
+        {
+            return;
+        }
+
         Health -= damage;
         _hitFlashTimer = 0.12f;
         GameAudio.Instance?.PlayHit();
@@ -111,7 +118,12 @@ public partial class SimpleMonster : CharacterBody3D
 
     private void DropMana()
     {
-        int dropCount = Mathf.Max(1, ManaDroppedOnDeath / 5);
+        if (_manaReserve <= 0)
+        {
+            return;
+        }
+
+        int dropCount = Mathf.Clamp(_manaReserve / 5, 1, 4);
         for (int i = 0; i < dropCount; i++)
         {
             float angle = Mathf.Tau * i / dropCount;
@@ -119,11 +131,12 @@ public partial class SimpleMonster : CharacterBody3D
             var mana = new ManaPickup
             {
                 Name = "DroppedMana",
-                ManaAmount = ManaDroppedOnDeath / dropCount
+                ManaAmount = _manaReserve / dropCount + (i < _manaReserve % dropCount ? 1 : 0)
             };
             GetTree().CurrentScene.AddChild(mana);
             mana.GlobalPosition = GlobalPosition + offset;
         }
+        _manaReserve = 0;
     }
 
     private void SpawnDeathBurst()

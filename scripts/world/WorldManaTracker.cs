@@ -1,5 +1,6 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
+using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
@@ -39,7 +40,7 @@ public partial class WorldManaTracker : Node
         Refresh();
     }
 
-    private void Refresh()
+    public void Refresh()
     {
         NeutralLooseMana = 0;
         PlayerControlledMana = 0;
@@ -47,7 +48,7 @@ public partial class WorldManaTracker : Node
 
         foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
         {
-            if (node is not ManaPickup pickup)
+            if (node is not ManaPickup pickup || pickup.IsQueuedForDeletion())
             {
                 continue;
             }
@@ -63,6 +64,14 @@ public partial class WorldManaTracker : Node
                 case ManaOwnership.Enemy:
                     EnemyControlledMana += pickup.ManaAmount;
                     break;
+            }
+        }
+
+        foreach (Node node in GetTree().GetNodesInGroup("player"))
+        {
+            if (node is CarpetFlightController player)
+            {
+                PlayerControlledMana += player.CollectedWorldMana;
             }
         }
 
@@ -87,6 +96,14 @@ public partial class WorldManaTracker : Node
             if (node is EnemyEcosystemEnemy enemy)
             {
                 EnemyControlledMana += enemy.ManaReserve;
+            }
+        }
+
+        foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
+        {
+            if (node is SimpleMonster monster)
+            {
+                EnemyControlledMana += monster.ManaReserve;
             }
         }
     }

@@ -1,5 +1,41 @@
 # Progress Log
 
+## 2026-10-10
+
+### Completed
+
+- Completed the next mana-loop correctness pass before expanding level objectives.
+- Fixed player-owned orb homing so movement accumulates instead of resetting to the original anchor every physics tick.
+- Added a shared `IsAvailable`/`TakeMana` path: consumed or queued-for-deletion orbs cannot be collected twice, and partially accepted transfers preserve the remainder.
+- Fixed balloon seek-radius units, hover-aware scoop/dock checks, capped movement, idle return position, and safe multi-orb deposits. Cargo now sits spaced below the balloon rather than inside its mesh.
+- Fixed partial castle delivery: subtract the accepted amount, spill only the neutral remainder, and clear the cargo list after enumeration.
+- Added `CollectedWorldMana` for physically absorbed player orbs. The world tally includes this separately from castle storage; starting spell capacity and castle-derived capacity growth are not extra physical mana.
+- Enabled wizard orb absorption and thief castle deposits, revalidated target availability/ownership at absorption, and removed automatic 12-mana reserves from repeatedly spawned wizards.
+- Preserved division remainders in ecosystem death drops. Legacy monsters now expose/count their initial reserve, return absorbed mana on death, and reject repeated death damage.
+- Added `tools/ManaLoopChecks.cs` and `tools/ManaLoopChecks.tscn` for focused headless checks against actual Godot nodes. Updated README with current status and reproducible commands.
+- Found Godot .NET 4.6.3 at `D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_mono_win64_console.exe`; CLI runtime verification is now available using its full path.
+- Replaced the wall-of-text HUD with compact edge panels for health/mana, quota progress, and selected mouse spells. Feedback now appears only during its active timer (or defeat), rather than retaining stale status text.
+- Added `F3` debug/controls toggle, hidden by default. The right-side panel uses readable padded backgrounds, section headings, wrapped text, and `PgUp`/`PgDn` scrolling; live refresh preserves the scroll position. HUD controls ignore mouse events so flight/casting stays usable.
+
+### Verified
+
+- `dotnet build MagicCarpetRemastered.sln`: passed, zero warnings/errors.
+- Godot 4.6.3 headless editor import: passed.
+- Headless `res://tools/ManaLoopChecks.tscn`: passed 67 assertions, including per-step balloon conservation, accumulated homing, partial player/castle collection, no double transfers, spell spend/regen isolation, rival collection/deposit, pop-spill ownership, and exact death drops.
+- Main arena headless smoke run with `--quit-after 600`: completed without gameplay exceptions. A verbose repeat identified an exit-time leak warning for `AudioStreamGeneratorPlayback`; audio cleanup remains a separate known gap.
+- These checks validate transfer correctness and scene execution, not visual readability, control feel, or balanced pacing.
+- HUD build passed with zero warnings/errors. Temporary headless and rendered Godot smoke checks verified initial hidden state, actual F3 input binding, repeat guard, section population, keyboard scrolling, scroll retention, and idle feedback hiding. Reviewed 1280×720 rendered screenshots for compact/debug layouts; the center stays clear with debug hidden.
+
+### Current Gaps And Next Recommended Work
+
+- Hands-on Godot playtest: possession aiming, owned-orb homing, balloon cargo readability, scoop/return/dock pacing, and rival mana pressure.
+- Playtest HUD legibility during flight/combat and at other window sizes. Use `F3` for diagnostics/control help and `PgUp`/`PgDn` to browse the debug panel.
+- Tune the resource loop from playtest feedback, then connect the 50% quota to an explicit win/loss level flow and director response.
+- Initial spell capacity is a prototype starting-power allowance, not physical world mana. Castle deliveries still increase capacity cumulatively; castle damage/withdrawal does not yet reduce that power.
+- Full enemy castles can leave reserve-carrying rivals in retreat; a full-storage fallback and balloon replacement after popping remain future behavior decisions.
+- Castle sanctuary/respawn, damage regression/spillage, two-hand loadouts, and minimap/radar remain pending.
+- Investigate placeholder audio playback disposal on scene shutdown (headless arena exit warning).
+
 ## 2026-09-09
 
 ### Completed
@@ -47,6 +83,8 @@
 - `V`: toggle chase/first-person camera
 - `R`: restart arena
 - `Esc`: capture/release mouse
+- `F3`: show/hide debug UI and controls (hidden by default)
+- `PgUp` / `PgDn`: scroll the visible debug panel
 
 ### Known Gaps
 

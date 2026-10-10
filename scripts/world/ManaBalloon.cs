@@ -107,18 +107,17 @@ public partial class ManaBalloon : Node3D
 
     private void HandleSeeking(float delta)
     {
-        Vector3 center = _homeAnchor;
         ManaPickup? best = null;
         float bestDistance = float.MaxValue;
         foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
         {
-            if (node is not ManaPickup pickup || pickup.Ownership != (UsePlayerMana ? ManaOwnership.Player : ManaOwnership.Enemy) || pickup.IsCarried)
+            if (node is not ManaPickup pickup || pickup.Ownership != (UsePlayerMana ? ManaOwnership.Player : ManaOwnership.Enemy) || !pickup.IsAvailable)
             {
                 continue;
             }
 
             float distance = GlobalPosition.DistanceTo(pickup.GlobalPosition);
-            if (distance > MaxSeekRadius * MaxSeekRadius)
+            if (distance > MaxSeekRadius)
             {
                 continue;
             }
@@ -132,8 +131,8 @@ public partial class ManaBalloon : Node3D
 
         if (best != null)
         {
-            MoveToward(best.GlobalPosition, delta);
-            if (bestDistance <= ScoopRadius)
+            MoveToward(best.GlobalPosition + Vector3.Up * HoverHeight, delta);
+            if (GlobalPosition.DistanceTo(best.GlobalPosition + Vector3.Up * HoverHeight) <= ScoopRadius)
             {
                 Scoop(best);
             }
@@ -141,7 +140,14 @@ public partial class ManaBalloon : Node3D
             return;
         }
 
-        _state = BalloonState.Returning;
+        if (_carried.Count > 0)
+        {
+            _state = BalloonState.Returning;
+        }
+        else
+        {
+            MoveToward(_homeAnchor, delta);
+        }
     }
 
     private void Scoop(ManaPickup pickup)
@@ -151,7 +157,7 @@ public partial class ManaBalloon : Node3D
             return;
         }
 
-        Vector3 offset = new Vector3(0.0f, 0.0f, 0.3f * _carried.Count + 0.3f);
+        Vector3 offset = new Vector3((_carried.Count - 1) * 1.0f, -1.7f, 0.0f);
         pickup.BeginCarry(this, offset);
         _carried.Add(pickup);
 
@@ -169,8 +175,9 @@ public partial class ManaBalloon : Node3D
             return;
         }
 
-        MoveToward(_castle.GlobalPosition, delta);
-        if (GlobalPosition.DistanceTo(_castle.GlobalPosition) <= HomeRadius)
+        Vector3 dockPosition = _castle.GlobalPosition + Vector3.Up * HoverHeight;
+        MoveToward(dockPosition, delta);
+        if (GlobalPosition.DistanceTo(dockPosition) <= HomeRadius)
         {
             DepositAll();
             _dockTimer = DockDelaySeconds;
@@ -186,20 +193,15 @@ public partial class ManaBalloon : Node3D
         }
         foreach (ManaPickup pickup in _carried)
         {
-            int amount = pickup.ManaAmount;
-            int accepted = _castle.DepositMana(amount);
-            if (accepted >= amount)
-            {
-                _carried.Remove(pickup);
-                pickup.QueueFree();
-            }
-            else
+            int accepted = _castle.DepositMana(pickup.ManaAmount);
+            pickup.TakeMana(accepted);
+            if (pickup.ManaAmount > 0)
             {
                 pickup.SpillAt(_castle.GlobalPosition + new Vector3(GD.Randf() * 2.0f - 1.0f, 2.0f, GD.Randf() * 2.0f - 1.0f));
                 pickup.ReassignOwnership(ManaOwnership.Neutral);
-                _carried.Remove(pickup);
             }
         }
+        _carried.Clear();
     }
 
     private void Pop()
@@ -239,16 +241,18 @@ public partial class ManaBalloon : Node3D
 
     private void MoveToward(Vector3 target, float delta)
     {
-        Vector3 targetAtHover = target + Vector3.Up * HoverHeight;
-        Vector3 toTarget = targetAtHover - GlobalPosition;
+        Vector3 toTarget = target - GlobalPosition;
         float distance = toTarget.Length();
         if (distance <= 0.001f)
         {
             return;
         }
 
-        GlobalPosition += (toTarget / distance) * MoveSpeed * delta;
-        LookAt(target, Vector3.Up);
+        GlobalPosition = GlobalPosition.MoveToward(target, MoveSpeed * delta);
+        if (new Vector2(toTarget.X, toTarget.Z).LengthSquared() > 0.0001f)
+        {
+            LookAt(target, Vector3.Up);
+        }
     }
 
     private void BuildVisuals()

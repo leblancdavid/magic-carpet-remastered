@@ -193,7 +193,6 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
                 RangedAttackCooldownSeconds = 1.8f;
                 RangedWindupSeconds = 0.2f;
                 OrbitalRadius = 10.0f;
-                ManaReserve = 12;
                 break;
         }
     }
@@ -466,13 +465,9 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
             }
         }
 
-        if (Role == EnemyRole.ManaThief)
+        if (Role is EnemyRole.ManaThief or EnemyRole.EnemyWizard)
         {
             TryAbsorbLooseMana();
-        }
-
-        if (Role == EnemyRole.EnemyWizard)
-        {
             TryDepositManaAtCastle();
         }
 
@@ -548,7 +543,7 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
 
 private void TryAbsorbLooseMana()
     {
-        if (_targetOrb == null || !IsInstanceValid(_targetOrb))
+        if (ShouldRetreat() || _targetOrb == null || !IsInstanceValid(_targetOrb) || !_targetOrb.IsAvailable)
         {
             return;
         }
@@ -559,8 +554,15 @@ private void TryAbsorbLooseMana()
         }
 
         ManaPickup orb = _targetOrb;
-        AbsorbMana(orb.ManaAmount);
-        orb.QueueFree();
+        bool eligible = orb.Ownership == ManaOwnership.Neutral
+            || (Role == EnemyRole.ManaThief && orb.Ownership == ManaOwnership.Player);
+        if (!eligible)
+        {
+            _targetOrb = null;
+            return;
+        }
+
+        AbsorbMana(orb.TakeMana(orb.ManaAmount));
         _targetOrb = null;
         _attackCooldown = AttackCooldownSeconds;
     }
@@ -579,7 +581,7 @@ private void TryAbsorbLooseMana()
             bool stillValid = preferPlayerOwned
                 ? _targetOrb.Ownership == ManaOwnership.Player || _targetOrb.Ownership == ManaOwnership.Neutral
                 : _targetOrb.Ownership == ManaOwnership.Neutral;
-            if (stillValid)
+            if (stillValid && _targetOrb.IsAvailable)
             {
                 return;
             }
@@ -594,7 +596,7 @@ private void TryAbsorbLooseMana()
 
         foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
         {
-            if (node is not ManaPickup pickup || pickup.IsCarried)
+            if (node is not ManaPickup pickup || !pickup.IsAvailable)
             {
                 continue;
             }
@@ -774,7 +776,8 @@ private void TryAbsorbLooseMana()
         }
 
         int drops = Mathf.Clamp(ManaReserve / 6, 1, 4);
-        int amountPerDrop = Mathf.Max(1, ManaReserve / drops);
+        int amountPerDrop = ManaReserve / drops;
+        int remainder = ManaReserve % drops;
         ManaOwnership dropOwnership = Role is EnemyRole.ManaThief or EnemyRole.EnemyWizard
             ? ManaOwnership.Enemy
             : ManaOwnership.Neutral;
@@ -785,7 +788,7 @@ private void TryAbsorbLooseMana()
             var pickup = new ManaPickup
             {
                 Name = "EnemyManaDrop",
-                ManaAmount = amountPerDrop,
+                ManaAmount = amountPerDrop + (i < remainder ? 1 : 0),
                 Ownership = dropOwnership
             };
             GetTree().CurrentScene.AddChild(pickup);

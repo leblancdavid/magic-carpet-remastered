@@ -1,17 +1,19 @@
 # Magic Carpet Remastered
 
-A Godot C# project shell for a modern remaster inspired by the classic DOS game Magic Carpet.
+A Godot C# playable prototype for a modern spiritual remaster inspired by the classic DOS game Magic Carpet.
 
 ## Current Status
 
-Discovery and initialization are in progress. The original DOS package is available locally at `D:\Games\MagicCarpet` for reference, but original proprietary files are not copied into this repo.
+The prototype includes carpet flight, combat, deformable island terrain, mana ownership/possession, balloon hauling, castles, rival enemies, and a first-pass spell set. The current milestone is stabilizing and playtesting the mana loop before adding a complete level's win/loss flow. Visuals and audio remain placeholders.
+
+See `docs/BUILD_ROADMAP.md` and `docs/PROGRESS_LOG.md` for priorities and verification history. The original DOS package at `D:\Games\MagicCarpet` is reference material; proprietary files are not copied into this repo.
 
 ## Requirements
 
-- Godot 4.x with .NET/C# support, matching the existing local projects where practical
+- Godot 4.6.3 with .NET/C# support (matches the project SDK)
 - .NET SDK
 
-Current discovery found .NET `9.0.307` available, but `godot` is not on `PATH`.
+Godot is available locally at `D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_mono_win64_console.exe`; it is not on `PATH`.
 
 ## Structure
 
@@ -21,13 +23,20 @@ Current discovery found .NET `9.0.307` available, but `godot` is not on `PATH`.
 - `assets/` - original/remastered assets
 - `tools/` - local research/import helpers
 
-## First Milestone
+## Run And Verify
 
-Build a small first playable slice:
+Open `project.godot` in Godot .NET, build the C# project, and run `scenes/Game.tscn`. Current controls are listed in `docs/PROGRESS_LOG.md`.
 
-- fly a carpet over simple 3D terrain
-- cast one projectile spell
-- collect one mana pickup type
-- fight one simple enemy
-- show a minimal HUD
-- restart the arena quickly
+The compact HUD shows health/mana, mana-control progress, and selected spells. Press **F3** to show/hide the debug and controls panel (off by default); **PgUp / PgDn** scroll its grouped diagnostics.
+
+From the repository root in PowerShell:
+
+```powershell
+dotnet build MagicCarpetRemastered.sln
+$godot = 'D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_mono_win64_console.exe'
+& $godot --headless --path . --editor --import --quit
+& $godot --headless --path . 'res://tools/ManaLoopChecks.tscn'
+& $godot --headless --path . --quit-after 600
+```
+
+The regression scene checks mana conservation, orb homing, balloon delivery/overflow/pop, rival collection, and exact death drops; it exits nonzero on failure. The final command is an arena startup/processing smoke run. Manual playtesting is still needed for control feel, readability, and balance.

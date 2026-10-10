@@ -64,7 +64,7 @@ Remaining Phase 2 work before signoff:
 
 Goal: make mana control the strategic loop.
 
-Status: implementation substantially advanced with the original-style direction in place. Mana pickups now carry explicit `Neutral`/`Player`/`Enemy` ownership with distinct colors; claimed/possessed mana grows the player's long-term pool; the well is a finite neutral landmark that seeds a claimable orb field instead of regenerating; a `Possess` economy spell (sixth `Tab` slot) converts aim-weighted neutral/rival loose mana into player-owned orbs; and player-owned orbs home naturally to the player. `ManaBalloon` replaces the old collector spirit and visibly hauls owned loose mana back to castle storage, popping on damage to spill neutral orbs; enemy thieves/wizards acquire and absorb loose orbs and drop rival-owned orbs on death. A world-mana tracker sums loose + castle + transit mana and exposes a 50% equilibrium quota on the HUD. Remaining work is runtime playtest tuning and gating the win/loss objective on quota state.
+Status: first-pass implementation now has a verified mana-transfer correctness pass. Mana pickups carry explicit `Neutral`/`Player`/`Enemy` ownership with distinct colors; claimed mana grows spell capacity/regeneration; the well seeds a finite neutral orb field; and `Possess` converts aim-weighted neutral/rival loose mana into player-owned orbs. Player-owned homing, balloon scoop/dock/delivery, partial deposits, pop spills, rival collection/deposit, and exact death drops are covered by a headless Godot regression scene. World-mana accounting includes loose/carried orbs, castle storage, enemy reserves, and physically absorbed player mana once each; initial spell capacity and castle-derived capacity bonuses are not additional world mana. Repeated ecosystem wizard spawning no longer creates fresh reserves. Remaining work is hands-on playtest tuning and gating the win/loss objective on quota state.
 
 Core work:
 
@@ -184,6 +184,8 @@ Deliverable: several levels connected by progression and escalating challenge.
 ## Phase 8: Presentation And Content
 
 Goal: establish the remastered identity.
+
+Status: presentation remains placeholder-based. A compact edge HUD now shows gameplay essentials, with diagnostics and control help in a formatted `F3` debug panel hidden by default. Rendered layout and toggle/scroll behavior have been checked; further readability playtesting, tactical map, original assets/audio, and polish remain.
 
 Core work:
 

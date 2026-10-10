@@ -23,6 +23,7 @@ public partial class ManaPickup : Area3D
 
     public Node3D? Hauler { get; private set; }
     public bool IsCarried => Hauler != null;
+    public bool IsAvailable => ManaAmount > 0 && !IsQueuedForDeletion() && !IsCarried;
 
     private CarpetFlightController? _player;
     private MeshInstance3D _mesh = null!;
@@ -60,6 +61,11 @@ public partial class ManaPickup : Area3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (IsQueuedForDeletion() || ManaAmount <= 0)
+        {
+            return;
+        }
+
         float deltaF = (float)delta;
 
         if (!_homePositionInitialized)
@@ -88,21 +94,34 @@ public partial class ManaPickup : Area3D
         float distance = toPlayer.Length();
         if (distance <= CollectionRadius)
         {
-            int accepted = _player.ClaimMana(ManaAmount);
-            ManaAmount -= accepted;
-            if (ManaAmount <= 0)
-            {
-                QueueFree();
-            }
+            TakeMana(_player.CollectWorldMana(ManaAmount));
 
             return;
         }
 
         if (distance <= PlayerHomingRadius)
         {
-            Vector3 direction = distance > 0.001f ? toPlayer / distance : Vector3.Zero;
-            GlobalPosition += direction * HomingSpeed * deltaF;
+            Vector3 nextPosition = GlobalPosition.MoveToward(_player.GlobalPosition, HomingSpeed * deltaF);
+            _homePosition += nextPosition - GlobalPosition;
+            GlobalPosition = nextPosition;
         }
+    }
+
+    public int TakeMana(int amount)
+    {
+        if (amount <= 0 || IsQueuedForDeletion())
+        {
+            return 0;
+        }
+
+        int taken = Mathf.Min(amount, ManaAmount);
+        ManaAmount -= taken;
+        if (ManaAmount == 0)
+        {
+            QueueFree();
+        }
+
+        return taken;
     }
 
     public void BeginCarry(Node3D hauler, Vector3 carryOffset)
@@ -132,10 +151,9 @@ public partial class ManaPickup : Area3D
 
     private void OnBodyEntered(Node3D body)
     {
-        if (body is SimpleMonster monster && Ownership == ManaOwnership.Neutral && !IsCarried)
+        if (body is SimpleMonster monster && monster.Health > 0 && Ownership == ManaOwnership.Neutral && IsAvailable)
         {
-            monster.AbsorbMana(ManaAmount);
-            QueueFree();
+            monster.AbsorbMana(TakeMana(ManaAmount));
         }
     }
 

@@ -17,7 +17,7 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - Spawn positions should be derived from terrain height. Placing the player, pickups, enemies, and pillars with explicit terrain clearance avoids buried or floating gameplay objects after procedural terrain changes.
 - Godot scene timing matters for generated nodes. For runtime-created VFX, pickups, and projectiles, add the node to the scene tree before setting `GlobalPosition` when global transforms are required.
 - Transparent water over the terrain can hide or flatten terrain readability in the prototype. Opaque/darker water with vertex-colored terrain made the island easier to read.
-- The HUD is currently the fastest tuning surface. Speed, terrain clearance, camera mode, mana, health, status, and invulnerability state give immediate playtest feedback without extra tooling.
+- The HUD is a fast tuning surface, but permanent diagnostics obscure the gameplay being tuned. Keep health/mana, objective progress, selected spells, and transient feedback in small edge panels; put speed, clearance, resource totals, role legends, and full controls behind a debug toggle.
 - Flight motion should use capped acceleration/deceleration rather than uncapped interpolation weights. This avoids frame-rate-sensitive overshoot and makes tuning values easier to reason about.
 - Carpet banking reads better when it follows actual local velocity instead of raw input. The visual tilt then reflects drift and deceleration, not just key presses.
 - Speed-responsive camera distance and FOV add useful motion feedback before bespoke art or camera effects exist.
@@ -29,7 +29,7 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 ## Current Technical Constraints
 
 - `dotnet build MagicCarpetRemastered.sln` verifies C# compilation quickly, but it does not prove the Godot scene runs correctly.
-- CLI runtime verification is currently blocked because `godot` is not on `PATH`; runtime testing depends on opening the project in Godot manually.
+- `godot` need not be on `PATH` for runtime verification. Godot .NET 4.6.3 is installed at `D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_mono_win64_console.exe`; use the full path for headless imports, regression scenes, and arena smoke runs. Visual feel still requires manual playtesting.
 - The prototype still favors direct systems over reusable frameworks. Keep new systems small until flight/combat feel is proven.
 
 ## Phase 2 Terrain Lessons
@@ -50,5 +50,16 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - Ownership should gate behavior at the source. Player-owned orbs home and auto-collect to the player; neutral and rival orbs should not auto-claim on contact or they bypass the possession spell and the contesting loop entirely.
 - An economy spell should be cheap and fast (low mana, short cooldown) because it kicks off a longer ownership chain. Aim-weighted selection avoids a manual targeting cursor while still rewarding intent; skip carried orbs so balloons cannot be strip-mined mid-flight.
 - When a unit hauls owned mana, carry the same `ManaPickup` nodes rather than destroying them on scoop. That keeps one source of truth for amount and ownership, and makes "pop to spill" a reassignment, not an oracle that must reconstruct orbs.
-- Emerging finite-resource systems benefit from a single tally node. Summing loose mana, castle storage, and in-transit reserves in one `WorldManaTracker` keeps the equilibrium quota readable without pushing accounting logic into every subsystem; treat monster-drop growth (infinite monster spawning) as a known world-total drift.
+- Emerging finite-resource systems benefit from a single tally node. `WorldManaTracker` sums loose/carried orbs, castle storage, physically absorbed player mana, and enemy reserves. Repeated ecosystem spawning must not mint reserves if the level's mana supply is finite.
 - When ownership is transferred on death, revert to neutral except where the enemy is the explicit contesting agent (thieves/wizards). Player-only collection pressure comes from neutral drops; rival drops must be possessed, which creates the targeted incentive to contest, not just blast everything.
+- Separate physical resource accounting from derived spell power. `CollectedWorldMana` records only orbs actually absorbed by the player; `ClaimedMana` is capacity/regeneration power and also receives castle-delivery bonuses. Counting both castle storage and those bonuses would duplicate the same mana. Initial spell capacity is a starting-power allowance, not part of the world resource supply.
+- Transfers must debit the source by exactly the amount accepted at the destination. Zero orb amounts immediately and exclude queued-for-deletion nodes so two consumers in one frame cannot absorb the same orb. Distribute integer remainders across death drops rather than truncating them.
+- Movement and interaction checks must use the same target point. A balloon flying toward a hover-offset target cannot dock by checking a smaller radius around the ground-level target. Clamp motion steps to prevent overshoot, and do not add hover height repeatedly when returning to an already elevated anchor.
+- A bobbing pickup needs a movable home anchor: update it along with homing movement or the next physics tick will undo the approach.
+- Headless regression scenes can exercise actual Godot nodes, world tallies, carry state, and transfers without introducing a mock gameplay framework. `tools/ManaLoopChecks.tscn` covers transfer invariants; arena smoke runs cover startup/normal processing; neither proves flight feel or visual readability.
+
+## UI Readability Lessons
+
+- Container-based, padded panels with bounded widths and word wrapping are more readable over terrain than a single unbounded multiline label. Keep the normal HUD away from the aiming area and hide detailed diagnostics by default.
+- Live-updating scrollable debug text must preserve its scroll offset, and key-repeat events must not repeatedly flip a toggle. Passive HUD controls should ignore mouse input so the overlay does not absorb spell clicks.
+- Rendered screenshots complement headless input checks: the HUD screenshot review caught objective copy wrapping onto a third line and touching the debug panel. Shorten gameplay copy before expanding panel coverage.
