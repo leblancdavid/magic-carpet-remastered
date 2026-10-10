@@ -37,9 +37,9 @@ public partial class Hud : CanvasLayer
         AddLabelPanel(root, "Objective", Control.LayoutPreset.TopRight,
             new Vector2(-300, 20), new Vector2(280, 86), out _objective);
         AddLabelPanel(root, "Loadout", Control.LayoutPreset.BottomLeft,
-            new Vector2(20, -100), new Vector2(360, 80), out _loadout);
+            new Vector2(20, -124), new Vector2(360, 104), out _loadout);
         _feedbackPanel = AddLabelPanel(root, "Feedback", Control.LayoutPreset.BottomLeft,
-            new Vector2(20, -164), new Vector2(360, 54), out _feedback);
+            new Vector2(20, -188), new Vector2(360, 54), out _feedback);
         _feedbackPanel.Visible = false;
 
         _resultPanel = AddLabelPanel(root, "LevelResult", Control.LayoutPreset.Center,
@@ -140,8 +140,9 @@ public partial class Hud : CanvasLayer
             _result.Text = $"{(_levelObjective!.State == LevelObjective.LevelState.Victory ? "VICTORY" : "DEFEAT")}\n"
                 + $"{_levelObjective.ResultMessage}\n\nPress R to restart";
         }
-        _loadout.Text = $"LMB  {_player.PrimarySpellName}   ·   Tab cycle\nRMB  {_player.PossessSpellName}   ·   claim mana";
-        _feedback.Text = _player.Health <= 0 ? "Wizard down — your castle will respawn you" : _player.ActiveFeedbackMessage;
+        _loadout.Text = $"LMB  {_player.PrimarySpellName}   ·   Tab cycle\nRMB  {_player.PossessSpellName}   ·   claim mana\nGold beacons: spell upgrades";
+        _feedback.Text = _player.Health <= 0 ? "Wizard down — your castle will respawn you"
+            : !string.IsNullOrEmpty(_player.DiscoveryFeedbackMessage) ? _player.DiscoveryFeedbackMessage : _player.ActiveFeedbackMessage;
         _feedbackPanel.Visible = !_resultPanel.Visible && !string.IsNullOrEmpty(_feedback.Text);
 
         if (!_debugPanel.Visible)
@@ -152,6 +153,8 @@ public partial class Hud : CanvasLayer
         string details = Section("FLIGHT / PLAYER")
             + $"Camera: {_player.CameraMode}\nSpeed: {_player.Speed:0.0}\nTerrain clearance: {_player.AltitudeAboveTerrain:0.0}\n"
             + $"Spell power: {_player.ClaimedMana} (castle +{_player.CastleManaBonus})\nMana collection: balloon delivery\n{_player.ShieldStatusText}\n\n"
+            + Section("SPELL DISCOVERIES")
+            + _player.SpellProgressionText + "\nGold beacons grant rank II: fly within 4 units.\nUpgrades survive respawn; R resets them.\n\n"
             + Section("MANA ECONOMY")
             + (_manaTracker == null ? "Tracker unavailable\n" : $"World total: {_manaTracker.TotalMana}\nNeutral loose: {_manaTracker.NeutralLooseMana}\nNeutral creatures: {_manaTracker.NeutralCreatureMana}\nPlayer: {_manaTracker.PlayerControlledMana}\nRival: {_manaTracker.EnemyControlledMana}\n")
             + (_well == null ? "Well: unavailable\n\n" : "Well: finite neutral landmark\n\n")

@@ -33,6 +33,7 @@ public partial class Game : Node3D
         CreatePlayer();
         CreateBalloons();
         CreateManaPickups();
+        CreateSpellDiscoveries();
         CreateEnemyEcosystem();
         CreateLevelObjective();
         AddChild(new WorldManaTracker { Name = "WorldManaTracker" });
@@ -178,6 +179,28 @@ public partial class Game : Node3D
     private void CreateEnemyEcosystem()
     {
         AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector", SpawnEnemyWizards = false });
+    }
+
+    private void CreateSpellDiscoveries()
+    {
+        (string Id, string Title, float X, float Z)[] discoveries =
+        {
+            ("firebolt", "Firebolt", -42, -20),
+            ("arcane-burst", "Arcane Burst", 0, -45),
+            ("mana-shield", "Mana Shield", -40, 32),
+            ("wind-dash", "Wind Dash", 34, 34),
+            ("guardian", "Guardian", 45, -30)
+        };
+        foreach (var discovery in discoveries)
+        {
+            AddChild(new SpellDiscovery
+            {
+                Name = $"SpellDiscovery{discovery.Title.Replace(" ", "")}",
+                SpellId = discovery.Id,
+                SpellName = discovery.Title,
+                Position = AboveTerrain(discovery.X, discovery.Z, 6)
+            });
+        }
     }
 
     private void CreateLevelObjective()

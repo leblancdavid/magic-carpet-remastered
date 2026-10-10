@@ -25,6 +25,8 @@ Godot is available locally at `D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\
 
 ## Run And Verify
 
+Explore the island outskirts for five labeled **gold spell beacons**. Fly within four horizontal units to discover a rank-II upgrade for Firebolt, Arcane Burst, Mana Shield, Wind Dash, or Guardian. Upgrades improve spell effects at the existing mana costs/cooldowns, survive wizard respawn, and reset with **R**. The selected spell shows its rank and **F3** lists progression. See `docs/SPELL_PROGRESSION.md` for upgrade values and playtest steps.
+
 Open `project.godot` in Godot .NET, build the C# project, and run `scenes/Game.tscn`. Current controls are listed in `docs/PROGRESS_LOG.md`.
 
 The compact HUD shows health/mana, rival castle/wizard objective status, respawn countdowns, and selected spells. Victory requires the rival castle destroyed and its wizard defeated. Both wizards respawn after **10 seconds** while their respective castle survives; a respawn clears the rival's earlier defeat. Destroying the player castle causes defeat. Results freeze gameplay and release the mouse; press **R** to restart. One designated rival is tracked through its respawns; the ecosystem director does not spawn extra wizards. Use **Firebolt** against the rival castle. Press **F3** to show/hide the debug and controls panel (off by default); **PgUp / PgDn** scroll its grouped diagnostics.
@@ -52,6 +54,7 @@ $godot = 'D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_m
 & $godot --headless --path . 'res://tools/LevelObjectiveChecks.tscn'
 & $godot --headless --path . 'res://tools/WizardFlightChecks.tscn'
 & $godot --headless --path . 'res://tools/PlaytestMechanicsChecks.tscn'
+& $godot --headless --path . 'res://tools/SpellProgressionChecks.tscn'
 & $godot --headless --path . --quit-after 600
 ```
 

@@ -28,6 +28,9 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 
 ## Current Technical Constraints
 
+- Discovery rewards should derive stronger effects from authored base tuning and per-player spell rank rather than repeatedly mutating exported values. This prevents duplicate rewards from stacking and separates exploration progression from castle-derived resource power. Initialize summoned-unit lifetime/damage before adding it to the tree, since `_Ready` snapshots lifetime.
+- Scene-reload checks resumed from `PhysicsFrame` should defer their restart action to the end of the frame. Synchronous removal during that signal can leave scheduled actors trying to read detached world transforms; the deferred action models normal input timing and gives clean integration checks.
+
 - `dotnet build MagicCarpetRemastered.sln` verifies C# compilation quickly, but it does not prove the Godot scene runs correctly.
 - `godot` need not be on `PATH` for runtime verification. Godot .NET 4.6.3 is installed at `D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_mono_win64_console.exe`; use the full path for headless imports, regression scenes, and arena smoke runs. Visual feel still requires manual playtesting.
 - The prototype still favors direct systems over reusable frameworks. Keep new systems small until flight/combat feel is proven.

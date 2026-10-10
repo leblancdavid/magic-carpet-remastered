@@ -156,6 +156,8 @@ Deferred Phase 5 tuning:
 
 Goal: make spells the player's primary expression and progression axis.
 
+Progression update (2026-10-10): five exploration beacons now grant one-time rank-II upgrades for Firebolt, Burst, Shield, Dash, and Guardian. All existing spells remain available at rank I; stronger effects preserve current costs/cooldowns and are independent of castle mana power. Discoveries survive wizard respawn and reset with R. Actual collection, casting, terrain-following landmarks, pause behavior, and arena restart are regression-checked. See `docs/SPELL_PROGRESSION.md`. Locked-spell unlocks, campaign persistence, general hand reassignment, and homing remain pending; next validate upgrade visibility/pacing and tune the spell tradeoffs before broadening progression.
+
 Status: first-pass spell variety is implemented. The abilities have a small spell definition model and visible HUD loadout text. `Arcane Burst` adds area damage on `Q`, `Mana Shield` adds a defensive spell on `E`, `Wind Dash` adds mobility utility on `F`, and `Guardian` adds a temporary summoned ally on `G`. `Possess` is the first `Economy`-kind spell, dedicated to RMB and launching a terrain-following claiming bolt. `Tab` cycles the five combat/utility quick spells for `LMB`, while direct spell hotkeys remain available. Per user direction, the direct crater/raise/lower/flatten tool and its 1–4 bindings are hidden; its internal code remains available, and firebolt impact craters still work. The original-style claimed/regenerating mana base now exists, so further spell tuning, unlock/upgrade rules, and runtime validation can resume once the claimed-mana loop is playtested.
 
 Core work:

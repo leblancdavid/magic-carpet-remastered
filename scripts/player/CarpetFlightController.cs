@@ -1,3 +1,4 @@
+using System.Linq;
 using Godot;
 using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Enemies;
@@ -81,12 +82,12 @@ public partial class CarpetFlightController : CharacterBody3D
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : GlobalPosition.Y - _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z);
     public bool IsInvulnerable => _damageInvulnerabilityTimer > 0.0f;
     public string CameraMode => _firstPersonCamera ? "First Person" : "Chase";
-    public string PrimarySpellName => GetSelectedQuickSpell()?.DisplayName ?? "Firebolt";
+    public string PrimarySpellName => GetSelectedQuickSpell()?.RankedName ?? "Firebolt";
     public string TerrainSpellName => _terrainSpell?.DisplayName ?? "Terrain Shape";
-    public string AreaSpellName => _areaSpell?.DisplayName ?? "Arcane Burst";
-    public string ShieldSpellName => _shieldSpell?.DisplayName ?? "Mana Shield";
-    public string MobilitySpellName => _mobilitySpell?.DisplayName ?? "Wind Dash";
-public string SummonSpellName => _summonSpell?.DisplayName ?? "Guardian";
+    public string AreaSpellName => _areaSpell?.RankedName ?? "Arcane Burst";
+    public string ShieldSpellName => _shieldSpell?.RankedName ?? "Mana Shield";
+    public string MobilitySpellName => _mobilitySpell?.RankedName ?? "Wind Dash";
+public string SummonSpellName => _summonSpell?.RankedName ?? "Guardian";
     public string PossessSpellName => _possessSpell?.DisplayName ?? "Possess";
     public bool IsShielded => _shieldTimer > 0.0f;
     public string ShieldStatusText => IsShielded ? $"Shield {_shieldTimer:0.0}s" : "Shield ready";
@@ -95,6 +96,14 @@ public string SummonSpellName => _summonSpell?.DisplayName ?? "Guardian";
         : $"Quick: LMB {GetSelectedQuickSpell()!.DisplayName} ({GetSelectedQuickSpell()!.ManaCost})   Tab: Firebolt/Burst/Shield/Dash/Guardian   Q {_areaSpell.DisplayName}   E {_shieldSpell.DisplayName}   F {_mobilitySpell.DisplayName}   G {_summonSpell.DisplayName}   RMB {_possessSpell.DisplayName} ({_possessSpell.ManaCost})";
     public string StatusMessage { get; private set; } = "Collect mana, bank excess at the well, and contest the red monsters.";
     public string ActiveFeedbackMessage => _feedbackTimer > 0.0f ? StatusMessage : string.Empty;
+    public string DiscoveryFeedbackMessage => _discoveryFeedbackTimer > 0 ? _discoveryFeedback : string.Empty;
+    public string SpellProgressionText => string.Join("\n", new[] { _primarySpell, _areaSpell, _shieldSpell, _mobilitySpell, _summonSpell }
+        .Select(spell => $"{spell.RankedName} — rank {spell.Rank}/2"));
+    public int FireboltDamage => GetSpellRank("firebolt") == 2 ? 35 : 25;
+    public int EffectiveAreaDamage => Mathf.RoundToInt(AreaSpellDamage * (GetSpellRank("arcane-burst") == 2 ? 1.25f : 1));
+    public float EffectiveAreaRadius => AreaSpellRadius * (GetSpellRank("arcane-burst") == 2 ? 1.25f : 1);
+    public float EffectiveShieldDuration => ShieldDurationSeconds + (GetSpellRank("mana-shield") == 2 ? 2 : 0);
+    public float EffectiveDashSpeed => MobilityDashSpeed * (GetSpellRank("wind-dash") == 2 ? 1.2f : 1);
     public string TerrainDebugText => _arena == null
         ? "Terrain: unavailable"
         : $"Terrain edit: {_arena.LastEditedVertexCount} verts   Chunks: {_arena.LastRebuiltChunkCount}   Rebuild: {_arena.LastRebuildMilliseconds:0.00} ms";
@@ -141,6 +150,31 @@ private SpellDefinition _summonSpell = null!;
     private int _baseManaPower;
     private uint _aliveCollisionLayer;
     private uint _aliveCollisionMask;
+    private string _discoveryFeedback = string.Empty;
+    private float _discoveryFeedbackTimer;
+
+    public SpellDefinition? FindSpell(string id) => id switch
+    {
+        "firebolt" => _primarySpell,
+        "arcane-burst" => _areaSpell,
+        "mana-shield" => _shieldSpell,
+        "wind-dash" => _mobilitySpell,
+        "guardian" => _summonSpell,
+        _ => null
+    };
+
+    public int GetSpellRank(string id) => FindSpell(id)?.Rank ?? 0;
+
+    public bool DiscoverSpellUpgrade(string id)
+    {
+        if (Health <= 0 || IsQueuedForDeletion()) return false;
+        SpellDefinition? spell = FindSpell(id);
+        if (spell == null || !spell.TryUpgrade()) return false;
+        _discoveryFeedback = $"Discovered {spell.RankedName}!";
+        _discoveryFeedbackTimer = 4;
+        GameAudio.Instance?.PlayPickup();
+        return true;
+    }
 
     public override void _Ready()
     {
@@ -210,6 +244,7 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
     {
         if (Health <= 0) return;
         float deltaF = (float)delta;
+        _discoveryFeedbackTimer = Mathf.Max(0, _discoveryFeedbackTimer - deltaF);
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
         _areaSpellCooldown = Mathf.Max(0.0f, _areaSpellCooldown - deltaF);
         _shieldSpellCooldown = Mathf.Max(0.0f, _shieldSpellCooldown - deltaF);
@@ -469,7 +504,7 @@ case QuickSpellSlot.Guardian:
         _feedbackTimer = 0.35f;
         GameAudio.Instance?.PlaySpellCast();
 
-        var projectile = new SpellProjectile();
+        var projectile = new SpellProjectile { Damage = FireboltDamage };
         GetTree().CurrentScene.AddChild(projectile);
 
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
@@ -495,7 +530,7 @@ case QuickSpellSlot.Guardian:
         }
 
         SpendMana(_areaSpell.ManaCost);
-        int hits = DamageEnemiesInRadius(hitPosition, AreaSpellRadius, AreaSpellDamage);
+        int hits = DamageEnemiesInRadius(hitPosition, EffectiveAreaRadius, EffectiveAreaDamage);
         SpawnAreaSpellBurst(hitPosition);
         StatusMessage = $"{_areaSpell.DisplayName}: {hits} hit";
         _feedbackTimer = 0.7f;
@@ -512,7 +547,7 @@ case QuickSpellSlot.Guardian:
         }
 
         SpendMana(_shieldSpell.ManaCost);
-        _shieldTimer = ShieldDurationSeconds;
+        _shieldTimer = EffectiveShieldDuration;
         StatusMessage = $"{_shieldSpell.DisplayName} active";
         _feedbackTimer = 0.9f;
         _carpetMaterial.AlbedoColor = new Color(0.2f, 0.85f, 1.0f);
@@ -531,7 +566,7 @@ case QuickSpellSlot.Guardian:
 
         SpendMana(_mobilitySpell.ManaCost);
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
-        Velocity = new Vector3(direction.X * MobilityDashSpeed, Mathf.Max(Velocity.Y, direction.Y * MobilityDashSpeed + MobilityDashLift), direction.Z * MobilityDashSpeed);
+        Velocity = new Vector3(direction.X * EffectiveDashSpeed, Mathf.Max(Velocity.Y, direction.Y * EffectiveDashSpeed + MobilityDashLift), direction.Z * EffectiveDashSpeed);
         StatusMessage = _mobilitySpell.DisplayName;
         _feedbackTimer = 0.6f;
         SpawnMobilityBurst();
@@ -551,7 +586,9 @@ case QuickSpellSlot.Guardian:
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
         var guardian = new SummonedGuardian
         {
-            Name = "SummonedGuardian"
+            Name = "SummonedGuardian",
+            Damage = GetSpellRank("guardian") == 2 ? 16 : 12,
+            LifetimeSeconds = GetSpellRank("guardian") == 2 ? 18 : 12
         };
         GetTree().CurrentScene.AddChild(guardian);
         guardian.GlobalPosition = GlobalPosition + direction * SummonDistance + Vector3.Up * 1.0f;
@@ -724,7 +761,7 @@ GameAudio.Instance?.PlaySpellCast();
             EmissionColor = new Color(0.65f, 0.12f, 1.0f),
             DurationSeconds = 0.5f,
             StartScale = 1.2f,
-            EndScale = AreaSpellRadius
+            EndScale = EffectiveAreaRadius
         };
         GetTree().CurrentScene.AddChild(burst);
         burst.GlobalPosition = position;

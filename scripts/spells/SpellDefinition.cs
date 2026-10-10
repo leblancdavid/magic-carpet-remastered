@@ -28,4 +28,13 @@ public sealed class SpellDefinition
     public int ManaCost { get; }
     public float CooldownSeconds { get; }
     public string Description { get; }
+    public int Rank { get; private set; } = 1;
+    public string RankedName => Rank > 1 ? $"{DisplayName} II" : DisplayName;
+
+    public bool TryUpgrade()
+    {
+        if (Rank >= 2) return false;
+        Rank = 2;
+        return true;
+    }
 }
