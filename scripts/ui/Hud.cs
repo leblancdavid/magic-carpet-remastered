@@ -114,7 +114,7 @@ public partial class Hud : CanvasLayer
         _objective.Text = _manaTracker == null ? "Mana control\nFinding world mana..."
             : $"Mana control  {_manaTracker.PlayerShare01 * 100:0}% / {_manaTracker.EquilibriumFraction * 100:0}%\n"
                 + (_manaTracker.EquilibriumMet ? "Equilibrium quota reached" : "Possess mana to claim it");
-        _loadout.Text = $"LMB  {_player.PrimarySpellName}   ·   Tab cycle\nRMB  {_player.TerrainSpellModeText}   ·   1–4 select";
+        _loadout.Text = $"LMB  {_player.PrimarySpellName}   ·   Tab cycle\nRMB  {_player.PossessSpellName}   ·   claim mana";
         _feedback.Text = _player.Health <= 0 ? "Defeated — press R to restart" : _player.ActiveFeedbackMessage;
         _feedbackPanel.Visible = !string.IsNullOrEmpty(_feedback.Text);
 
@@ -133,11 +133,11 @@ public partial class Hud : CanvasLayer
             + CastleDetails(_playerCastle, "Player") + CastleDetails(_enemyCastle, "Rival")
             + (_enemyEcosystem?.StatusText.Replace("   Intensity", "\nIntensity") ?? "Ecosystem unavailable") + "\n\n"
             + Section("TERRAIN") + _player.TerrainDebugText.Replace("   ", "\n")
-            + $"\nMode: {_player.TerrainSpellModeText}\nCost: {_player.TerrainSpellManaCostForCurrentMode} mana\n\n"
+            + "\n\n"
             + Section("CONTROLS")
             + "WASD — fly\nSpace / C — ascend / descend\nMouse — look\nV — camera mode\nEsc — capture / release mouse\nR — restart arena\n\n"
             + $"LMB — {_player.PrimarySpellName}\nTab — cycle quick spell\nQ — {_player.AreaSpellName}\nE — {_player.ShieldSpellName}\nF — {_player.MobilitySpellName}\nG — {_player.SummonSpellName}\n"
-            + "Possess — sixth Tab slot\nRMB — selected terrain spell\n1 / 2 / 3 / 4 — crater / raise / lower / flatten\n\n"
+            + $"RMB — Possess ({_player.PossessSpellManaCost} mana): aim at a globe or the ground before it; the bolt follows terrain after landing.\n\n"
             + Section("OWNERSHIP / ROLE GUIDE")
             + "Mana: gray neutral · cyan yours · red rival\nBalloons haul owned mana to castles. Pop rivals to spill their cargo.\n\n"
             + "Orange — swarm\nGreen — beast\nBlue — caster\nRed — sieger\nYellow — thief\nPurple — wizard";

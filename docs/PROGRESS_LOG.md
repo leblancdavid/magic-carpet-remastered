@@ -4,6 +4,11 @@
 
 ### Completed
 
+- Fixed balloon arrival `LookAt` errors reported during playtesting: orient from the departure position before capped movement reaches the target. Already-arrived and vertical-only moves preserve facing.
+- Replaced instant aim-weighted possession with `PossessProjectile`: a visible cyan bolt flies along the camera aim, then follows terrain/water at fixed clearance and a straight horizontal heading. Short heightmap substeps and swept sphere hits claim the first eligible neutral/rival globe, preserving its mana amount; carried, consumed, and already-owned globes are skipped.
+- Dedicated RMB to Possess (2 mana, 0.4-second cooldown); removed Possess from the five-slot LMB/Tab cycle. Disabled direct terrain casting and 1–4 bindings, hid its gameplay/help hints, and retained the internal shaping tools and firebolt craters.
+- Grounded unclaimed neutral/rival loose globes at terrain/water height + 1.3 units so possession bolts can reach seeded mana, death drops, and balloon spills. Carried/player-owned homing globes retain their existing movement.
+- Added cyan impact feedback and delayed possession status on actual globe hits. Initial projectile tuning is 48 units/second, 120-unit range, 4-second lifetime, 0.9-unit surface clearance, and 1.3-unit hit radius; misses spend mana and expire without claiming.
 - Completed the next mana-loop correctness pass before expanding level objectives.
 - Fixed player-owned orb homing so movement accumulates instead of resetting to the original anchor every physics tick.
 - Added a shared `IsAvailable`/`TakeMana` path: consumed or queued-for-deletion orbs cannot be collected twice, and partially accepted transfers preserve the remainder.
@@ -19,6 +24,9 @@
 
 ### Verified
 
+- Balloon arrival fix: clean `dotnet build MagicCarpetRemastered.sln` (zero warnings/errors) and 88 passing headless mana-loop assertions, including four new exact-arrival/facing/idle/vertical-motion checks. A 2,400-frame headless arena smoke run completed without `LookAt` or gameplay errors; the previously known exit-time ObjectDB leak warning remains.
+- Possession pass: `dotnet build MagicCarpetRemastered.sln` passed with zero warnings/errors; Godot headless editor import passed; `res://tools/ManaLoopChecks.tscn` passed 84 assertions. New checks cover airborne-to-ground transition, straight heading, hill/crater following against the live height grid, neutral/rival first hits, ignored carried/consumed/owned/off-path globes, no repeat claims, range/lifetime expiry, water skim, RMB binding, hidden terrain bindings, five-slot Tab wrap, and cast cost.
+- Possession arena smoke run (`--headless --path . --quit-after 600`) completed without gameplay errors. Visual bolt readability and hands-on aiming still need playtesting.
 - `dotnet build MagicCarpetRemastered.sln`: passed, zero warnings/errors.
 - Godot 4.6.3 headless editor import: passed.
 - Headless `res://tools/ManaLoopChecks.tscn`: passed 67 assertions, including per-step balloon conservation, accumulated homing, partial player/castle collection, no double transfers, spell spend/regen isolation, rival collection/deposit, pop-spill ownership, and exact death drops.
@@ -28,12 +36,12 @@
 
 ### Current Gaps And Next Recommended Work
 
-- Hands-on Godot playtest: possession aiming, owned-orb homing, balloon cargo readability, scoop/return/dock pacing, and rival mana pressure.
+- Hands-on Godot playtest: RMB possession bolt aiming (aim down to land before distant globes), speed/range/hit tolerance, owned-orb homing, balloon cargo readability, scoop/return/dock pacing, and rival mana pressure. Horizontal/upward shots remain airborne until they meet a surface or expire; the bolt does not auto-target or steer toward globes.
 - Playtest HUD legibility during flight/combat and at other window sizes. Use `F3` for diagnostics/control help and `PgUp`/`PgDn` to browse the debug panel.
 - Tune the resource loop from playtest feedback, then connect the 50% quota to an explicit win/loss level flow and director response.
 - Initial spell capacity is a prototype starting-power allowance, not physical world mana. Castle deliveries still increase capacity cumulatively; castle damage/withdrawal does not yet reduce that power.
 - Full enemy castles can leave reserve-carrying rivals in retreat; a full-storage fallback and balloon replacement after popping remain future behavior decisions.
-- Castle sanctuary/respawn, damage regression/spillage, two-hand loadouts, and minimap/radar remain pending.
+- Castle sanctuary/respawn, damage regression/spillage, general reassignable two-hand loadouts, and minimap/radar remain pending. RMB now has fixed Possess; direct terrain shaping is intentionally hidden per user direction.
 - Investigate placeholder audio playback disposal on scene shutdown (headless arena exit warning).
 
 ## 2026-09-09
@@ -75,11 +83,8 @@
 - `F`: cast Wind Dash mobility
 - `G`: cast Guardian summon
 - `Tab`: cycle LMB quick spell
-- Right mouse: cast selected terrain mode
-- `1`: terrain crater mode
-- `2`: terrain raise mode
-- `3`: terrain lower mode
-- `4`: terrain flatten mode
+- Right mouse: fire terrain-following Possess bolt to claim neutral/rival loose mana
+- Direct terrain shaping and `1`–`4` mode bindings are hidden for now
 - `V`: toggle chase/first-person camera
 - `R`: restart arena
 - `Esc`: capture/release mouse

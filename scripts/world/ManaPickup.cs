@@ -26,6 +26,7 @@ public partial class ManaPickup : Area3D
     public bool IsAvailable => ManaAmount > 0 && !IsQueuedForDeletion() && !IsCarried;
 
     private CarpetFlightController? _player;
+    private HeightmapArena? _arena;
     private MeshInstance3D _mesh = null!;
     private StandardMaterial3D _material = null!;
     private Vector3 _carryOffset;
@@ -81,6 +82,14 @@ public partial class ManaPickup : Area3D
         }
 
         _bobPhase += deltaF * BobSpeed;
+        if (Ownership != ManaOwnership.Player)
+        {
+            _arena ??= GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+            if (_arena != null)
+            {
+                _homePosition.Y = Mathf.Max(_arena.HeightAt(_homePosition.X, _homePosition.Z), _arena.WaterHeight) + 1.3f;
+            }
+        }
         float bob = Mathf.Sin(_bobPhase) * BobHeight * 0.5f;
         GlobalPosition = _homePosition + Vector3.Up * bob;
 

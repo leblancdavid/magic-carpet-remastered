@@ -248,11 +248,13 @@ public partial class ManaBalloon : Node3D
             return;
         }
 
-        GlobalPosition = GlobalPosition.MoveToward(target, MoveSpeed * delta);
         if (new Vector2(toTarget.X, toTarget.Z).LengthSquared() > 0.0001f)
         {
             LookAt(target, Vector3.Up);
         }
+        // Turn from the departure position: a capped step can land exactly on
+        // target, which would make LookAt(target) invalid after moving.
+        GlobalPosition = GlobalPosition.MoveToward(target, MoveSpeed * delta);
     }
 
     private void BuildVisuals()

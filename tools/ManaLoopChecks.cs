@@ -3,6 +3,7 @@ using System.Reflection;
 using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Player;
+using MagicCarpetRemastered.Scripts.Spells;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Tools;
@@ -25,11 +26,15 @@ public partial class ManaLoopChecks : Node3D
             ClearActors();
             CheckBalloonDelivery();
             ClearActors();
+            CheckBalloonArrival();
+            ClearActors();
             CheckBalloonPop();
             ClearActors();
             CheckEnemyTransfers();
             ClearActors();
             CheckLegacyMonster();
+            ClearActors();
+            CheckPossession();
             GD.Print($"Mana loop checks passed: {_checks}");
             GetTree().Quit();
         }
@@ -198,6 +203,114 @@ public partial class ManaLoopChecks : Node3D
         monster.ApplyDamage(1000);
         tracker.Refresh();
         Check(monster.ManaReserve == 0 && tracker.TotalMana == total && tracker.NeutralLooseMana == total, "Legacy monster death returns initial and absorbed mana exactly");
+    }
+
+    private void CheckBalloonArrival()
+    {
+        var balloon = AddActor(new ManaBalloon());
+        balloon.GlobalPosition = new Vector3(10, 6, 10);
+        Vector3 target = balloon.GlobalPosition + new Vector3(0.02f, 0, 0);
+        Invoke(balloon, "MoveToward", target, 1.0f);
+        Check(balloon.GlobalPosition.IsEqualApprox(target), "Balloon capped step arrives exactly at target");
+        Check((-balloon.GlobalBasis.Z).Dot(Vector3.Right) > 0.99f, "Balloon turns before exact arrival without a coincident LookAt");
+        Basis facing = balloon.GlobalBasis;
+        Invoke(balloon, "MoveToward", target, 1.0f);
+        Check(balloon.GlobalBasis.IsEqualApprox(facing), "Balloon already at target keeps its facing");
+        target += Vector3.Up;
+        Invoke(balloon, "MoveToward", target, 1.0f);
+        Check(balloon.GlobalPosition.IsEqualApprox(target) && balloon.GlobalBasis.IsEqualApprox(facing), "Vertical-only balloon movement preserves facing without invalid up-vector LookAt");
+    }
+
+    private void CheckPossession()
+    {
+        var arena = AddActor(new HeightmapArena { CellsPerSide = 24, CellSize = 2, HeightScale = 0, WaterHeight = -20 });
+        arena.FlattenTerrain(Vector3.Zero, 100000, 0);
+        arena.RaiseTerrain(new Vector3(8, 0, 0), 4, 5);
+        var bolt = AddActor(new PossessProjectile());
+        bolt.GlobalPosition = new Vector3(-8, 4, 0);
+        bolt.Launch(new Vector3(1, -1, 0));
+        bolt._PhysicsProcess(0.2);
+        Check(bolt.IsFollowingTerrain, "Downward possession bolt lands and starts following terrain");
+        float x = bolt.GlobalPosition.X;
+        bolt._PhysicsProcess(0.2);
+        Check(bolt.GlobalPosition.X > x && Mathf.Abs(bolt.GlobalPosition.Z) < 0.001f, "Terrain-following bolt keeps straight horizontal heading");
+        Check(Mathf.Abs(bolt.GlobalPosition.Y - arena.HeightAt(bolt.GlobalPosition.X, 0) - bolt.SurfaceClearance) < 0.001f, "Bolt climbs raised terrain at fixed clearance");
+        arena.ApplyCrater(bolt.GlobalPosition + new Vector3(2, 0, 0), 4, 6);
+        bolt._PhysicsProcess(0.05);
+        Check(Mathf.Abs(bolt.GlobalPosition.Y - arena.HeightAt(bolt.GlobalPosition.X, 0) - bolt.SurfaceClearance) < 0.001f, "Bolt samples deformed terrain before collision rebuild");
+        bolt.Free();
+
+        arena.FlattenTerrain(Vector3.Zero, 100000, 0);
+        // Add farther orb first to catch group-order selection, then skip owned,
+        // carried, spent, and off-path orbs before hitting the nearer rival.
+        var farther = AddActor(new ManaPickup { ManaAmount = 9, BobHeight = 0 });
+        farther.GlobalPosition = new Vector3(9, 12, 0);
+        farther._PhysicsProcess(0);
+        Check(Mathf.Abs(farther.GlobalPosition.Y - 1.3f) < 0.001f, "Unclaimed floating mana settles to terrain for possession");
+        var owned = AddActor(new ManaPickup { Ownership = ManaOwnership.Player });
+        owned.GlobalPosition = new Vector3(1, 0.9f, 0);
+        var carried = AddActor(new ManaPickup());
+        carried.GlobalPosition = new Vector3(2, 0.9f, 0);
+        carried.BeginCarry(this, Vector3.Zero);
+        var spent = AddActor(new ManaPickup());
+        spent.GlobalPosition = new Vector3(3, 0.9f, 0);
+        spent.TakeMana(spent.ManaAmount);
+        var offPath = AddActor(new ManaPickup());
+        offPath.GlobalPosition = new Vector3(4, 0.9f, 4);
+        var near = AddActor(new ManaPickup { Ownership = ManaOwnership.Enemy, ManaAmount = 17 });
+        near.GlobalPosition = new Vector3(6, 1.3f, 0);
+        var tracker = AddActor(new WorldManaTracker());
+        int total = tracker.TotalMana;
+        int playerTotal = tracker.PlayerControlledMana;
+        bolt = AddActor(new PossessProjectile());
+        bolt.GlobalPosition = new Vector3(0, 0.9f, 0);
+        bolt.Launch(Vector3.Right);
+        int claimed = 0;
+        bolt.ManaPossessed += amount => claimed += amount;
+        bolt._PhysicsProcess(0.3);
+        tracker.Refresh();
+        Check(near.Ownership == ManaOwnership.Player && near.ManaAmount == 17 && claimed == 17, "Swept hit claims first rival globe without consuming its mana");
+        Check(farther.Ownership == ManaOwnership.Neutral && offPath.Ownership == ManaOwnership.Neutral && carried.Ownership == ManaOwnership.Neutral, "Bolt ignores off-path/carried globes and stops at first hit");
+        Check(bolt.IsQueuedForDeletion() && tracker.TotalMana == total && tracker.PlayerControlledMana == playerTotal + 17, "Claim conserves world mana and terminates bolt");
+        bolt._PhysicsProcess(0.3);
+        Check(claimed == 17, "Claim cannot repeat after impact");
+
+        bolt = AddActor(new PossessProjectile());
+        bolt.GlobalPosition = new Vector3(7, 0.9f, 0);
+        bolt.Launch(Vector3.Right);
+        bolt._PhysicsProcess(0.1);
+        Check(farther.Ownership == ManaOwnership.Player && bolt.IsQueuedForDeletion(), "Neutral globe is also claimable by bolt impact");
+
+        bolt = AddActor(new PossessProjectile { MaxRange = 3 });
+        bolt.GlobalPosition = new Vector3(0, 10, -10);
+        bolt.Launch(Vector3.Right);
+        bolt._PhysicsProcess(1);
+        Check(bolt.IsQueuedForDeletion() && Mathf.Abs(bolt.GlobalPosition.X - 3) < 0.001f, "Miss expires at bounded range");
+        bolt = AddActor(new PossessProjectile { LifetimeSeconds = 0.1f });
+        bolt.GlobalPosition = new Vector3(0, 10, -10);
+        bolt.Launch(Vector3.Up);
+        bolt._PhysicsProcess(1);
+        Check(bolt.IsQueuedForDeletion() && !bolt.IsFollowingTerrain, "Airborne vertical miss expires safely by lifetime");
+
+        arena.WaterHeight = 2;
+        bolt = AddActor(new PossessProjectile());
+        bolt.GlobalPosition = new Vector3(-10, 0, -10);
+        bolt.Launch(Vector3.Right);
+        bolt._PhysicsProcess(0.02);
+        Check(Mathf.Abs(bolt.GlobalPosition.Y - 2 - bolt.SurfaceClearance) < 0.001f, "Bolt skims water rather than submerged terrain");
+
+        var player = AddActor(new CarpetFlightController());
+        Check(InputMap.ActionHasEvent("cast_possess", new InputEventMouseButton { ButtonIndex = MouseButton.Right }), "RMB binds possession");
+        Check(!InputMap.HasAction("cast_terrain") && !InputMap.HasAction("terrain_raise"), "Terrain tool input is hidden");
+        for (int i = 0; i < 5; i++) Invoke(player, "CycleQuickSpell");
+        Check(player.PrimarySpellName == "Firebolt", "Tab wraps through five combat/utility spells");
+        int mana = player.Mana;
+        Invoke(player, "CastPossessSpell");
+        Check(player.Mana == mana - player.PossessSpellManaCost, "Casting a miss still spends possession mana");
+        foreach (Node child in GetChildren())
+        {
+            if (child is PossessProjectile projectile) projectile.SetPhysicsProcess(false);
+        }
     }
 
     private static void Invoke(object target, string method, params object[] arguments)

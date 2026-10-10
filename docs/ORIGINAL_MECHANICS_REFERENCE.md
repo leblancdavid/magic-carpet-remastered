@@ -57,6 +57,8 @@ Harvesting is a two-step process: create or find mana, then claim it. Claimed ma
 
 Possession is a defining economy spell, not a minor pickup action.
 
+User-reported original behavior (2026-10-10): fire a possession bolt at mana; it continues along a straight heading while following the terrain until it strikes a mana globe. Exact original speed, clearance, and hit tolerance are not measured. The prototype uses this behavior with original procedural visuals, a fixed RMB binding, and tunable bounded travel.
+
 Primary uses:
 
 - claim neutral loose mana

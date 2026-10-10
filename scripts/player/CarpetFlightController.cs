@@ -16,14 +16,13 @@ public partial class CarpetFlightController : CharacterBody3D
         Flatten
     }
 
-private enum QuickSpellSlot
+    private enum QuickSpellSlot
     {
         Firebolt,
         ArcaneBurst,
         ManaShield,
         WindDash,
-        Guardian,
-        Possess
+        Guardian
     }
 
     [Export] public float MoveSpeed { get; set; } = 24.0f;
@@ -73,7 +72,6 @@ private enum QuickSpellSlot
     [Export] public float SummonDistance { get; set; } = 5.0f;
     [Export] public int PossessSpellManaCost { get; set; } = 2;
     [Export] public float PossessSpellCooldownSeconds { get; set; } = 0.4f;
-    [Export] public float PossessRadius { get; set; } = 16.0f;
 
     public int Mana { get; private set; } = 40;
     public int ClaimedMana { get; private set; }
@@ -96,7 +94,7 @@ public string SummonSpellName => _summonSpell?.DisplayName ?? "Guardian";
     public string ShieldStatusText => IsShielded ? $"Shield {_shieldTimer:0.0}s" : "Shield ready";
     public string SpellLoadoutText => _primarySpell == null || _terrainSpell == null || _areaSpell == null || _shieldSpell == null || _mobilitySpell == null || _summonSpell == null || _possessSpell == null
         ? "Spells: loading"
-        : $"Quick: LMB {GetSelectedQuickSpell()!.DisplayName} ({GetSelectedQuickSpell()!.ManaCost})   Tab: Firebolt/Burst/Shield/Dash/Guardian/Possess   Q {_areaSpell.DisplayName}   E {_shieldSpell.DisplayName}   F {_mobilitySpell.DisplayName}   G {_summonSpell.DisplayName}   RMB {_terrainSpell.DisplayName}";
+        : $"Quick: LMB {GetSelectedQuickSpell()!.DisplayName} ({GetSelectedQuickSpell()!.ManaCost})   Tab: Firebolt/Burst/Shield/Dash/Guardian   Q {_areaSpell.DisplayName}   E {_shieldSpell.DisplayName}   F {_mobilitySpell.DisplayName}   G {_summonSpell.DisplayName}   RMB {_possessSpell.DisplayName} ({_possessSpell.ManaCost})";
     public string StatusMessage { get; private set; } = "Collect mana, bank excess at the well, and contest the red monsters.";
     public string ActiveFeedbackMessage => _feedbackTimer > 0.0f ? StatusMessage : string.Empty;
     public string TerrainDebugText => _arena == null
@@ -158,7 +156,7 @@ private SpellDefinition _summonSpell = null!;
         _mobilitySpell = new SpellDefinition("wind-dash", "Wind Dash", SpellKind.Mobility, MobilitySpellManaCost, MobilitySpellCooldownSeconds, "Dash quickly in the aimed direction.");
 _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, SummonSpellManaCost, SummonSpellCooldownSeconds, "Summon a temporary ally that attacks nearby enemies.");
         _terrainSpell = new SpellDefinition("terrain-shape", "Terrain Shape", SpellKind.Terrain, TerrainSpellManaCost, TerrainSpellCooldownSeconds, "Shape terrain using the selected terrain mode.");
-        _possessSpell = new SpellDefinition("possess", "Possess", SpellKind.Economy, PossessSpellManaCost, PossessSpellCooldownSeconds, "Claim neutral or rival loose mana as your own.");
+        _possessSpell = new SpellDefinition("possess", "Possess", SpellKind.Economy, PossessSpellManaCost, PossessSpellCooldownSeconds, "Fire a terrain-following bolt to claim neutral or rival loose mana.");
 
         _cameraPivot = new Node3D { Name = "CameraPivot" };
         AddChild(_cameraPivot);
@@ -196,26 +194,6 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
         if (@event.IsActionPressed("cycle_quick_spell"))
         {
             CycleQuickSpell();
-        }
-
-        if (@event.IsActionPressed("terrain_crater"))
-        {
-            SetTerrainSpellMode(TerrainSpellMode.Crater);
-        }
-
-        if (@event.IsActionPressed("terrain_raise"))
-        {
-            SetTerrainSpellMode(TerrainSpellMode.Raise);
-        }
-
-        if (@event.IsActionPressed("terrain_lower"))
-        {
-            SetTerrainSpellMode(TerrainSpellMode.Lower);
-        }
-
-        if (@event.IsActionPressed("terrain_flatten"))
-        {
-            SetTerrainSpellMode(TerrainSpellMode.Flatten);
         }
 
         if (@event is InputEventMouseMotion motion && Input.MouseMode == Input.MouseModeEnum.Captured)
@@ -294,10 +272,10 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
             CastSummonSpell();
         }
 
-        if (Input.IsActionPressed("cast_terrain") && _terrainSpellCooldown <= 0.0f)
+        if (Input.IsActionPressed("cast_possess") && _possessCooldown <= 0.0f)
         {
-            _terrainSpellCooldown = _terrainSpell.CooldownSeconds;
-            CastTerrainSpell(_terrainSpellMode);
+            _possessCooldown = _possessSpell.CooldownSeconds;
+            CastPossessSpell();
         }
     }
 
@@ -396,7 +374,7 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
 
 private void CycleQuickSpell()
     {
-        int next = ((int)_selectedQuickSpell + 1) % 6;
+        int next = ((int)_selectedQuickSpell + 1) % 5;
         _selectedQuickSpell = (QuickSpellSlot)next;
         StatusMessage = $"Quick spell: {GetSelectedQuickSpell()?.DisplayName ?? "unknown"}";
         _feedbackTimer = 1.0f;
@@ -411,7 +389,6 @@ private void CycleQuickSpell()
             QuickSpellSlot.ManaShield => _shieldSpell,
             QuickSpellSlot.WindDash => _mobilitySpell,
 QuickSpellSlot.Guardian => _summonSpell,
-            QuickSpellSlot.Possess => _possessSpell,
             _ => _primarySpell
         };
     }
@@ -464,15 +441,6 @@ case QuickSpellSlot.Guardian:
 
                 _summonSpellCooldown = _summonSpell.CooldownSeconds;
                 CastSummonSpell();
-                break;
-            case QuickSpellSlot.Possess:
-                if (_possessCooldown > 0.0f)
-                {
-                    return;
-                }
-
-                _possessCooldown = _possessSpell.CooldownSeconds;
-                CastPossessSpell();
                 break;
         }
     }
@@ -585,15 +553,6 @@ GameAudio.Instance?.PlaySpellCast();
 
     private void CastPossessSpell()
     {
-        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
-        ManaPickup? target = FindPossessTarget(direction);
-        if (target == null)
-        {
-            StatusMessage = "No loose mana to possess nearby.";
-            _feedbackTimer = 0.8f;
-            return;
-        }
-
         if (Mana < _possessSpell.ManaCost)
         {
             StatusMessage = $"Not enough mana for {_possessSpell.DisplayName.ToLowerInvariant()}.";
@@ -602,68 +561,25 @@ GameAudio.Instance?.PlaySpellCast();
         }
 
         SpendMana(_possessSpell.ManaCost);
-        target.ReassignOwnership(ManaOwnership.Player);
-        SpawnPossessBurst(target.GlobalPosition);
-        StatusMessage = $"Claimed {target.ManaAmount} mana";
+        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
+        var projectile = new PossessProjectile { Name = "PossessProjectile" };
+        projectile.ManaPossessed += OnManaPossessed;
+        GetTree().CurrentScene.AddChild(projectile);
+        projectile.GlobalPosition = _camera.GlobalPosition + direction * 1.5f;
+        projectile.Launch(direction);
+        StatusMessage = "Possess";
         _feedbackTimer = 0.6f;
         GameAudio.Instance?.PlaySpellCast();
     }
 
-    private ManaPickup? FindPossessTarget(Vector3 aimDirection)
+    private void OnManaPossessed(int amount)
     {
-        ManaPickup? best = null;
-        float bestScore = -1.0f;
-        foreach (ManaPickup pickup in GetTree().GetNodesInGroup("loose_mana"))
+        if (!IsInstanceValid(this) || IsQueuedForDeletion())
         {
-            if (pickup.Ownership == ManaOwnership.Player || !pickup.IsAvailable)
-            {
-                continue;
-            }
-
-            Vector3 toPickup = pickup.GlobalPosition - GlobalPosition;
-            float distance = toPickup.Length();
-            if (distance > PossessRadius || distance <= 0.001f)
-            {
-                continue;
-            }
-
-            Vector3 normalized = toPickup / distance;
-            float aimScore = 0.5f + 0.5f * normalized.Dot(aimDirection);
-            float distanceScore = 1.0f - distance / PossessRadius;
-            float score = aimScore + distanceScore * 0.5f;
-            if (score > bestScore)
-            {
-                bestScore = score;
-                best = pickup;
-            }
+            return;
         }
-
-        return best;
-    }
-
-    private void SpawnPossessBurst(Vector3 position)
-    {
-        var particles = new GpuParticles3D
-        {
-            Emitting = true,
-            OneShot = true,
-            Amount = 18,
-            Lifetime = 0.45f,
-            Explosiveness = 0.6f,
-            Position = ToLocal(position)
-        };
-        var processMaterial = new ParticleProcessMaterial
-        {
-            Direction = Vector3.Up,
-            Spread = 80.0f,
-            InitialVelocityMin = 1.5f,
-            InitialVelocityMax = 6.0f,
-            ScaleMin = 0.06f,
-            ScaleMax = 0.18f,
-            Color = new Color(0.2f, 0.9f, 1.0f)
-        };
-particles.ProcessMaterial = processMaterial;
-        AddChild(particles);
+        StatusMessage = $"Possessed {amount} mana";
+        _feedbackTimer = 0.8f;
     }
 
     private void CastTerrainSpell(TerrainSpellMode mode)

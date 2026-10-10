@@ -56,15 +56,15 @@ Deliverable: generated terrain can be flown over and modified by spells.
 
 Remaining Phase 2 work before signoff:
 
-- runtime playtest terrain modes in Godot
-- tune crater radius/depth, raise/lower height, flatten behavior, mana cost, and cooldown
+- runtime playtest combat impact craters in Godot
+- direct shaping-mode playtesting/tuning is deferred: the user requested hiding crater/raise/lower/flatten controls for now (2026-10-10); internal tools remain implemented
 - tune chunk size if terrain edits are too expensive or too slow
 
 ## Phase 3: Mana Economy
 
 Goal: make mana control the strategic loop.
 
-Status: first-pass implementation now has a verified mana-transfer correctness pass. Mana pickups carry explicit `Neutral`/`Player`/`Enemy` ownership with distinct colors; claimed mana grows spell capacity/regeneration; the well seeds a finite neutral orb field; and `Possess` converts aim-weighted neutral/rival loose mana into player-owned orbs. Player-owned homing, balloon scoop/dock/delivery, partial deposits, pop spills, rival collection/deposit, and exact death drops are covered by a headless Godot regression scene. World-mana accounting includes loose/carried orbs, castle storage, enemy reserves, and physically absorbed player mana once each; initial spell capacity and castle-derived capacity bonuses are not additional world mana. Repeated ecosystem wizard spawning no longer creates fresh reserves. Remaining work is hands-on playtest tuning and gating the win/loss objective on quota state.
+Status: first-pass implementation now has verified mana-transfer correctness and a projectile-based possession pass. Mana pickups carry explicit `Neutral`/`Player`/`Enemy` ownership with distinct colors; claimed mana grows spell capacity/regeneration; the well seeds a finite neutral orb field; and RMB `Possess` launches a terrain/water-skimming bolt that converts the first neutral/rival loose globe hit into player-owned mana. Unclaimed globes sit near the surface so they can be hit. Player-owned homing, balloon scoop/dock/delivery, partial deposits, pop spills, rival collection/deposit, exact death drops, and possession movement/hits are covered by a headless Godot regression scene. World-mana accounting includes loose/carried orbs, castle storage, enemy reserves, and physically absorbed player mana once each; initial spell capacity and castle-derived capacity bonuses are not additional world mana. Repeated ecosystem wizard spawning no longer creates fresh reserves. Remaining work is hands-on playtest tuning and gating the win/loss objective on quota state.
 
 Core work:
 
@@ -81,7 +81,7 @@ Deliverable: fights happen because mana is valuable and contested.
 
 Remaining Phase 3 work before signoff:
 
-- runtime playtest possession aim selection, cost/cooldown, and ownership colors in Godot
+- runtime playtest possession bolt aiming, surface clearance, hit tolerance, speed/range, cost/cooldown, and ownership colors in Godot
 - runtime playtest balloon scoop/return/dock pacing and pop-spill behavior
 - tune enemy thief/wizard orb acquisition, absorb amounts, and retreat thresholds around the claimed-mana loop
 - validate world-mana totals and equilibrium-quota progress, then gate the win/loss objective on quota state
@@ -145,7 +145,7 @@ Deferred Phase 5 tuning:
 
 Goal: make spells the player's primary expression and progression axis.
 
-Status: first-pass spell variety is implemented. The current firebolt and terrain shaping abilities now have a small spell definition model and visible HUD loadout text. `Arcane Burst` adds area damage on `Q`, `Mana Shield` adds a defensive spell on `E`, `Wind Dash` adds mobility utility on `F`, and `Guardian` adds a temporary summoned ally on `G`. `Possess` is the first `Economy`-kind spell, cycling as the sixth `Tab` quick slot to claim loose neutral/rival mana as player-owned. `Tab` now cycles the active quick spell for `LMB`, while direct spell hotkeys remain available. The original-style claimed/regenerating mana base now exists, so further spell tuning, unlock/upgrade rules, and runtime validation can resume once the claimed-mana loop is playtested.
+Status: first-pass spell variety is implemented. The abilities have a small spell definition model and visible HUD loadout text. `Arcane Burst` adds area damage on `Q`, `Mana Shield` adds a defensive spell on `E`, `Wind Dash` adds mobility utility on `F`, and `Guardian` adds a temporary summoned ally on `G`. `Possess` is the first `Economy`-kind spell, dedicated to RMB and launching a terrain-following claiming bolt. `Tab` cycles the five combat/utility quick spells for `LMB`, while direct spell hotkeys remain available. Per user direction, the direct crater/raise/lower/flatten tool and its 1–4 bindings are hidden; its internal code remains available, and firebolt impact craters still work. The original-style claimed/regenerating mana base now exists, so further spell tuning, unlock/upgrade rules, and runtime validation can resume once the claimed-mana loop is playtested.
 
 Core work:
 
@@ -157,7 +157,7 @@ Core work:
 - light auto-targeting/homing rules for appropriate offensive spells
 - projectile damage spell
 - area damage spell
-- terrain deformation spell
+- terrain deformation through combat impacts (direct shaping tool deferred/hidden)
 - summoning spell
 - shield or defense spell
 - mobility or utility spell
