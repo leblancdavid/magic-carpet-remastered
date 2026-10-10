@@ -9,6 +9,7 @@ namespace MagicCarpetRemastered.Scripts.Game;
 
 public partial class Game : Node3D
 {
+    [Export] public bool UseSphericalWorld { get; set; }
     private HeightmapArena _arena = null!;
     private CastleKeep _playerCastle = null!;
     private CastleKeep _enemyCastle = null!;
@@ -16,6 +17,12 @@ public partial class Game : Node3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (@event is InputEventKey key && key.Pressed && !key.Echo && key.Keycode == Key.F6)
+        {
+            GetTree().Paused = false;
+            GetTree().ChangeSceneToFile("res://scenes/PlanetFlightTest.tscn");
+            return;
+        }
         if (@event.IsActionPressed("restart_arena"))
         {
             GetTree().Paused = false;
@@ -38,10 +45,12 @@ public partial class Game : Node3D
         CreateLevelObjective();
         AddChild(new WorldManaTracker { Name = "WorldManaTracker" });
         AddChild(new Hud { Name = "Hud" });
+        if (UseSphericalWorld) AddChild(new PlanetSettings { Name = "PlanetSettings" });
+        _arena.RefreshPlanetDetail();
         ProcessMode = ProcessModeEnum.Pausable;
         foreach (Node child in GetChildren())
         {
-            child.ProcessMode = child is Hud ? ProcessModeEnum.Always : ProcessModeEnum.Pausable;
+            child.ProcessMode = child is Hud or PlanetSettings ? ProcessModeEnum.Always : ProcessModeEnum.Pausable;
         }
     }
 
@@ -63,14 +72,14 @@ public partial class Game : Node3D
         {
             Name = "Sun",
             RotationDegrees = new Vector3(-55.0f, 35.0f, 0.0f),
-            LightEnergy = 2.5f
+            LightEnergy = UseSphericalWorld ? 1.2f : 2.5f
         };
         AddChild(sun);
     }
 
     private void CreateArena()
     {
-        _arena = new HeightmapArena { Name = "HeightmapArena" };
+        _arena = new HeightmapArena { Name = "HeightmapArena", IsSpherical = UseSphericalWorld, PlanetRadius = PlanetSizes.SelectedRadius };
         AddChild(_arena);
 
         for (int i = 0; i < 18; i++)
@@ -87,7 +96,7 @@ public partial class Game : Node3D
         _player = new CarpetFlightController
         {
             Name = "PlayerCarpet",
-            Position = AboveTerrain(0.0f, 14.0f, 9.0f)
+            Position = AboveTerrain(UseSphericalWorld ? -130 : 0, 14, 9)
         };
         AddChild(_player);
     }
@@ -108,7 +117,7 @@ public partial class Game : Node3D
         {
             Name = "PlayerCastle",
             IsPlayerCastle = true,
-            Position = AboveTerrain(-22.0f, 8.0f, 2.0f)
+            Position = AboveTerrain(UseSphericalWorld ? -145 : -22, 8, 2)
         };
         AddChild(_playerCastle);
 
@@ -116,7 +125,7 @@ public partial class Game : Node3D
         {
             Name = "EnemyCastle",
             IsPlayerCastle = false,
-            Position = AboveTerrain(22.0f, -12.0f, 2.0f),
+            Position = AboveTerrain(UseSphericalWorld ? 145 : 22, -12, 2),
             InitialStoredMana = 48
         };
         AddChild(_enemyCastle);
@@ -128,14 +137,16 @@ public partial class Game : Node3D
         {
             Name = "PlayerBalloon",
             UsePlayerMana = true,
-            Position = AboveTerrain(-16.0f, 4.0f, 5.0f)
+            Position = AboveTerrain(UseSphericalWorld ? -130 : -16, 4, 5),
+            MaxSeekRadius = UseSphericalWorld ? 200 : 46
         });
 
         AddChild(new ManaBalloon
         {
             Name = "EnemyBalloon",
             UsePlayerMana = false,
-            Position = AboveTerrain(16.0f, -8.0f, 5.0f)
+            Position = AboveTerrain(UseSphericalWorld ? 130 : 16, -8, 5),
+            MaxSeekRadius = UseSphericalWorld ? 200 : 46
         });
     }
 
@@ -156,7 +167,9 @@ public partial class Game : Node3D
             {
                 float angle = Mathf.Tau * i / orbCount + GD.Randf() * 0.6f;
                 float radius = 3.0f + GD.Randf() * 4.0f;
-                Vector3 offset = new Vector3(Mathf.Cos(angle) * radius, GD.Randf() * 2.0f, Mathf.Sin(angle) * radius);
+                Vector3 up = _arena.UpAt(wellClusters[cluster]);
+                Basis frame = PlanetGeometry.Frame(up, Vector3.Forward);
+                Vector3 offset = frame * new Vector3(Mathf.Cos(angle) * radius, GD.Randf() * 2.0f, Mathf.Sin(angle) * radius);
                 AddChild(new ManaPickup
                 {
                     Name = "LooseMana",
@@ -198,7 +211,7 @@ public partial class Game : Node3D
                 Name = $"SpellDiscovery{discovery.Title.Replace(" ", "")}",
                 SpellId = discovery.Id,
                 SpellName = discovery.Title,
-                Position = AboveTerrain(discovery.X, discovery.Z, 6)
+                Position = AboveTerrain(discovery.X * (UseSphericalWorld ? 3 : 1), discovery.Z * (UseSphericalWorld ? 3 : 1), 6)
             });
         }
     }
@@ -209,7 +222,7 @@ public partial class Game : Node3D
         {
             Name = "RivalWizard",
             Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard,
-            Position = AboveTerrain(17.0f, -17.0f, 7.0f)
+            Position = AboveTerrain(UseSphericalWorld ? 130 : 17, -17, 7)
         };
         AddChild(rival);
         var objective = new LevelObjective { Name = "LevelObjective" };
@@ -230,6 +243,7 @@ public partial class Game : Node3D
             Position = position
         };
         AddChild(pillar);
+        _arena.Orient(pillar);
 
         pillar.AddChild(new CollisionShape3D
         {
@@ -250,6 +264,6 @@ public partial class Game : Node3D
 
     private Vector3 AboveTerrain(float x, float z, float clearance)
     {
-        return new Vector3(x, _arena.HeightAt(x, z) + clearance, z);
+        return _arena.FromMap(x, z, clearance);
     }
 }

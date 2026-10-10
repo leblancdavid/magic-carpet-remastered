@@ -16,10 +16,12 @@ public partial class SpellProjectile : Area3D
     private Vector3 _direction = Vector3.Forward;
     private CarpetFlightController? _owner;
     private float _lifeRemaining;
+    private HeightmapArena? _arena;
 
     public override void _Ready()
     {
         _lifeRemaining = LifetimeSeconds;
+        _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         BodyEntered += OnBodyEntered;
 
         var shape = new CollisionShape3D
@@ -49,6 +51,26 @@ public partial class SpellProjectile : Area3D
         Vector3 previous = GlobalPosition;
         GlobalPosition += _direction * Speed * deltaF;
         _lifeRemaining -= deltaF;
+        if (_arena?.IsSpherical == true)
+        {
+            var ray = PhysicsRayQueryParameters3D.Create(previous, GlobalPosition);
+            if (IsInstanceValid(_owner)) ray.Exclude = new Godot.Collections.Array<Rid> { _owner!.GetRid() };
+            var result = GetWorld3D().DirectSpaceState.IntersectRay(ray);
+            if (result.Count > 0 && result["collider"].As<Node3D>() is Node3D body)
+            {
+                GlobalPosition = (Vector3)result["position"];
+                OnBodyEntered(body);
+                return;
+            }
+            if (_arena.TrySurfaceHit(previous, GlobalPosition, out Vector3 hit))
+            {
+                GlobalPosition = hit;
+                _arena.ApplyCrater(hit, TerrainCraterRadius, TerrainCraterDepth);
+                SpawnImpactBurst();
+                QueueFree();
+                return;
+            }
+        }
 
         float stepDistance = GlobalPosition.DistanceTo(previous);
         foreach (Node node in GetTree().GetNodesInGroup("balloon"))
@@ -86,7 +108,7 @@ public partial class SpellProjectile : Area3D
             return;
         }
 
-        if (body == _owner)
+        if (IsInstanceValid(_owner) && body == _owner)
         {
             return;
         }

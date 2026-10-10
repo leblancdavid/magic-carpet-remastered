@@ -124,11 +124,11 @@ public partial class LevelObjective : Node
     private Vector3 RespawnPosition(CastleKeep castle)
     {
         // Spawn beside the solid keep, never within its collider.
-        Vector3 position = castle.GlobalPosition + new Vector3(9, 4, 0);
+        Vector3 position = castle.GlobalPosition + castle.GlobalBasis * new Vector3(9, 4, 0);
         var arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         if (arena != null)
         {
-            position.Y = arena.SurfaceHeight(position.X, position.Z) + 6;
+            position = arena.OnSurface(position, 6);
             position = arena.ClampFlightPosition(position, 2);
         }
         return position;

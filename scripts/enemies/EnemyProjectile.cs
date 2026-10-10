@@ -14,10 +14,12 @@ public partial class EnemyProjectile : Area3D
     private Vector3 _direction = Vector3.Forward;
     private Node3D? _owner;
     private float _lifeRemaining;
+    private HeightmapArena? _arena;
 
     public override void _Ready()
     {
         _lifeRemaining = LifetimeSeconds;
+        _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         BodyEntered += OnBodyEntered;
         Monitoring = true;
         Monitorable = true;
@@ -45,8 +47,31 @@ public partial class EnemyProjectile : Area3D
     {
         if (IsQueuedForDeletion()) return;
         float deltaF = (float)delta;
+        Vector3 previous = GlobalPosition;
         GlobalPosition += _direction * Speed * deltaF;
         _lifeRemaining -= deltaF;
+        if (_arena?.IsSpherical == true)
+        {
+            var ray = PhysicsRayQueryParameters3D.Create(previous, GlobalPosition);
+            // A projectile can outlive its shooter. A disposed Godot wrapper
+            // still passes a C# type check, but native calls such as GetRid fail.
+            if (IsInstanceValid(_owner) && _owner is CollisionObject3D owner)
+                ray.Exclude = new Godot.Collections.Array<Rid> { owner.GetRid() };
+            var result = GetWorld3D().DirectSpaceState.IntersectRay(ray);
+            if (result.Count > 0 && result["collider"].As<Node3D>() is Node3D body)
+            {
+                GlobalPosition = (Vector3)result["position"];
+                OnBodyEntered(body);
+                return;
+            }
+            if (_arena.TrySurfaceHit(previous, GlobalPosition, out Vector3 hit))
+            {
+                GlobalPosition = hit;
+                SpawnImpactBurst();
+                QueueFree();
+                return;
+            }
+        }
 
         if (_lifeRemaining <= 0.0f)
         {
@@ -57,6 +82,7 @@ public partial class EnemyProjectile : Area3D
     public void Launch(Vector3 direction, Node3D owner)
     {
         _direction = new Vector3(direction.X, 0.0f, direction.Z).Normalized();
+        if (_arena?.IsSpherical == true) _direction = direction.Normalized();
         if (_direction == Vector3.Zero)
         {
             _direction = direction.Normalized();
@@ -66,7 +92,7 @@ public partial class EnemyProjectile : Area3D
 
     private void OnBodyEntered(Node3D body)
     {
-        if (body == _owner || IsQueuedForDeletion())
+        if (IsQueuedForDeletion() || (IsInstanceValid(_owner) && body == _owner))
         {
             return;
         }

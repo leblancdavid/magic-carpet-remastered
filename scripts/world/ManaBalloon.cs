@@ -46,6 +46,7 @@ public partial class ManaBalloon : Node3D
         BuildVisuals();
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         if (_arena != null) GlobalPosition = _arena.ClampFlightPosition(GlobalPosition);
+        _arena?.Orient(this);
     }
 
     public override void _PhysicsProcess(double delta)
@@ -119,7 +120,7 @@ public partial class ManaBalloon : Node3D
                 continue;
             }
 
-            float distance = GlobalPosition.DistanceTo(pickup.GlobalPosition);
+            float distance = _arena?.IsSpherical == true ? _arena.SurfaceDistance(GlobalPosition, pickup.GlobalPosition) : GlobalPosition.DistanceTo(pickup.GlobalPosition);
             if (distance > MaxSeekRadius)
             {
                 continue;
@@ -134,8 +135,9 @@ public partial class ManaBalloon : Node3D
 
         if (best != null)
         {
-            MoveToward(best.GlobalPosition + Vector3.Up * HoverHeight, delta);
-            if (GlobalPosition.DistanceTo(best.GlobalPosition + Vector3.Up * HoverHeight) <= ScoopRadius)
+            Vector3 scoopPosition = best.GlobalPosition + (_arena?.UpAt(best.GlobalPosition) ?? Vector3.Up) * HoverHeight;
+            MoveToward(scoopPosition, delta);
+            if (GlobalPosition.DistanceTo(scoopPosition) <= ScoopRadius)
             {
                 Scoop(best);
             }
@@ -178,7 +180,7 @@ public partial class ManaBalloon : Node3D
             return;
         }
 
-        Vector3 dockPosition = _castle.GlobalPosition + Vector3.Up * HoverHeight;
+        Vector3 dockPosition = _castle.GlobalPosition + (_arena?.UpAt(_castle.GlobalPosition) ?? Vector3.Up) * HoverHeight;
         MoveToward(dockPosition, delta);
         if (GlobalPosition.DistanceTo(dockPosition) <= HomeRadius)
         {
@@ -201,7 +203,7 @@ public partial class ManaBalloon : Node3D
             if (pickup.ManaAmount > 0)
             {
                 // Release overflow outside the solid keep, not inside its collider.
-                pickup.SpillAt(_castle.GlobalPosition + new Vector3(5.0f + pickup.Radius, 2.0f, GD.Randf() * 2.0f - 1.0f));
+                pickup.SpillAt(_castle.GlobalPosition + _castle.GlobalBasis * new Vector3(5.0f + pickup.Radius, 2.0f, GD.Randf() * 2.0f - 1.0f));
                 pickup.ReassignOwnership(ManaOwnership.Neutral);
             }
         }
@@ -245,6 +247,13 @@ public partial class ManaBalloon : Node3D
 
     private void MoveToward(Vector3 target, float delta)
     {
+        if (_arena?.IsSpherical == true)
+        {
+            Vector3 heading = _arena.DirectionTo(GlobalPosition, target);
+            GlobalPosition = _arena.ClampFlightPosition(_arena.StepToward(GlobalPosition, target, MoveSpeed * delta));
+            _arena.Orient(this, heading.LengthSquared() > 0.001f ? heading : null);
+            return;
+        }
         Vector3 toTarget = target - GlobalPosition;
         float distance = toTarget.Length();
         if (distance <= 0.001f)

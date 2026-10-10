@@ -20,6 +20,7 @@ public partial class SummonedGuardian : CharacterBody3D
 
     public override void _Ready()
     {
+        AddToGroup("guardian");
         _lifeRemaining = LifetimeSeconds;
         AddCollisionAndVisuals();
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
@@ -41,7 +42,7 @@ public partial class SummonedGuardian : CharacterBody3D
         if (target == null)
         {
             Velocity = Velocity.MoveToward(Vector3.Zero, MoveSpeed * deltaF);
-            MoveAndSlide();
+            if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
             _arena?.ClampFlightBody(this);
             PulseMaterial(deltaF);
             return;
@@ -50,11 +51,18 @@ public partial class SummonedGuardian : CharacterBody3D
         Vector3 toTarget = target.GlobalPosition - GlobalPosition;
         float distance = toTarget.Length();
         Vector3 direction = distance > 0.001f ? toTarget / distance : Vector3.Zero;
+        if (_arena?.IsSpherical == true)
+        {
+            direction = _arena.DirectionTo(GlobalPosition, target.GlobalPosition);
+            float radial = Mathf.Clamp((_arena.Clearance(target.GlobalPosition) - _arena.Clearance(GlobalPosition)) * 2, -4, 4);
+            direction = (direction + _arena.UpAt(GlobalPosition) * radial / MoveSpeed).Normalized();
+            _arena.Orient(this, _arena.Tangent(direction, GlobalPosition));
+        }
 
         if (distance > AttackRadius)
         {
             Velocity = direction * MoveSpeed;
-            MoveAndSlide();
+            if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
         }
         else
         {

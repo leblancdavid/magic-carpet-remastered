@@ -23,14 +23,17 @@ public static class ManaScatter
             };
             // Golden-angle placement avoids aligned columns and overlapping fragments.
             float angle = phase + i * 2.399963f;
-            Vector3 outward = new(Mathf.Cos(angle), 0, Mathf.Sin(angle));
+            Vector3 up = arena?.UpAt(origin) ?? Vector3.Up;
+            Vector3 forward = Mathf.Abs(up.Dot(Vector3.Forward)) < 0.9f ? Vector3.Forward : Vector3.Right;
+            Basis frame = PlanetGeometry.Frame(up, forward);
+            Vector3 outward = frame * new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle));
             Vector3 position = origin + outward * (minimumRadius + orb.Radius + (i % 3) * 0.65f);
             if (arena != null)
             {
                 position = arena.ClampFlightPosition(position, orb.Radius + 0.2f);
             }
             parent.AddChild(orb);
-            orb.LaunchScatter(position, outward * (6.0f + (i % 4) * 1.3f) + Vector3.Up * (5.0f + i % 3));
+            orb.LaunchScatter(position, outward * (6.0f + (i % 4) * 1.3f) + up * (5.0f + i % 3));
         }
     }
 }

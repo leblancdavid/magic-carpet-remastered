@@ -10,6 +10,20 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - Use this file for reusable lessons, technical decisions, gotchas, and design constraints learned while building.
 - When a lesson changes phase priorities or scope, update both this file and `docs/BUILD_ROADMAP.md`.
 
+## Spherical Flight Lessons
+
+- Globe movement needs a location-dependent up vector. Apply the great-circle step rotation to up, heading, and tangential velocity together; this preserves orientation through poles without a geographic-north bias.
+- Radius and speed control different aspects of comfort: angular up rate is `speed / (radius + clearance)`, while visible curvature remains a geometric property even when movement is slowed. Tune castle travel distance independently of circumference.
+- Radial carpet lift can counter constant inward gravity and regulate clearance without introducing orbital mechanics. This analytic flight constraint is separate from terrain collision and rigid-body mana physics.
+- A pitched chase-camera offset can enter the sphere at low clearance even when the carpet is safe; clamp camera radius independently.
+- Godot headless mode does not provide captured mouse state. Test flight simulation with explicit input values rather than relying on mouse capture to activate synthetic actions.
+- A collision body's linear tangent step adds outward radius drift on a globe. Preserve the solver's measured radial displacement and reproject the new location before transporting orientation/velocity; otherwise altitude slowly rises during sustained horizontal flight.
+- Cube-sphere terrain edits can share a single direction-based height function and persistent stamps across all faces. Rebuild every intersecting patch, keep active collision sampling consistent across boundaries, and hide far/fine mesh gaps with visual skirts.
+- Validate migrated mechanics on the underside and at face seams. World-Y assumptions can look correct near the starting pole while breaking gravity, cargo offsets, possession, respawn, and spell discoveries on the opposite hemisphere.
+- Rigid mana needs global downward gravity disabled, inward acceleration applied in force integration, and radial floor/ceiling handling. Keep ordinary terrain contacts in the solver so slope rolling/merging remain physical.
+- Logistics and steering need surface arc distance and tangent directions; projectiles need real straight-line aim/sweeps/visibility. Flattening enemy aim into global X/Z silently breaks combat away from the starting hemisphere.
+- Godot C# wrappers remain non-null and still pass `is` checks after their native node is freed. Projectiles can outlive their caster, so use `IsInstanceValid` before native owner calls such as `GetRid`; omit the owner exclusion after disposal and let the shot continue its normal hit/lifetime behavior. Regression checks must advance past actual deferred deletion before exercising the shot.
+
 ## Phase 1 Prototype Lessons
 
 - A playable prototype benefits from code-generated primitives and procedural content first. This keeps the game runnable without proprietary assets or asset import friction.

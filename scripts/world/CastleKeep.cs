@@ -35,6 +35,7 @@ public partial class CastleKeep : StaticBody3D
     public override void _Ready()
     {
         AddToGroup(IsPlayerCastle ? "player_castle" : "enemy_castle");
+        (GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena)?.Orient(this);
         MaxHealth = Mathf.Max(1, MaxHealth);
         Health = MaxHealth;
         StoredMana = Mathf.Clamp(InitialStoredMana, 0, EffectiveStorageCapacity);

@@ -79,7 +79,7 @@ public partial class CarpetFlightController : CharacterBody3D
     public int CastleManaBonus => ClaimedMana - _baseManaPower;
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
-    public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : GlobalPosition.Y - _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z);
+    public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : _arena.Elevation(GlobalPosition) - _arena.HeightAt(GlobalPosition);
     public bool IsInvulnerable => _damageInvulnerabilityTimer > 0.0f;
     public string CameraMode => _firstPersonCamera ? "First Person" : "Chase";
     public string PrimarySpellName => GetSelectedQuickSpell()?.RankedName ?? "Firebolt";
@@ -125,6 +125,8 @@ public string SummonSpellName => _summonSpell?.RankedName ?? "Guardian";
     private HeightmapArena? _arena;
     private ManaWell? _manaWell;
     private float _yaw;
+    private float _appliedYaw;
+    private Vector3 LocalUp => _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
     private float _pitch = -0.2f;
     private float _fireCooldown;
     private float _areaSpellCooldown;
@@ -181,6 +183,7 @@ private SpellDefinition _summonSpell = null!;
         AddToGroup("player");
         Input.MouseMode = Input.MouseModeEnum.Captured;
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        _arena?.Orient(this);
         _manaWell = GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
         _baseManaPower = Mathf.Clamp(Mathf.Max(InitialClaimedMana, ManaCapacity), 1, Mathf.Max(1, MaxClaimedMana));
         RefreshCastleManaPower();
@@ -201,10 +204,11 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
             Name = "Camera3D",
             Current = true,
             Position = new Vector3(0.0f, 2.0f, 8.0f),
-            Fov = 75.0f
+            Fov = 75.0f,
+            Far = 8000
         };
         _cameraPivot.AddChild(_camera);
-        _camera.LookAt(_cameraPivot.GlobalPosition, Vector3.Up);
+        _camera.LookAt(_cameraPivot.GlobalPosition, LocalUp);
 
         AddCarpetVisual();
         _aliveCollisionLayer = CollisionLayer;
@@ -257,7 +261,12 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
         _damageInvulnerabilityTimer = Mathf.Max(0.0f, _damageInvulnerabilityTimer - deltaF);
         RegenerateMana(deltaF);
 
-        Rotation = new Vector3(0.0f, _yaw, 0.0f);
+        if (_arena?.IsSpherical == true)
+        {
+            _arena.Orient(this, (-GlobalBasis.Z).Rotated(LocalUp, _yaw - _appliedYaw));
+            _appliedYaw = _yaw;
+        }
+        else Rotation = new Vector3(0.0f, _yaw, 0.0f);
         _cameraPivot.Rotation = new Vector3(_pitch, 0.0f, 0.0f);
         UpdateCamera(deltaF);
 
@@ -273,15 +282,20 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
         }
 
         Vector3 horizontal = (GlobalBasis * horizontalInput) * MoveSpeed;
-        Vector3 desiredVelocity = new(horizontal.X, localInput.Y * VerticalSpeed, horizontal.Z);
+        Vector3 desiredVelocity = horizontal + LocalUp * localInput.Y * VerticalSpeed;
         ApplyTerrainFollow(ref desiredVelocity);
         bool isAccelerating = horizontalInput.LengthSquared() > 0.001f || Mathf.Abs(localInput.Y) > 0.001f;
         Velocity = Velocity.MoveToward(desiredVelocity, (isAccelerating ? Acceleration : Drag) * deltaF);
         GameAudio.Instance?.SetFlightIntensity(Mathf.Clamp(Velocity.Length() / MoveSpeed, 0.0f, 1.0f));
         UpdateCarpetBank(deltaF);
-        MoveAndSlide();
+        if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
 
         ClampAboveGround();
+        if (_arena?.IsSpherical == true)
+        {
+            Vector3 safeCamera = _arena.OnSurface(_camera.GlobalPosition, 0.5f);
+            if (_arena.Clearance(_camera.GlobalPosition) < 0.5f) _camera.GlobalPosition = safeCamera;
+        }
         if (Input.IsActionPressed("cast_primary"))
         {
             CastSelectedQuickSpell();
@@ -566,7 +580,9 @@ case QuickSpellSlot.Guardian:
 
         SpendMana(_mobilitySpell.ManaCost);
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
-        Velocity = new Vector3(direction.X * EffectiveDashSpeed, Mathf.Max(Velocity.Y, direction.Y * EffectiveDashSpeed + MobilityDashLift), direction.Z * EffectiveDashSpeed);
+        Vector3 up = LocalUp;
+        Velocity = (direction - up * direction.Dot(up)) * EffectiveDashSpeed
+            + up * Mathf.Max(Velocity.Dot(up), direction.Dot(up) * EffectiveDashSpeed + MobilityDashLift);
         StatusMessage = _mobilitySpell.DisplayName;
         _feedbackTimer = 0.6f;
         SpawnMobilityBurst();
@@ -591,7 +607,8 @@ case QuickSpellSlot.Guardian:
             LifetimeSeconds = GetSpellRank("guardian") == 2 ? 18 : 12
         };
         GetTree().CurrentScene.AddChild(guardian);
-        guardian.GlobalPosition = GlobalPosition + direction * SummonDistance + Vector3.Up * 1.0f;
+        guardian.GlobalPosition = GlobalPosition + direction * SummonDistance + LocalUp;
+        _arena?.ClampFlightBody(guardian);
         SpawnSummonBurst(guardian.GlobalPosition);
         StatusMessage = $"Summoned {_summonSpell.DisplayName}";
         _feedbackTimer = 0.8f;
@@ -667,7 +684,7 @@ GameAudio.Instance?.PlaySpellCast();
                 _arena.LowerTerrain(hitPosition, TerrainSpellRadius, TerrainSpellHeight);
                 break;
             case TerrainSpellMode.Flatten:
-                _arena.FlattenTerrain(hitPosition, TerrainSpellRadius, hitPosition.Y);
+                _arena.FlattenTerrain(hitPosition, TerrainSpellRadius, _arena.Elevation(hitPosition));
                 break;
         }
 
@@ -707,6 +724,7 @@ GameAudio.Instance?.PlaySpellCast();
 
         if (_arena != null)
         {
+            if (_arena.IsSpherical && _arena.TrySurfaceHit(origin, target, out hitPosition)) return true;
             Vector3 ray = target - origin;
             float rayLength = ray.Length();
             if (rayLength > 0.001f)
@@ -718,10 +736,10 @@ GameAudio.Instance?.PlaySpellCast();
                 {
                     float distance = stepLength * i;
                     Vector3 point = origin + stepDirection * distance;
-                    float terrainHeight = _arena.HeightAt(point.X, point.Z);
-                    if (point.Y <= terrainHeight)
+                    float terrainHeight = _arena.HeightAt(point);
+                    if (_arena.Elevation(point) <= terrainHeight)
                     {
-                        hitPosition = new Vector3(point.X, terrainHeight, point.Z);
+                        hitPosition = _arena.AtElevation(point, terrainHeight);
                         return true;
                     }
                 }
@@ -895,20 +913,23 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
             return;
         }
 
-        float surface = _arena.SurfaceHeight(GlobalPosition.X, GlobalPosition.Z);
-        if (GlobalPosition.Y >= surface + _arena.MaxFlightClearance)
+        float surface = _arena.SurfaceHeight(GlobalPosition);
+        Vector3 up = LocalUp;
+        float vertical = desiredVelocity.Dot(up);
+        if (_arena.Elevation(GlobalPosition) >= surface + _arena.MaxFlightClearance)
         {
-            desiredVelocity.Y = Mathf.Min(0, desiredVelocity.Y);
+            desiredVelocity += up * (Mathf.Min(0, vertical) - vertical);
+            vertical = desiredVelocity.Dot(up);
         }
         float targetAltitude = surface + MinimumAltitude;
-        float altitudeError = targetAltitude - GlobalPosition.Y;
+        float altitudeError = targetAltitude - _arena.Elevation(GlobalPosition);
         if (altitudeError <= 0.0f)
         {
             return;
         }
 
         float terrainLift = Mathf.Min(altitudeError * TerrainFollowStrength, TerrainFollowMaxLiftSpeed);
-        desiredVelocity.Y = Mathf.Max(desiredVelocity.Y, terrainLift);
+        desiredVelocity += up * (Mathf.Max(vertical, terrainLift) - vertical);
     }
 
     private void RouteManaToWell()
@@ -951,7 +972,7 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
         }
         else
         {
-            _camera.LookAt(_cameraPivot.GlobalPosition, Vector3.Up);
+            _camera.LookAt(_cameraPivot.GlobalPosition, LocalUp);
         }
 
         if (IsInvulnerable)

@@ -67,6 +67,12 @@ public partial class SpellDiscovery : Node3D
         if (IsCollected || IsQueuedForDeletion() || player.Health <= 0) return false;
         Vector3 offset = player.GlobalPosition - GlobalPosition;
         float halfHeight = (_arena?.MaxFlightClearance ?? 12) * 0.5f;
+        if (_arena?.IsSpherical == true)
+        {
+            if (_arena.SurfaceDistance(player.GlobalPosition, GlobalPosition) > CollectionRadius
+                || Mathf.Abs(_arena.Elevation(player.GlobalPosition) - _arena.Elevation(GlobalPosition)) > halfHeight) return false;
+            offset = Vector3.Zero;
+        }
         if (new Vector2(offset.X, offset.Z).LengthSquared() > CollectionRadius * CollectionRadius
             || Mathf.Abs(offset.Y) > halfHeight) return false;
         if (!player.DiscoverSpellUpgrade(SpellId)) return false;
@@ -79,7 +85,7 @@ public partial class SpellDiscovery : Node3D
     private void FollowSurface()
     {
         if (_arena == null) return;
-        GlobalPosition = new Vector3(GlobalPosition.X,
-            _arena.SurfaceHeight(GlobalPosition.X, GlobalPosition.Z) + _arena.MaxFlightClearance * 0.5f, GlobalPosition.Z);
+        GlobalPosition = _arena.OnSurface(GlobalPosition, _arena.MaxFlightClearance * 0.5f);
+        _arena.Orient(this);
     }
 }

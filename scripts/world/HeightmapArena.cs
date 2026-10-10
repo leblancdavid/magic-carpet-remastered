@@ -11,11 +11,110 @@ public partial class HeightmapArena : Node3D
     [Export] public float HeightScale { get; set; } = 9.0f;
     [Export] public float WaterHeight { get; set; } = -0.8f;
     [Export] public float MaxFlightClearance { get; set; } = 12.0f;
+    [Export] public bool IsSpherical { get; set; }
+    [Export] public float PlanetRadius { get; set; } = 800;
+    public Vector3 PlanetCenter => new(0, -PlanetRadius, 0);
+    private PlanetTerrain? _planet;
+
+    public Vector3 UpAt(Vector3 position) => IsSpherical ? PlanetGeometry.Up(position, PlanetCenter) : Vector3.Up;
+    public float HeightAt(Vector3 position) => IsSpherical ? _planet!.HeightAt(UpAt(position)) : HeightAt(position.X, position.Z);
+    public float SurfaceHeight(Vector3 position) => Mathf.Max(HeightAt(position), WaterHeight);
+    public float Elevation(Vector3 position) => IsSpherical ? position.DistanceTo(PlanetCenter) - PlanetRadius : position.Y;
+    public float Clearance(Vector3 position) => Elevation(position) - SurfaceHeight(position);
+    public Vector3 AtElevation(Vector3 position, float elevation) => IsSpherical
+        ? PlanetCenter + UpAt(position) * (PlanetRadius + elevation) : new Vector3(position.X, elevation, position.Z);
+    public Vector3 OnSurface(Vector3 position, float clearance = 0) => AtElevation(position, SurfaceHeight(position) + clearance);
+    public Vector3 FromMap(float x, float z, float clearance)
+    {
+        Vector3 position = IsSpherical ? PlanetCenter + new Vector3(x, PlanetRadius, z).Normalized() * PlanetRadius : new Vector3(x, 0, z);
+        return OnSurface(position, clearance);
+    }
+    public Vector3 Tangent(Vector3 vector, Vector3 position) => vector - UpAt(position) * vector.Dot(UpAt(position));
+    public Vector3 DirectionTo(Vector3 from, Vector3 to)
+    {
+        Vector3 direction = Tangent(to - from, from);
+        if (direction.LengthSquared() < 0.000001f && SurfaceDistance(from, to) > 1)
+            direction = Tangent(Vector3.Right, from).LengthSquared() > 0.01f ? Tangent(Vector3.Right, from) : Tangent(Vector3.Forward, from);
+        return direction.Normalized();
+    }
+    public float SurfaceDistance(Vector3 from, Vector3 to) => IsSpherical
+        ? PlanetRadius * Mathf.Atan2(UpAt(from).Cross(UpAt(to)).Length(), Mathf.Clamp(UpAt(from).Dot(UpAt(to)), -1, 1))
+        : new Vector2(to.X - from.X, to.Z - from.Z).Length();
+    public void Orient(Node3D node, Vector3? forward = null)
+    {
+        if (!IsSpherical) return;
+        Vector3 up = UpAt(node.GlobalPosition);
+        Vector3 heading = Tangent(forward ?? -node.GlobalBasis.Z, node.GlobalPosition);
+        if (heading.LengthSquared() < 0.00001f) heading = Tangent(Vector3.Right, node.GlobalPosition);
+        node.GlobalBasis = PlanetGeometry.Frame(up, heading);
+        if (node is CharacterBody3D body) body.UpDirection = up;
+    }
+    public Vector3 StepToward(Vector3 from, Vector3 to, float step)
+    {
+        if (!IsSpherical) return from.MoveToward(to, step);
+        float distance = SurfaceDistance(from, to);
+        Vector3 up = UpAt(from);
+        if (distance > 0.001f)
+        {
+            Quaternion rotation = PlanetGeometry.TravelRotation(up, DirectionTo(from, to), PlanetRadius, Mathf.Min(step, distance));
+            up = rotation * up;
+        }
+        return OnSurface(PlanetCenter + up * PlanetRadius, Mathf.MoveToward(Clearance(from), Clearance(to), step));
+    }
+    public void MoveBody(CharacterBody3D body)
+    {
+        Vector3 previous = body.GlobalPosition;
+        Vector3 oldUp = UpAt(body.GlobalPosition);
+        body.UpDirection = oldUp;
+        body.MoveAndSlide();
+        if (!IsSpherical) return;
+        // A straight tangent step otherwise increases radius every frame. Keep
+        // the actual solver's radial displacement while correcting this curvature drift.
+        float radialDisplacement = (body.GlobalPosition - previous).Dot(oldUp);
+        body.GlobalPosition = AtElevation(body.GlobalPosition, Elevation(previous) + radialDisplacement);
+        Vector3 up = UpAt(body.GlobalPosition);
+        Vector3 axis = oldUp.Cross(up);
+        if (axis.LengthSquared() > 0.0000000001f)
+        {
+            Quaternion rotation = new(axis.Normalized(), Mathf.Atan2(axis.Length(), oldUp.Dot(up)));
+            body.Velocity = rotation * body.Velocity;
+            Orient(body, rotation * -body.GlobalBasis.Z);
+        }
+        else Orient(body);
+    }
+    public void RefreshPlanetDetail() => _planet?.RefreshDetail();
+    public bool TrySurfaceHit(Vector3 from, Vector3 to, out Vector3 hit)
+    {
+        int steps = Mathf.Max(1, Mathf.CeilToInt(from.DistanceTo(to) / 0.5f));
+        Vector3 previous = from;
+        for (int i = 0; i <= steps; i++)
+        {
+            Vector3 point = from.Lerp(to, (float)i / steps);
+            if (Clearance(point) <= 0)
+            {
+                for (int refine = 0; refine < 10; refine++)
+                {
+                    Vector3 middle = (previous + point) * 0.5f;
+                    if (Clearance(middle) <= 0) point = middle; else previous = middle;
+                }
+                hit = OnSurface(point);
+                return true;
+            }
+            previous = point;
+        }
+        hit = default;
+        return false;
+    }
 
     public float SurfaceHeight(float x, float z) => Mathf.Max(HeightAt(x, z), WaterHeight);
 
     public Vector3 ClampFlightPosition(Vector3 position, float minimumClearance = 1.0f, float? maximumClearance = null)
     {
+        if (IsSpherical)
+        {
+            float limit = Mathf.Max(minimumClearance, Mathf.Min(MaxFlightClearance, maximumClearance ?? MaxFlightClearance));
+            return OnSurface(position, Mathf.Clamp(Clearance(position), minimumClearance, limit));
+        }
         float surface = SurfaceHeight(position.X, position.Z);
         float maximum = Mathf.Max(minimumClearance, Mathf.Min(MaxFlightClearance, maximumClearance ?? MaxFlightClearance));
         position.Y = Mathf.Clamp(position.Y, surface + minimumClearance, surface + maximum);
@@ -26,6 +125,15 @@ public partial class HeightmapArena : Node3D
     {
         Vector3 before = body.GlobalPosition;
         body.GlobalPosition = ClampFlightPosition(before, minimumClearance, maximumClearance);
+        if (IsSpherical)
+        {
+            Vector3 up = UpAt(body.GlobalPosition);
+            float radial = body.Velocity.Dot(up);
+            if (Elevation(body.GlobalPosition) < Elevation(before)) body.Velocity -= up * Mathf.Max(0, radial);
+            if (Elevation(body.GlobalPosition) > Elevation(before)) body.Velocity -= up * Mathf.Min(0, radial);
+            Orient(body);
+            return;
+        }
         if (!Mathf.IsEqualApprox(before.Y, body.GlobalPosition.Y))
         {
             body.Velocity = new Vector3(body.Velocity.X,
@@ -47,6 +155,12 @@ public partial class HeightmapArena : Node3D
     public override void _Ready()
     {
         AddToGroup("heightmap_arena");
+        if (IsSpherical)
+        {
+            _planet = new PlanetTerrain { Arena = this, Name = "PlanetTerrain" };
+            AddChild(_planet);
+            return;
+        }
         GenerateHeightmap();
         BuildTerrain();
         BuildWater();
@@ -69,6 +183,7 @@ public partial class HeightmapArena : Node3D
 
     public void FlattenTerrain(Vector3 worldPosition, float radius, float targetHeight)
     {
+        if (IsSpherical) { RegisterPlanetEdit(worldPosition, radius, targetHeight, true); return; }
         if (_heights == null)
         {
             GenerateHeightmap();
@@ -189,6 +304,7 @@ public partial class HeightmapArena : Node3D
 
     private void ApplyRadialDeformation(Vector3 worldPosition, float radius, float amount)
     {
+        if (IsSpherical) { RegisterPlanetEdit(worldPosition, radius, amount, false); return; }
         if (_heights == null)
         {
             GenerateHeightmap();
@@ -398,4 +514,15 @@ public partial class HeightmapArena : Node3D
     }
 
     private sealed record TerrainChunk(MeshInstance3D Mesh, CollisionShape3D Collision);
+
+    private void RegisterPlanetEdit(Vector3 position, float radius, float amount, bool flatten)
+    {
+        LastEditedVertexCount = _planet!.Deform(UpAt(position), radius, amount, flatten);
+    }
+
+    public void ReportPlanetRebuild(int chunks, double milliseconds)
+    {
+        LastRebuiltChunkCount = chunks;
+        LastRebuildMilliseconds = milliseconds;
+    }
 }

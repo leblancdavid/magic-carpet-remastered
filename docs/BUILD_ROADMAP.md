@@ -12,6 +12,16 @@ Playtest mechanics update (2026-10-10): wizards respawn after ten seconds while 
 
 ## Development Tracks
 
+### Active Scope Addition: Configurable Spherical Worlds (2026-10-10)
+
+User-approved direction: spherical planets with radial gravity and surface-relative upright flight. The user playtested and accepted 800 radius, then selected **Small 500 / Medium 800 / Large 1,000 / XL 1,200** and requested the existing gameplay features on the globe. Medium is the default. Larger worlds for more participants remains a future direction; human networking scope is undecided.
+
+Playable conversion implemented: default `scenes/PlanetGame.tscn` includes patch-based procedural spherical terrain/oceans/deformation/collision, upright carpet flight/cameras, radial physical mana/merging/spills, curved possession and balloon routes, castles/storage/power/repair, all spells/discoveries, enemy roles/rival wizard, respawns, objectives, HUD/VFX/audio, and F2 size selection. `PlanetFlightTest.tscn` remains a diagnostic lab with the same presets. Geometry and integrated gameplay regressions pass; hands-on tuning of the converted full loop remains pending. See `docs/SPHERICAL_WORLD.md`.
+
+Active next priorities: integrated spherical playtest across the four sizes → longer-session deformation/LOD/collision profiling → distributed strategic content and participant-count decisions → remaining spell/campaign/presentation work. The original phase statuses below retain their historical prototype scope and tuning backlog; their shared systems now also run on the globe.
+
+Startup: F5 launches full spherical gameplay. In-game F6 switches to the flight lab and back to a fresh spherical match. The flat island remains `Game.tscn` for regression/reference; it is not the default world.
+
 Keep work separated into three tracks:
 
 - playable prototype: clean Godot systems and original content

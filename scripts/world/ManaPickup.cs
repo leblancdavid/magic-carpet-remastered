@@ -43,6 +43,7 @@ public partial class ManaPickup : RigidBody3D
     {
         AddToGroup("loose_mana");
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        if (_arena?.IsSpherical == true) GravityScale = 0;
         ContactMonitor = true;
         MaxContactsReported = 16;
         ContinuousCd = true;
@@ -86,7 +87,7 @@ public partial class ManaPickup : RigidBody3D
 
         if (IsCarried && Hauler != null)
         {
-            GlobalPosition = Hauler.GlobalPosition + _carryOffset;
+            GlobalPosition = Hauler.GlobalPosition + (_arena?.IsSpherical == true ? Hauler.GlobalBasis * _carryOffset : _carryOffset);
             return;
         }
 
@@ -95,9 +96,7 @@ public partial class ManaPickup : RigidBody3D
         {
             if (_arena != null)
             {
-                Vector3 position = GlobalPosition;
-                position.Y = SurfaceHeight(position) + Radius;
-                GlobalPosition = position;
+                GlobalPosition = _arena.OnSurface(GlobalPosition, Radius);
             }
             _surfaceInitialized = true;
         }
@@ -113,6 +112,30 @@ public partial class ManaPickup : RigidBody3D
     public override void _IntegrateForces(PhysicsDirectBodyState3D state)
     {
         if (IsCarried || !IsAvailable || _arena == null) return;
+        if (_arena.IsSpherical)
+        {
+            Vector3 position = state.Transform.Origin;
+            Vector3 up = _arena.UpAt(position);
+            state.LinearVelocity -= up * 9.8f * state.Step;
+            float clearance = _arena.Clearance(position);
+            float radial = state.LinearVelocity.Dot(up);
+            Transform3D spherical = state.Transform;
+            if (clearance > _arena.MaxFlightClearance)
+            {
+                spherical.Origin = _arena.OnSurface(position, _arena.MaxFlightClearance);
+                state.LinearVelocity -= up * Mathf.Max(0, radial);
+                state.Transform = spherical;
+            }
+            bool water = _arena.HeightAt(position) <= _arena.WaterHeight;
+            if (clearance < Radius - (water ? 0 : 0.15f))
+            {
+                spherical.Origin = _arena.OnSurface(position, Radius);
+                state.LinearVelocity -= up * Mathf.Min(0, radial);
+                state.Transform = spherical;
+                if (water) state.LinearVelocity *= Mathf.Max(0, 1 - state.Step * 0.4f);
+            }
+            return;
+        }
         Transform3D transform = state.Transform;
         float terrain = _arena.HeightAt(transform.Origin.X, transform.Origin.Z);
         bool onWater = _arena.WaterHeight >= terrain;
@@ -188,7 +211,7 @@ public partial class ManaPickup : RigidBody3D
         Freeze = false;
         CollisionLayer = 1;
         CollisionMask = 1;
-        GravityScale = 1;
+        GravityScale = _arena?.IsSpherical == true ? 0 : 1;
     }
 
     public void SpillAt(Vector3 position)
@@ -229,7 +252,7 @@ public partial class ManaPickup : RigidBody3D
             int amount = consumed.TakeMana(consumed.ManaAmount);
             survivor.ManaAmount += amount;
             survivor.LinearVelocity = momentum / survivor.ManaAmount;
-            survivor.GlobalPosition += Vector3.Up * (survivor.Radius - oldRadius);
+            survivor.GlobalPosition += (_arena?.UpAt(survivor.GlobalPosition) ?? Vector3.Up) * (survivor.Radius - oldRadius);
             return;
         }
         if (body is SimpleMonster monster && monster.Health > 0 && Ownership == ManaOwnership.Neutral && IsAvailable)

@@ -73,6 +73,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     private float _playerContactCooldown;
     private float _orbitPhase;
     private Vector3 _wanderDirection = Vector3.Forward;
+    private Vector3 LocalUp => _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
 
     public override void _Ready()
     {
@@ -123,7 +124,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             UpdateFlyingVelocity(move);
         }
 
-        MoveAndSlide();
+        if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
         if (Role == EnemyRole.EnemyWizard)
         {
             ClampWizardAltitude();
@@ -239,6 +240,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         {
             _orbitPhase += delta * 0.7f;
             _wanderDirection = _wanderDirection.Slerp(new Vector3(Mathf.Sin(_orbitPhase), 0.0f, Mathf.Cos(_orbitPhase)), 0.04f).Normalized();
+            if (_arena?.IsSpherical == true) _wanderDirection = _arena.Tangent(-GlobalBasis.Z, GlobalPosition).Normalized();
             return _wanderDirection * MoveSpeed * 0.25f;
         }
 
@@ -264,7 +266,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         if (_player != null)
         {
             Vector3 toPlayer = _player.GlobalPosition - GlobalPosition;
-            Vector3 lateral = new Vector3(-toPlayer.Z, 0.0f, toPlayer.X).Normalized();
+            Vector3 lateral = toPlayer.Cross(LocalUp).Normalized();
             orbit = lateral * Mathf.Sin(Time.GetTicksMsec() * 0.003f + GlobalPosition.X * 0.07f) * 4.0f;
 
             if (distance < AttackRadius * 1.6f)
@@ -285,11 +287,10 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     {
         if (_arena != null)
         {
-            float groundY = _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z) + GroundClearance;
-            GlobalPosition = new Vector3(GlobalPosition.X, Mathf.Lerp(GlobalPosition.Y, groundY, 0.16f), GlobalPosition.Z);
+            GlobalPosition = GlobalPosition.Lerp(_arena.OnSurface(GlobalPosition, GroundClearance), 0.16f);
         }
 
-        return distance > 2.0f ? new Vector3(direction.X, 0.0f, direction.Z) * MoveSpeed : Vector3.Zero;
+        return distance > 2.0f ? direction * MoveSpeed : Vector3.Zero;
     }
 
     private Vector3 MoveRangedCaster(Vector3 direction, float distance)
@@ -301,16 +302,16 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
         if (distance < RangedMinDistance)
         {
-            return (-direction * MoveSpeed) + Vector3.Up * 0.5f;
+            return (-direction * MoveSpeed) + LocalUp * 0.5f;
         }
 
         if (distance > RangedMaxDistance)
         {
-            return (direction * MoveSpeed) + Vector3.Up * 0.2f;
+            return (direction * MoveSpeed) + LocalUp * 0.2f;
         }
 
-        Vector3 strafe = new Vector3(-direction.Z, 0.0f, direction.X) * Mathf.Sin(_orbitPhase += 0.03f) * 4.0f;
-        return strafe + Vector3.Up * 0.3f;
+        Vector3 strafe = direction.Cross(LocalUp) * Mathf.Sin(_orbitPhase += 0.03f) * 4.0f;
+        return strafe + LocalUp * 0.3f;
     }
 
     private Vector3 MoveCastleAttacker(Vector3 direction, float distance)
@@ -382,7 +383,7 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
                 return -direction * (MoveSpeed * 0.75f);
             }
 
-            Vector3 strafe = new Vector3(-direction.Z, 0.0f, direction.X) * Mathf.Sin(_orbitPhase += 0.035f) * 5.0f;
+            Vector3 strafe = direction.Cross(LocalUp) * Mathf.Sin(_orbitPhase += 0.035f) * 5.0f;
             return strafe;
         }
 
@@ -391,6 +392,19 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
 
     private void UpdateFlyingVelocity(Vector3 desiredMove)
     {
+        if (_arena?.IsSpherical == true)
+        {
+            Vector3 tangent = _arena.Tangent(desiredMove, GlobalPosition);
+            tangent = tangent.LengthSquared() > 0.0001f ? tangent.Normalized() * MoveSpeed : Vector3.Zero;
+            float limit = Mathf.Min(WizardMaxFlightClearance, _arena.MaxFlightClearance);
+            float clearance = Mathf.Min(WizardHoverClearance, limit);
+            if (_targetOrb == null && !ShouldRetreat() && _player != null && _player.Health > 0)
+                clearance = Mathf.Clamp(_arena.Clearance(_player.GlobalPosition), clearance, limit);
+            float radialSpeed = Mathf.Clamp((clearance - _arena.Clearance(GlobalPosition)) * 2, -WizardVerticalSpeed, WizardVerticalSpeed);
+            Velocity = tangent + LocalUp * radialSpeed;
+            _arena.Orient(this, tangent.LengthSquared() > 0.0001f ? tangent : null);
+            return;
+        }
         // Horizontal steering and altitude correction must not be normalized together:
         // a tiny upward hover bias otherwise becomes full-speed perpetual ascent.
         Vector3 horizontal = new(desiredMove.X, 0, desiredMove.Z);
@@ -415,6 +429,7 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
 
     private void ClampWizardAltitude()
     {
+        if (_arena?.IsSpherical == true) { _arena.ClampFlightBody(this, GroundClearance, WizardMaxFlightClearance); return; }
         float surface = WizardSurfaceHeight();
         GlobalPosition = new Vector3(GlobalPosition.X,
             Mathf.Clamp(GlobalPosition.Y, surface + GroundClearance, surface + Mathf.Min(WizardMaxFlightClearance, _arena?.MaxFlightClearance ?? 12.0f)), GlobalPosition.Z);
@@ -436,6 +451,7 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
         if (_enemyCastle != null)
         {
             Vector3 toCastle = _enemyCastle.GlobalPosition - GlobalPosition;
+            if (_arena?.IsSpherical == true) toCastle = _arena.DirectionTo(GlobalPosition, _enemyCastle.GlobalPosition) * HorizontalDistanceTo(_enemyCastle.GlobalPosition);
             if (toCastle.Length() > RetreatDistance)
             {
                 return toCastle;
@@ -558,7 +574,14 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
         }
 
         float distance = HorizontalDistanceTo(_player.GlobalPosition);
-        return distance >= RangedMinDistance && distance <= RangedMaxDistance;
+        if (distance < RangedMinDistance || distance > RangedMaxDistance) return false;
+        if (_arena?.IsSpherical == true)
+        {
+            var ray = PhysicsRayQueryParameters3D.Create(GlobalPosition, _player.GlobalPosition);
+            ray.Exclude = new Godot.Collections.Array<Rid> { GetRid(), _player.GetRid() };
+            if (GetWorld3D().DirectSpaceState.IntersectRay(ray).Count > 0) return false;
+        }
+        return true;
     }
 
     private void FireProjectile()
@@ -656,7 +679,7 @@ private void TryAbsorbLooseMana()
                 continue;
             }
 
-            float distance = GlobalPosition.DistanceTo(pickup.GlobalPosition);
+            float distance = _arena?.IsSpherical == true ? _arena.SurfaceDistance(GlobalPosition, pickup.GlobalPosition) : GlobalPosition.DistanceTo(pickup.GlobalPosition);
             if (distance > MaxOrbSeekRadius)
             {
                 continue;
@@ -753,6 +776,7 @@ private void TryAbsorbLooseMana()
             return;
         }
 
+        if (_arena.IsSpherical) { GlobalPosition = _arena.OnSurface(GlobalPosition, GroundClearance); _arena.Orient(this); return; }
         float groundY = _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z) + GroundClearance;
         GlobalPosition = new Vector3(GlobalPosition.X, Mathf.Max(GlobalPosition.Y, groundY), GlobalPosition.Z);
     }
@@ -899,12 +923,14 @@ private void TryAbsorbLooseMana()
 
     private float HorizontalDistanceTo(Vector3 target)
     {
+        if (_arena?.IsSpherical == true) return _arena.SurfaceDistance(GlobalPosition, target);
         Vector2 delta = new Vector2(GlobalPosition.X - target.X, GlobalPosition.Z - target.Z);
         return delta.Length();
     }
 
     private Vector3 HorizontalDirectionTo(Vector3 target)
     {
+        if (_arena?.IsSpherical == true) return _arena.DirectionTo(GlobalPosition, target);
         Vector2 delta = new Vector2(target.X - GlobalPosition.X, target.Z - GlobalPosition.Z);
         if (delta.LengthSquared() <= 0.0001f)
         {

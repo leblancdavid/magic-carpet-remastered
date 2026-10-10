@@ -62,6 +62,12 @@ public partial class SimpleMonster : CharacterBody3D
         Vector3 toTarget = _target.GlobalPosition - GlobalPosition;
         float distance = toTarget.Length();
         Vector3 direction = distance > 0.1f ? toTarget.Normalized() : Vector3.Zero;
+        if (_arena?.IsSpherical == true)
+        {
+            direction = _arena.DirectionTo(GlobalPosition, _target.GlobalPosition);
+            float radial = Mathf.Clamp((_arena.Clearance(_target.GlobalPosition) - _arena.Clearance(GlobalPosition)) * 2, -5, 5);
+            direction = (direction + _arena.UpAt(GlobalPosition) * radial / MoveSpeed).Normalized();
+        }
 
         if (ShouldContestManaWell(distance))
         {
@@ -72,7 +78,7 @@ public partial class SimpleMonster : CharacterBody3D
                 float wellDistance = toWell.Length();
                 direction = wellDistance > 0.1f ? toWell.Normalized() : Vector3.Zero;
                 Velocity = direction * (MoveSpeed * 1.15f);
-                MoveAndSlide();
+                if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
                 _arena?.ClampFlightBody(this);
                 UpdateRangedAttack(deltaF, wellDistance, direction);
                 return;
@@ -80,7 +86,7 @@ public partial class SimpleMonster : CharacterBody3D
         }
 
         Velocity = direction * MoveSpeed;
-        MoveAndSlide();
+        if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
         _arena?.ClampFlightBody(this);
 
         UpdateRangedAttack(deltaF, distance, direction);

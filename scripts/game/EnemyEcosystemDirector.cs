@@ -231,6 +231,17 @@ public partial class EnemyEcosystemDirector : Node
 
     private Vector3 AboveTerrain(float x, float z, float clearance)
     {
+        if (_arena?.IsSpherical == true)
+        {
+            var player = GetTree().GetFirstNodeInGroup("player") as Node3D;
+            // Keep ecosystem pressure active wherever the player travels.
+            if (player != null && _arena.SurfaceDistance(player.GlobalPosition, _arena.FromMap(0, 0, 0)) > 130)
+            {
+                Vector3 offset = player.GlobalBasis * new Vector3(x, 0, z);
+                return _arena.OnSurface(player.GlobalPosition + offset, clearance);
+            }
+            return _arena.FromMap(x, z, clearance);
+        }
         float height = _arena == null ? 0.0f : _arena.HeightAt(x, z);
         return new Vector3(x, height + clearance, z);
     }

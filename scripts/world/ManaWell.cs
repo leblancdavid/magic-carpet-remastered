@@ -16,6 +16,7 @@ public partial class ManaWell : StaticBody3D
     public override void _Ready()
     {
         AddToGroup("mana_well");
+        (GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena)?.Orient(this);
         StoredMana = 0;
         AddCollisionAndVisuals();
         SeedNeutralField();
@@ -71,7 +72,7 @@ public partial class ManaWell : StaticBody3D
                 Ownership = ManaOwnership.Neutral
             };
             GetTree().CurrentScene.AddChild(orb);
-            orb.GlobalPosition = GlobalPosition + offset + Vector3.Up * PickupSpawnHeight;
+            orb.GlobalPosition = GlobalPosition + GlobalBasis * (offset + Vector3.Up * PickupSpawnHeight);
         }
     }
 

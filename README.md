@@ -4,7 +4,7 @@ A Godot C# playable prototype for a modern spiritual remaster inspired by the cl
 
 ## Current Status
 
-The prototype includes carpet flight, combat, deformable island terrain, mana ownership/possession, balloon hauling, castles, rival enemies, a first-pass spell set, and level victory/defeat flow. Win by destroying the rival castle and defeating its wizard, in either order. Mana ownership is a resource system and does not trigger victory. Visuals and audio remain placeholders.
+The default prototype is a spherical planet with upright carpet flight, combat, deformable land/oceans, radial-gravity mana spheres, ownership/possession, balloon hauling, castles, rival enemies, spells/upgrades, and level victory/defeat flow. Planet sizes are **Small 500 / Medium 800 / Large 1,000 / XL 1,200** radius units; Medium is the default. Win by destroying the rival castle and defeating its wizard, in either order. Mana ownership is a resource system and does not trigger victory. Visuals and audio remain placeholders.
 
 See `docs/BUILD_ROADMAP.md` and `docs/PROGRESS_LOG.md` for priorities and verification history. The original DOS package at `D:\Games\MagicCarpet` is reference material; proprietary files are not copied into this repo.
 
@@ -27,7 +27,9 @@ Godot is available locally at `D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\
 
 Explore the island outskirts for five labeled **gold spell beacons**. Fly within four horizontal units to discover a rank-II upgrade for Firebolt, Arcane Burst, Mana Shield, Wind Dash, or Guardian. Upgrades improve spell effects at the existing mana costs/cooldowns, survive wizard respawn, and reset with **R**. The selected spell shows its rank and **F3** lists progression. See `docs/SPELL_PROGRESSION.md` for upgrade values and playtest steps.
 
-Open `project.godot` in Godot .NET, build the C# project, and run `scenes/Game.tscn`. Current controls are listed in `docs/PROGRESS_LOG.md`.
+Open `project.godot` in Godot .NET, build the C# project, and press **F5 (Run Project)** to launch `scenes/PlanetGame.tscn`. **F2** pauses and opens planet-size selection; **Start new planet** resets the match at that size. **R** restarts at the selected size. Selection lasts for the application session. Running `scenes/Game.tscn` directly opens the flat-island reference arena. Current controls are listed in `docs/PROGRESS_LOG.md`.
+
+**Spherical flight lab:** press **F6** during gameplay, or run `scenes/PlanetFlightTest.tscn`. Compare the four named presets with adjustable radius, speed, and altitude. **Esc** releases the mouse for settings, **V** toggles cameras, **F** dashes, **R** resets flight, and **F6** starts a fresh spherical gameplay match. The lab includes inward gravity, surface-relative upright flight, globe distance markers, and castle scale references. See `docs/SPHERICAL_WORLD.md` for implementation details and integrated playtest steps.
 
 The compact HUD shows health/mana, rival castle/wizard objective status, respawn countdowns, and selected spells. Victory requires the rival castle destroyed and its wizard defeated. Both wizards respawn after **10 seconds** while their respective castle survives; a respawn clears the rival's earlier defeat. Destroying the player castle causes defeat. Results freeze gameplay and release the mouse; press **R** to restart. One designated rival is tracked through its respawns; the ecosystem director does not spawn extra wizards. Use **Firebolt** against the rival castle. Press **F3** to show/hide the debug and controls panel (off by default); **PgUp / PgDn** scroll its grouped diagnostics.
 
@@ -55,7 +57,10 @@ $godot = 'D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_m
 & $godot --headless --path . 'res://tools/WizardFlightChecks.tscn'
 & $godot --headless --path . 'res://tools/PlaytestMechanicsChecks.tscn'
 & $godot --headless --path . 'res://tools/SpellProgressionChecks.tscn'
-& $godot --headless --path . --quit-after 600
+& $godot --headless --path . 'res://tools/PlanetFlightChecks.tscn'
+& $godot --headless --path . 'res://tools/PlanetGameplayChecks.tscn'
+& $godot --headless --path . --quit-after 1200
+& $godot --headless --path . 'res://scenes/Game.tscn' --quit-after 600
 ```
 
 The mana-loop regression scene checks mana conservation, player contact/proximity rejection, balloon delivery/overflow/pop, rival collection, exact death drops, possession bolt movement/hits/expiry, and possession controls. The physics scene advances real solver frames to check ground contact, size changes, rolling, obstacle collisions, same-color/chained merges, cargo release, balloon-only player collection, live terrain deformation, and water support. The objective scene checks both kill orders, one-target rejection, mana-quota independence, defeat precedence, firebolt castle damage, result pausing/UI, and actual arena restart. Run that scene without `--headless` to also check mouse recapture. Wizard flight checks advance real physics frames to cover stable altitude, globe acquisition/deposit, bounded combat height, castle-loss movement, and raised-terrain clearance. Regression scenes exit nonzero on failure. The final command is an arena startup/processing smoke run. Manual playtesting is still needed for control feel, readability, and balance.

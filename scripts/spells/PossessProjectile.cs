@@ -45,10 +45,10 @@ public partial class PossessProjectile : Node3D
         {
             _direction = Vector3.Forward;
         }
-        _heading = new Vector3(_direction.X, 0, _direction.Z).Normalized();
+        _heading = (_arena?.Tangent(_direction, GlobalPosition) ?? new Vector3(_direction.X, 0, _direction.Z)).Normalized();
         if (_heading.LengthSquared() < 0.001f)
         {
-            _heading = Vector3.Forward;
+            _heading = _arena?.IsSpherical == true ? PlanetGeometry.Frame(_arena.UpAt(GlobalPosition), Mathf.Abs(_arena.UpAt(GlobalPosition).Z) < 0.9f ? Vector3.Forward : Vector3.Right).Z * -1 : Vector3.Forward;
         }
     }
 
@@ -69,13 +69,19 @@ public partial class PossessProjectile : Node3D
             float step = Mathf.Min(remaining, 0.5f);
             Vector3 previous = GlobalPosition;
             Vector3 next = previous + (IsFollowingTerrain ? _heading : _direction) * step;
+            if (_arena?.IsSpherical == true && IsFollowingTerrain)
+            {
+                Quaternion rotation = PlanetGeometry.TravelRotation(_arena.UpAt(previous), _heading, previous.DistanceTo(_arena.PlanetCenter), step);
+                _heading = rotation * _heading;
+                next = _arena.PlanetCenter + rotation * (previous - _arena.PlanetCenter);
+            }
             if (_arena != null)
             {
-                float surfaceY = Mathf.Max(_arena.HeightAt(next.X, next.Z), _arena.WaterHeight) + SurfaceClearance;
-                if (IsFollowingTerrain || next.Y <= surfaceY)
+                if (IsFollowingTerrain || _arena.Clearance(next) <= SurfaceClearance)
                 {
+                    if (!IsFollowingTerrain) _heading = _arena.Tangent(_heading, next).Normalized();
                     IsFollowingTerrain = true;
-                    next.Y = surfaceY;
+                    next = _arena.OnSurface(next, SurfaceClearance);
                 }
             }
 
@@ -100,7 +106,8 @@ public partial class PossessProjectile : Node3D
             Vector3 motion = next - previous;
             if (motion.LengthSquared() > 0.0001f)
             {
-                LookAt(next + motion, Mathf.Abs(motion.Normalized().Dot(Vector3.Up)) > 0.99f ? Vector3.Forward : Vector3.Up);
+                Vector3 up = _arena?.UpAt(next) ?? Vector3.Up;
+                LookAt(next + motion, Mathf.Abs(motion.Normalized().Dot(up)) > 0.99f ? _heading : up);
             }
             _travelled += step;
             remaining -= step;
