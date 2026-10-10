@@ -67,3 +67,15 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - Container-based, padded panels with bounded widths and word wrapping are more readable over terrain than a single unbounded multiline label. Keep the normal HUD away from the aiming area and hide detailed diagnostics by default.
 - Live-updating scrollable debug text must preserve its scroll offset, and key-repeat events must not repeatedly flip a toggle. Passive HUD controls should ignore mouse input so the overlay does not absorb spell clicks.
 - Rendered screenshots complement headless input checks: the HUD screenshot review caught objective copy wrapping onto a third line and touching the debug panel. Shorten gameplay copy before expanding panel coverage.
+
+## Level Objective Lessons
+
+- User-directed victory is rival castle destruction AND rival wizard defeat, independent of mana ownership. Use a designated rival identity instead of counting an ecosystem role whose members can be replaced by the director. Record death before queued deletion so either kill order works.
+- Keep the gameplay root pausable and the result HUD always-processing. An always-processing gameplay root would let newly spawned enemies/projectiles inherit processing while the result is displayed. Handle restart input in the live HUD during pause, unpause before reload, and mark input handled before scene reload detaches the old HUD.
+- Test actual scene reload as well as objective flags. A surviving harness must live outside the reloaded `CurrentScene`; assign a current scene only after it is attached to the tree root. Headless mouse capture is not representative, so verify mouse recapture with a rendered regression run.
+
+## Flying Rival Lessons
+
+- Never normalize a combined steering vector that uses a tiny vertical bias to mean hover. When horizontal movement stops, that bias becomes full-speed ascent. Use planar steering plus proportional, speed-limited height correction against the live terrain/water surface, with an explicit altitude band and terrain burial protection.
+- A resource-seeking unit must approach within its actual absorption radius. Stopping eight units from a globe while absorption requires 2.7 units leaves the wizard idle and climbing forever. Real physics-frame sampling catches altitude drift and collection failures that startup/existence tests miss.
+- Objective-critical enemies need recognizable silhouettes. A purple sphere reads as another monster or resource. Original primitive robe/hat/carpet geometry, a matching hit collider, and a world label make the rival identifiable without an asset dependency. Verify both default-camera and close-up rendered views.

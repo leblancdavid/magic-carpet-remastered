@@ -6,6 +6,8 @@ Build a modern Godot C# spiritual remaster inspired by Magic Carpet. The project
 
 Use `docs/ORIGINAL_MECHANICS_REFERENCE.md` as the condensed system-design reference for original-style mechanics and priorities.
 
+Current victory direction (user update, 2026-10-10): destroy the rival player's castle AND defeat its wizard, in either order. Mana possession/storage supports combat power and logistics; it is not a victory condition. This supersedes the earlier equilibrium-quota objective plan.
+
 ## Development Tracks
 
 Keep work separated into three tracks:
@@ -64,7 +66,7 @@ Remaining Phase 2 work before signoff:
 
 Goal: make mana control the strategic loop.
 
-Status: first-pass implementation has verified mana-transfer correctness, grounded amount-scaled physics spheres, same-owner merging, and projectile-based possession. Mana carries explicit `Neutral`/`Player`/`Enemy` ownership with distinct colors; the well seeds a finite neutral orb field; and RMB `Possess` launches a terrain/water-skimming bolt that converts the first neutral/rival loose globe hit into player-owned mana. Per user direction (2026-10-10), the player cannot absorb or attract mana: possessed spheres remain in the world for balloons to scoop and deliver to castles, where deliveries grow spell capacity/regeneration. Player contact/proximity rejection, balloon delivery/overflow/pop, rival transfers, exact death drops, possession, and sphere physics are covered by headless Godot regression scenes. World-mana accounting includes loose/carried spheres, castle storage, and enemy reserves once each; initial spell capacity and castle-derived capacity bonuses are not additional world mana. Repeated ecosystem wizard spawning does not create fresh reserves. Remaining work is hands-on playtest tuning and gating the win/loss objective on quota state.
+Status: first-pass implementation has verified mana-transfer correctness, grounded amount-scaled physics spheres, same-owner merging, and projectile-based possession. Mana carries explicit `Neutral`/`Player`/`Enemy` ownership with distinct colors; the well seeds a finite neutral orb field; and RMB `Possess` launches a terrain/water-skimming bolt that converts the first neutral/rival loose globe hit into player-owned mana. Per user direction (2026-10-10), the player cannot absorb or attract mana: possessed spheres remain in the world for balloons to scoop and deliver to castles, where deliveries grow spell capacity/regeneration. Player contact/proximity rejection, balloon delivery/overflow/pop, rival transfers, exact death drops, possession, and sphere physics are covered by headless Godot regression scenes. World-mana accounting includes loose/carried spheres, castle storage, and enemy reserves once each; initial spell capacity and castle-derived capacity bonuses are not additional world mana. Mana totals remain resource diagnostics; victory now requires rival castle destruction and wizard defeat. Remaining work is hands-on playtest tuning.
 
 Core work:
 
@@ -86,8 +88,8 @@ Remaining Phase 3 work before signoff:
 - runtime playtest possession bolt aiming, surface clearance, hit tolerance, speed/range, cost/cooldown, and ownership colors in Godot
 - runtime playtest balloon scoop/return/dock pacing and pop-spill behavior
 - tune enemy thief/wizard orb acquisition, absorb amounts, and retreat thresholds around the claimed-mana loop
-- validate world-mana totals and equilibrium-quota progress, then gate the win/loss objective on quota state
-- decide director response to quota state (spawn pressure shifts as the player approaches equilibrium)
+- validate world-mana totals during combat and hauling; quota state does not gate victory
+- decide director pressure around castle assaults and resource control
 - defer detailed capacity, regen, pickup rate, and contest-drain tuning until the claimed-mana loop is playtested
 - drive the well forward from its finite neutral landmark role (visual landmark + initial field) as balloon/possession behavior matures
 
@@ -111,7 +113,7 @@ Deliverable: one arena has a player castle, enemy castle, and contested mana flo
 Remaining Phase 4 work before signoff:
 
 - runtime playtest the castle scale, storage, and routing loop in Godot
-- decide whether castle damage and raiding should be handled by existing combat or a dedicated assault objective
+- runtime playtest firebolt castle damage and the combined rival castle/wizard elimination objective
 - add clearer territorial feedback if the current castle silhouettes are too subtle
 - add castle sanctuary/respawn behavior after the mana loop is stable
 - add castle damage regression and stored-mana spillage once castle combat is readable
@@ -120,7 +122,7 @@ Remaining Phase 4 work before signoff:
 
 Goal: create systemic pressure rather than only scripted waves.
 
-Status: functionally complete for the current prototype. The prototype now has role-based enemy spawning with swarms, ground beasts, ranged casters, castle attackers, mana thieves, and an enemy wizard archetype. The director caps each role; mana thief and wizard roles have retreat/deposit loops; player fireballs damage ecosystem enemies; enemy attack checks use horizontal distance so arena altitude does not suppress behavior; and the castles are far enough apart for readable siege pressure. Fine tuning is deferred until the game loop is more complete.
+Status: functionally complete for the current prototype. The prototype has role-based enemy spawning with swarms, ground beasts, ranged casters, castle attackers, mana thieves, and an enemy wizard archetype. The arena now starts with one designated rival wizard; ecosystem wizard spawning is disabled there so the defeated rival is never replaced. Mana thief and wizard roles have retreat/deposit loops; player fireballs damage ecosystem enemies and the rival castle; enemy attack checks use horizontal distance so arena altitude does not suppress behavior; and the castles are far enough apart for readable siege pressure. Fine tuning remains pending.
 
 Core work:
 
@@ -140,7 +142,9 @@ Deferred Phase 5 tuning:
 - runtime playtest the enemy mix, spawn pacing, and role behavior in Godot
 - tune intensity ramp, max active enemies, spawn interval, and role health/damage values
 - decide whether enemy wizard retreat and castle interaction need deeper behavior after the spell/campaign loops exist
+- deeper rival wizard AI is explicitly deferred by the user (2026-10-10); current visibility, defeatability, and castle-destruction objective behavior are accepted for this pass
 - confirm red castle attackers and purple wizards appear at readable pressure levels
+- rival visibility and defeatability are confirmed by user playtest; further robe/carpet/nameplate polish and flight/combat tuning are deferred
 - confirm ranged enemy shots and castle rams are now obvious and reliable during playtest
 
 ## Phase 6: Spell System
@@ -171,11 +175,13 @@ Deliverable: a small spellbook with meaningful tactical tradeoffs.
 
 Goal: turn arenas into a full game loop.
 
+Status: the initial arena's rival/castle elimination objective pass is accepted by the user (2026-10-10): the rival is visible and defeatable, and castle destruction objective behavior works in playtesting. `LevelObjective` requires both rival castle destruction and designated wizard defeat in either order; player death or home castle destruction causes defeat. Terminal results pause gameplay, release the mouse, and show an R-to-restart overlay. Headless/rendered regressions verify transitions and actual arena reload. Deeper rival AI is deferred; broader balance, multiple realms, and progression remain pending.
+
 Core work:
 
 - island/realm level model
 - objective variants
-- finite world mana and equilibrium quota win condition
+- finite world mana as a strategic resource; rival castle AND wizard elimination win condition
 - biome themes
 - escalating enemy wizard setups
 - persistent unlocks and spell progression

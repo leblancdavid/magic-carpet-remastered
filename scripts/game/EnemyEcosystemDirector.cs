@@ -38,6 +38,7 @@ public partial class EnemyEcosystemDirector : Node
     [Export] public int MaxCastleAttackers { get; set; } = 2;
     [Export] public int MaxManaThieves { get; set; } = 2;
     [Export] public int MaxEnemyWizards { get; set; } = 1;
+    [Export] public bool SpawnEnemyWizards { get; set; } = true;
 
     public float Intensity => _intensity;
     public string StatusText => $"Ecosystem: {_activeByRole[0]} swarm, {_activeByRole[1]} beasts, {_activeByRole[2]} casters, {_activeByRole[3]} siegers, {_activeByRole[4]} thieves, {_activeByRole[5]} wizards   Intensity {Intensity:0.00}";
@@ -89,7 +90,8 @@ public partial class EnemyEcosystemDirector : Node
 
         SpawnZone zone = SelectSpawnZone();
         var role = SelectRole(zone, initialWave, waveIndex);
-        if (GetRoleCount(role) >= GetRoleCap(role))
+        if ((!SpawnEnemyWizards && role == Enemies.EnemyEcosystemEnemy.EnemyRole.EnemyWizard)
+            || GetRoleCount(role) >= GetRoleCap(role))
         {
             role = SelectFallbackRole(zone);
         }

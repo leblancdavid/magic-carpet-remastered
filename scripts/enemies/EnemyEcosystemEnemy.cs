@@ -1,3 +1,4 @@
+using System;
 using Godot;
 using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Player;
@@ -40,6 +41,11 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public float PlayerContactCooldownSeconds { get; set; } = 0.8f;
     [Export] public float ManaTargetAcquireInterval { get; set; } = 0.6f;
     [Export] public float MaxOrbSeekRadius { get; set; } = 42.0f;
+    [Export] public float WizardHoverClearance { get; set; } = 5.5f;
+    [Export] public float WizardMaxFlightClearance { get; set; } = 16.0f;
+    [Export] public float WizardVerticalSpeed { get; set; } = 6.0f;
+
+    public event Action? Defeated;
 
     public string RoleText => Role switch
     {
@@ -106,7 +112,16 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             Velocity = Vector3.Zero;
         }
 
+        if (Role == EnemyRole.EnemyWizard)
+        {
+            UpdateWizardFlightVelocity(move);
+        }
+
         MoveAndSlide();
+        if (Role == EnemyRole.EnemyWizard)
+        {
+            ClampWizardAltitude();
+        }
         ClampToGroundIfNeeded();
         UpdateVisualColor(deltaF);
         HandleAttacks(deltaF);
@@ -127,6 +142,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         {
             SpawnDeathBurst();
             DropMana();
+            Defeated?.Invoke();
             QueueFree();
         }
     }
@@ -337,12 +353,12 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
     {
         if (_targetOrb != null && IsInstanceValid(_targetOrb) && ManaReserve < RetreatManaThreshold)
         {
-            if (distance > 8.0f)
+            if (distance > ManaStealRadius * 0.85f)
             {
-                return direction * (MoveSpeed * 1.05f) + Vector3.Up * 0.4f;
+                return direction * (MoveSpeed * 1.05f);
             }
 
-            return Vector3.Up * 0.35f;
+            return Vector3.Zero;
         }
 
         _targetOrb = null;
@@ -360,10 +376,40 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
             }
 
             Vector3 strafe = new Vector3(-direction.Z, 0.0f, direction.X) * Mathf.Sin(_orbitPhase += 0.035f) * 5.0f;
-            return strafe + Vector3.Up * 0.45f;
+            return strafe;
         }
 
         return direction * MoveSpeed;
+    }
+
+    private void UpdateWizardFlightVelocity(Vector3 desiredMove)
+    {
+        // Horizontal steering and altitude correction must not be normalized together:
+        // a tiny upward hover bias otherwise becomes full-speed perpetual ascent.
+        Vector3 horizontal = new(desiredMove.X, 0, desiredMove.Z);
+        horizontal = horizontal.LengthSquared() > 0.0001f ? horizontal.Normalized() * MoveSpeed : Vector3.Zero;
+        float surface = WizardSurfaceHeight();
+        float targetHeight = surface + WizardHoverClearance;
+        if (_targetOrb == null && !ShouldRetreat() && _player != null && _player.Health > 0)
+        {
+            targetHeight = Mathf.Clamp(_player.GlobalPosition.Y, targetHeight, surface + WizardMaxFlightClearance);
+        }
+        float vertical = Mathf.Clamp((targetHeight - GlobalPosition.Y) * 2.0f, -WizardVerticalSpeed, WizardVerticalSpeed);
+        Velocity = new Vector3(horizontal.X, vertical, horizontal.Z);
+        if (horizontal.LengthSquared() > 0.0001f)
+        {
+            Rotation = new Vector3(0, Mathf.Atan2(-horizontal.X, -horizontal.Z), 0);
+        }
+    }
+
+    private float WizardSurfaceHeight() => _arena == null ? 0
+        : Mathf.Max(_arena.HeightAt(GlobalPosition.X, GlobalPosition.Z), _arena.WaterHeight);
+
+    private void ClampWizardAltitude()
+    {
+        float surface = WizardSurfaceHeight();
+        GlobalPosition = new Vector3(GlobalPosition.X,
+            Mathf.Clamp(GlobalPosition.Y, surface + GroundClearance, surface + WizardMaxFlightClearance), GlobalPosition.Z);
     }
 
     private bool ShouldRetreat()
@@ -373,7 +419,8 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
             return true;
         }
 
-        return Role == EnemyRole.EnemyWizard && ManaReserve >= RetreatManaThreshold && _enemyCastle != null;
+        return Role == EnemyRole.EnemyWizard && ManaReserve >= RetreatManaThreshold
+            && _enemyCastle != null && !_enemyCastle.IsDestroyed;
     }
 
     private Vector3 GetRetreatVector()
@@ -733,24 +780,69 @@ private void TryAbsorbLooseMana()
     {
         AddChild(new CollisionShape3D
         {
-            Shape = new SphereShape3D { Radius = 0.85f }
+            Shape = Role == EnemyRole.EnemyWizard
+                ? new CapsuleShape3D { Radius = 0.65f, Height = 3.0f }
+                : new SphereShape3D { Radius = 0.85f },
+            Position = Role == EnemyRole.EnemyWizard ? new Vector3(0, 0.7f, 0) : Vector3.Zero
         });
 
-        var mesh = new MeshInstance3D();
-        mesh.Mesh = Role == EnemyRole.GroundBeast
-            ? new CylinderMesh { TopRadius = 0.65f, BottomRadius = 1.0f, Height = 1.6f }
-            : new SphereMesh { Radius = 0.82f, Height = 1.6f };
         _material = new StandardMaterial3D
         {
             AlbedoColor = new Color(0.72f, 0.08f, 0.16f),
             Roughness = 0.9f
         };
+        if (Role == EnemyRole.EnemyWizard)
+        {
+            BuildWizardVisuals();
+            return;
+        }
+
+        var mesh = new MeshInstance3D();
+        mesh.Mesh = Role == EnemyRole.GroundBeast
+            ? new CylinderMesh { TopRadius = 0.65f, BottomRadius = 1.0f, Height = 1.6f }
+            : new SphereMesh { Radius = 0.82f, Height = 1.6f };
         mesh.MaterialOverride = _material;
         if (Role == EnemyRole.GroundBeast)
         {
             mesh.Position = new Vector3(0.0f, 0.1f, 0.0f);
         }
         AddChild(mesh);
+    }
+
+    private void BuildWizardVisuals()
+    {
+        _material.AlbedoColor = new Color(0.56f, 0.18f, 1.0f);
+        _material.EmissionEnabled = true;
+        _material.Emission = new Color(0.22f, 0.04f, 0.45f);
+        AddWizardPart("Robe", new CylinderMesh { TopRadius = 0.32f, BottomRadius = 0.58f, Height = 1.45f },
+            new Vector3(0, 0.3f, 0), _material);
+        var face = new StandardMaterial3D { AlbedoColor = new Color(0.92f, 0.72f, 0.52f) };
+        AddWizardPart("Head", new SphereMesh { Radius = 0.28f, Height = 0.56f }, new Vector3(0, 1.23f, 0), face);
+        AddWizardPart("Hat", new CylinderMesh { TopRadius = 0, BottomRadius = 0.45f, Height = 0.8f },
+            new Vector3(0, 1.8f, 0), _material);
+        var carpet = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.65f, 0.12f, 0.55f),
+            EmissionEnabled = true,
+            Emission = new Color(0.28f, 0.04f, 0.2f)
+        };
+        AddWizardPart("Carpet", new BoxMesh { Size = new Vector3(2.8f, 0.16f, 1.8f) },
+            new Vector3(0, -0.52f, 0), carpet);
+        AddChild(new Label3D
+        {
+            Name = "WizardLabel",
+            Text = "RIVAL WIZARD",
+            Position = new Vector3(0, 2.75f, 0),
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            FontSize = 48,
+            PixelSize = 0.008f,
+            Modulate = new Color(0.9f, 0.7f, 1.0f)
+        });
+    }
+
+    private void AddWizardPart(string name, Mesh mesh, Vector3 position, Material material)
+    {
+        AddChild(new MeshInstance3D { Name = name, Mesh = mesh, Position = position, MaterialOverride = material });
     }
 
     private void SpawnDeathBurst()

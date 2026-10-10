@@ -80,6 +80,11 @@ public partial class SpellProjectile : Area3D
 
     private void OnBodyEntered(Node3D body)
     {
+        if (IsQueuedForDeletion())
+        {
+            return;
+        }
+
         if (body == _owner)
         {
             return;
@@ -95,6 +100,11 @@ public partial class SpellProjectile : Area3D
         if (body is EnemyEcosystemEnemy ecosystemEnemy)
         {
             ecosystemEnemy.ApplyDamage(Damage);
+        }
+
+        if (body is CastleKeep { IsPlayerCastle: false } castle)
+        {
+            castle.ApplyDamage(Damage);
         }
 
         if (body.IsInGroup("deformable_terrain") && GetTree().GetFirstNodeInGroup("heightmap_arena") is HeightmapArena arena)

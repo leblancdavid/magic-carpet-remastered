@@ -22,6 +22,9 @@ public partial class Hud : CanvasLayer
     private CastleKeep? _enemyCastle;
     private EnemyEcosystemDirector? _enemyEcosystem;
     private WorldManaTracker? _manaTracker;
+    private LevelObjective? _levelObjective;
+    private PanelContainer _resultPanel = null!;
+    private Label _result = null!;
 
     public override void _Ready()
     {
@@ -38,6 +41,11 @@ public partial class Hud : CanvasLayer
         _feedbackPanel = AddLabelPanel(root, "Feedback", Control.LayoutPreset.BottomLeft,
             new Vector2(20, -164), new Vector2(360, 54), out _feedback);
         _feedbackPanel.Visible = false;
+
+        _resultPanel = AddLabelPanel(root, "LevelResult", Control.LayoutPreset.Center,
+            new Vector2(-240, -95), new Vector2(480, 190), out _result, 24);
+        _result.HorizontalAlignment = HorizontalAlignment.Center;
+        _resultPanel.Visible = false;
 
         AddLabelPanel(root, "DebugHint", Control.LayoutPreset.BottomRight,
             new Vector2(-230, -56), new Vector2(210, 36), out _debugHint, 14);
@@ -89,6 +97,16 @@ public partial class Hud : CanvasLayer
         }
     }
 
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (GetTree().Paused && @event.IsActionPressed("restart_arena") && !@event.IsEcho())
+        {
+            GetViewport().SetInputAsHandled();
+            GetTree().Paused = false;
+            GetTree().ReloadCurrentScene();
+        }
+    }
+
     public override void _Process(double delta)
     {
         _refreshTimer -= (float)delta;
@@ -104,6 +122,7 @@ public partial class Hud : CanvasLayer
         _enemyCastle ??= GetTree().GetFirstNodeInGroup("enemy_castle") as CastleKeep;
         _enemyEcosystem ??= GetTree().GetFirstNodeInGroup("enemy_ecosystem_director") as EnemyEcosystemDirector;
         _manaTracker ??= GetTree().GetFirstNodeInGroup("world_mana_tracker") as WorldManaTracker;
+        _levelObjective ??= GetTree().GetFirstNodeInGroup("level_objective") as LevelObjective;
         if (_player == null)
         {
             return;
@@ -111,12 +130,18 @@ public partial class Hud : CanvasLayer
 
         _vitals.Text = $"Health  {_player.Health}     Mana  {_player.Mana} / {_player.ManaCapacity}\n"
             + (_player.IsShielded ? _player.ShieldStatusText : _player.IsInvulnerable ? "Protected after hit" : "Carpet ready");
-        _objective.Text = _manaTracker == null ? "Mana control\nFinding world mana..."
-            : $"Mana control  {_manaTracker.PlayerShare01 * 100:0}% / {_manaTracker.EquilibriumFraction * 100:0}%\n"
-                + (_manaTracker.EquilibriumMet ? "Equilibrium quota reached" : "Possess mana to claim it");
+        _objective.Text = _levelObjective == null ? "Eliminate the rival\nDestroy castle and wizard"
+            : $"Rival castle: {(_levelObjective.RivalCastleDestroyed ? "Destroyed" : $"{_enemyCastle?.Health} HP")}\n"
+                + $"Rival wizard: {(_levelObjective.RivalWizardDefeated ? "Defeated" : "Alive")}";
+        _resultPanel.Visible = _levelObjective != null && _levelObjective.State != LevelObjective.LevelState.Playing;
+        if (_resultPanel.Visible)
+        {
+            _result.Text = $"{(_levelObjective!.State == LevelObjective.LevelState.Victory ? "VICTORY" : "DEFEAT")}\n"
+                + $"{_levelObjective.ResultMessage}\n\nPress R to restart";
+        }
         _loadout.Text = $"LMB  {_player.PrimarySpellName}   ·   Tab cycle\nRMB  {_player.PossessSpellName}   ·   claim mana";
         _feedback.Text = _player.Health <= 0 ? "Defeated — press R to restart" : _player.ActiveFeedbackMessage;
-        _feedbackPanel.Visible = !string.IsNullOrEmpty(_feedback.Text);
+        _feedbackPanel.Visible = !_resultPanel.Visible && !string.IsNullOrEmpty(_feedback.Text);
 
         if (!_debugPanel.Visible)
         {

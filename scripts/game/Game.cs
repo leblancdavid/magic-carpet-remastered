@@ -12,11 +12,13 @@ public partial class Game : Node3D
     private HeightmapArena _arena = null!;
     private CastleKeep _playerCastle = null!;
     private CastleKeep _enemyCastle = null!;
+    private CarpetFlightController _player = null!;
 
     public override void _UnhandledInput(InputEvent @event)
     {
         if (@event.IsActionPressed("restart_arena"))
         {
+            GetTree().Paused = false;
             GetTree().ReloadCurrentScene();
         }
     }
@@ -32,8 +34,14 @@ public partial class Game : Node3D
         CreateBalloons();
         CreateManaPickups();
         CreateEnemyEcosystem();
+        CreateLevelObjective();
         AddChild(new WorldManaTracker { Name = "WorldManaTracker" });
         AddChild(new Hud { Name = "Hud" });
+        ProcessMode = ProcessModeEnum.Pausable;
+        foreach (Node child in GetChildren())
+        {
+            child.ProcessMode = child is Hud ? ProcessModeEnum.Always : ProcessModeEnum.Pausable;
+        }
     }
 
     private void CreateLighting()
@@ -75,12 +83,12 @@ public partial class Game : Node3D
 
     private void CreatePlayer()
     {
-        var player = new CarpetFlightController
+        _player = new CarpetFlightController
         {
             Name = "PlayerCarpet",
             Position = AboveTerrain(0.0f, 14.0f, 9.0f)
         };
-        AddChild(player);
+        AddChild(_player);
     }
 
     private void CreateManaWell()
@@ -169,7 +177,26 @@ public partial class Game : Node3D
 
     private void CreateEnemyEcosystem()
     {
-        AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector" });
+        AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector", SpawnEnemyWizards = false });
+    }
+
+    private void CreateLevelObjective()
+    {
+        var rival = new EnemyEcosystemEnemy
+        {
+            Name = "RivalWizard",
+            Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard,
+            Position = AboveTerrain(17.0f, -17.0f, 7.0f)
+        };
+        AddChild(rival);
+        var objective = new LevelObjective { Name = "LevelObjective" };
+        objective.Initialize(_player, _playerCastle, _enemyCastle, rival);
+        objective.Finished += () =>
+        {
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+            GetTree().Paused = true;
+        };
+        AddChild(objective);
     }
 
     private void AddPillar(Vector3 position)
