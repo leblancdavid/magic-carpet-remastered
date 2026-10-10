@@ -24,9 +24,9 @@ public partial class LevelObjectiveChecks : Node3D
             ClearActors();
             CheckVictory(castleFirst: false);
             ClearActors();
-            CheckDefeat(castleLoss: true);
+            CheckDefeat();
             ClearActors();
-            CheckDefeat(castleLoss: false);
+            CheckRespawns();
             ClearActors();
             CheckArenaIntegration();
             GetTree().Paused = false;
@@ -92,22 +92,60 @@ public partial class LevelObjectiveChecks : Node3D
         Check(actors.Objective.State == LevelObjective.LevelState.Victory && finishes == 1, "Victory is terminal and emitted once");
     }
 
-    private void CheckDefeat(bool castleLoss)
+    private void CheckDefeat()
     {
         var actors = CreateActors();
         actors.Rival.ApplyDamage(1000);
         actors.RivalCastle.ApplyDamage(1000);
-        if (castleLoss)
-        {
-            actors.Home.ApplyDamage(1000);
-        }
-        else
-        {
-            actors.Player.ApplyDamage(1000);
-        }
+        actors.Home.ApplyDamage(1000);
+        actors.Player.ApplyDamage(1000);
         actors.Objective.Evaluate();
-        Check(actors.Objective.State == LevelObjective.LevelState.Defeat, "Player/castle loss takes precedence over simultaneous victory");
+        Check(actors.Objective.State == LevelObjective.LevelState.Defeat, "Home castle loss takes precedence over simultaneous victory");
         Check(!string.IsNullOrEmpty(actors.Objective.ResultMessage), "Defeat explains its cause");
+    }
+
+    private void CheckRespawns()
+    {
+        var actors = CreateActors();
+        actors.Home.GlobalPosition = new Vector3(-20, 0, 0);
+        actors.RivalCastle.GlobalPosition = new Vector3(20, 0, 0);
+        actors.Rival.AbsorbMana(17);
+        var tracker = AddActor(new WorldManaTracker());
+        int total = tracker.TotalMana;
+        actors.Player.ApplyDamage(1000);
+        actors.Rival.ApplyDamage(1000);
+        actors.Objective.Evaluate();
+        Check(actors.Objective.State == LevelObjective.LevelState.Playing && actors.Objective.PlayerRespawnRemaining == 10,
+            "Wizard death starts respawn rather than ending a level with a living castle");
+        Vector3 position = actors.Player.GlobalPosition;
+        actors.Player._PhysicsProcess(1);
+        Check(actors.Player.Health == 0 && actors.Player.GlobalPosition == position && actors.Player.CollisionLayer == 0,
+            "Dead player cannot move or collide during countdown");
+        actors.Objective._PhysicsProcess(9.9);
+        Check(actors.Player.Health == 0 && actors.Objective.RivalWizardDefeated, "Both wizards stay dead before ten seconds");
+        actors.Rival.Free();
+        actors.Objective._PhysicsProcess(0.2);
+        var rival = GetNode<EnemyEcosystemEnemy>("RivalWizard");
+        rival.SetPhysicsProcess(false);
+        Check(actors.Player.Health == 100 && actors.Player.Mana == actors.Player.ManaCapacity && actors.Player.IsInvulnerable,
+            "Player respawns with restored health/mana and brief protection");
+        Check(actors.Player.GlobalPosition.DistanceTo(actors.Home.GlobalPosition) < 12 && actors.Player.CollisionLayer != 0,
+            "Player returns beside its home castle with collision restored");
+        Check(rival.Health > 0 && rival.GlobalPosition.DistanceTo(actors.RivalCastle.GlobalPosition) < 12
+            && !actors.Objective.RivalWizardDefeated, "Rival respawns at its own castle and clears the old defeat");
+        tracker.Refresh();
+        Check(tracker.TotalMana == total && rival.ManaReserve == 0, "Respawns do not mint physical wizard mana");
+        rival.ApplyDamage(1000);
+        actors.Objective._PhysicsProcess(10);
+        var second = GetNode<EnemyEcosystemEnemy>("RivalWizard");
+        second.SetPhysicsProcess(false);
+        Check(second != rival && second.Health > 0, "Repeated rival deaths rebind the respawn lifecycle");
+        actors.RivalCastle.ApplyDamage(1000);
+        actors.Objective._PhysicsProcess(20);
+        Check(!actors.Objective.RivalWizardDefeated && second.Health > 0, "Castle destruction alone leaves the current wizard alive");
+        second.ApplyDamage(1000);
+        actors.Objective._PhysicsProcess(20);
+        Check(actors.Objective.State == LevelObjective.LevelState.Victory, "Destroyed castle prevents respawn and final wizard death wins");
     }
 
     private void HitCastleWithFirebolts(CastleKeep castle)

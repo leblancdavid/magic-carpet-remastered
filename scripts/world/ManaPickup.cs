@@ -37,10 +37,12 @@ public partial class ManaPickup : RigidBody3D
     private SphereShape3D _sphere = null!;
     private SphereMesh _sphereMesh = null!;
     private bool _surfaceInitialized;
+    private float _mergeGraceRemaining;
 
     public override void _Ready()
     {
         AddToGroup("loose_mana");
+        _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         ContactMonitor = true;
         MaxContactsReported = 16;
         ContinuousCd = true;
@@ -76,6 +78,7 @@ public partial class ManaPickup : RigidBody3D
 
     public override void _PhysicsProcess(double delta)
     {
+        _mergeGraceRemaining = Mathf.Max(0, _mergeGraceRemaining - (float)delta);
         if (IsQueuedForDeletion() || ManaAmount <= 0)
         {
             return;
@@ -114,6 +117,13 @@ public partial class ManaPickup : RigidBody3D
         float terrain = _arena.HeightAt(transform.Origin.X, transform.Origin.Z);
         bool onWater = _arena.WaterHeight >= terrain;
         float floor = Mathf.Max(terrain, _arena.WaterHeight) + Radius;
+        float ceiling = _arena.SurfaceHeight(transform.Origin.X, transform.Origin.Z) + _arena.MaxFlightClearance;
+        if (transform.Origin.Y > ceiling)
+        {
+            transform.Origin = new Vector3(transform.Origin.X, ceiling, transform.Origin.Z);
+            state.Transform = transform;
+            state.LinearVelocity = new Vector3(state.LinearVelocity.X, Mathf.Min(0, state.LinearVelocity.Y), state.LinearVelocity.Z);
+        }
         // Leave ordinary terrain contacts to the solver. Snapping away tiny
         // penetrations every tick cancels gravity before it can produce rolling.
         if (transform.Origin.Y < floor - (onWater ? 0 : 0.15f))
@@ -190,6 +200,13 @@ public partial class ManaPickup : RigidBody3D
         _surfaceInitialized = true; // Spilled cargo falls from its release height.
     }
 
+    public void LaunchScatter(Vector3 position, Vector3 velocity)
+    {
+        SpillAt(position);
+        LinearVelocity = velocity;
+        _mergeGraceRemaining = 0.8f;
+    }
+
     public void ReassignOwnership(ManaOwnership ownership)
     {
         Ownership = ownership;
@@ -199,7 +216,8 @@ public partial class ManaPickup : RigidBody3D
     private void OnBodyEntered(Node body)
     {
         if (!IsInstanceValid(body) || !IsAvailable) return;
-        if (body is ManaPickup other && other.IsAvailable && Ownership == other.Ownership)
+        if (body is ManaPickup other && other.IsAvailable && Ownership == other.Ownership
+            && _mergeGraceRemaining <= 0 && other._mergeGraceRemaining <= 0)
         {
             // Stable survivor avoids two reciprocal contact callbacks merging
             // the same amounts twice. Deferred callbacks may refer to freed nodes.

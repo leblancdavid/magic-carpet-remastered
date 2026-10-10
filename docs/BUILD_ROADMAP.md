@@ -8,6 +8,8 @@ Use `docs/ORIGINAL_MECHANICS_REFERENCE.md` as the condensed system-design refere
 
 Current victory direction (user update, 2026-10-10): destroy the rival player's castle AND defeat its wizard, in either order. Mana possession/storage supports combat power and logistics; it is not a victory condition. This supersedes the earlier equilibrium-quota objective plan.
 
+Playtest mechanics update (2026-10-10): wizards respawn after ten seconds while their respective castle survives; a rival respawn clears its previous defeat. Killing the wizard first can win only if the castle falls before it returns. Player castle destruction causes defeat. Surviving castles slowly repair after a quiet delay, neutral creatures carry/drop intrinsic mana, destruction spills fragment into ballistic small spheres, and shared flight clearance is capped at 12 units above terrain/water. See `docs/PLAYTEST_MECHANICS.md` for current defaults and validation steps.
+
 ## Development Tracks
 
 Keep work separated into three tracks:
@@ -25,6 +27,7 @@ Status: implementation-complete for the initial prototype, pending runtime playt
 Core work:
 
 - tuned carpet flight with acceleration, drag, banking, altitude floor, and collision
+- shared terrain/water-relative maximum flight clearance (12 units), also used by creatures, balloons, guardians, and physical mana; projectiles ignore this flight ceiling
 - mouse-look, first-person camera, chase camera, and camera toggle
 - one projectile spell with mana cost, cooldown, and hit feedback
 - mana pickups and a visible mana/health HUD
@@ -71,6 +74,7 @@ Status: first-pass implementation has verified mana-transfer correctness, ground
 Core work:
 
 - mana orb drops from enemies
+- intrinsic neutral-creature reserves and outward many-small-sphere destruction bursts; mana is counted from spawn and conserved through transfers/deaths, while recurring neutral spawns introduce new supply
 - grounded, amount-scaled physics spheres with downhill rolling, solid-object collision, and same-ownership contact merging (implemented; runtime tuning pending)
 - mana wells or ambient sources
 - possession marks mana for balloon-only player collection; player contact/proximity never collects it
@@ -97,7 +101,7 @@ Remaining Phase 3 work before signoff:
 
 Goal: add base building, storage, and strategic conflict.
 
-Status: implementation in progress. The prototype now has a player castle, enemy castle, castle health/storage/growth, and `ManaBalloon` haulers that visibly carry owned loose mana between the field and castles. Remaining work is runtime tuning and signoff.
+Status: implementation in progress. The prototype has player/enemy castles, health/storage/growth, and `ManaBalloon` haulers. Damage reduces effective storage capacity (rounded up), spilling excess as neutral ballistic fragments; destruction releases the full reserve exactly once and leaves stage-zero ruins. Surviving castles repair 3 HP/second after five seconds without damage, reopening capacity without recreating mana. Both wizards respawn after ten seconds beside surviving castles. Growth and spell-power bonuses follow retained storage. Transfer, recovery, power, repair, respawn, and real-physics spill checks pass. Remaining work is runtime tuning, deeper sanctuary behavior, destroyed-castle rebuilding decisions, and signoff.
 
 Core work:
 
@@ -115,14 +119,15 @@ Remaining Phase 4 work before signoff:
 - runtime playtest the castle scale, storage, and routing loop in Godot
 - runtime playtest firebolt castle damage and the combined rival castle/wizard elimination objective
 - add clearer territorial feedback if the current castle silhouettes are too subtle
-- add castle sanctuary/respawn behavior after the mana loop is stable
-- add castle damage regression and stored-mana spillage once castle combat is readable
+- runtime playtest castle-backed ten-second wizard respawns; deeper sanctuary/respawn-cost behavior remains deferred
+- runtime playtest castle storage regression, neutral spill visibility/recovery, and retained-mana spell power under siege; automated conservation and terrain-grounded spill checks pass
+- runtime playtest surviving-castle auto-repair delay/rate and recovery logistics; decide whether destroyed castles can ever be rebuilt
 
 ## Phase 5: Enemy Ecosystem
 
 Goal: create systemic pressure rather than only scripted waves.
 
-Status: functionally complete for the current prototype. The prototype has role-based enemy spawning with swarms, ground beasts, ranged casters, castle attackers, mana thieves, and an enemy wizard archetype. The arena now starts with one designated rival wizard; ecosystem wizard spawning is disabled there so the defeated rival is never replaced. Mana thief and wizard roles have retreat/deposit loops; player fireballs damage ecosystem enemies and the rival castle; enemy attack checks use horizontal distance so arena altitude does not suppress behavior; and the castles are far enough apart for readable siege pressure. Fine tuning remains pending.
+Status: functionally complete for the current prototype. Role-based enemies include swarms, ground beasts, ranged casters, castle attackers, mana thieves, and a wizard archetype. Neutral creatures now carry/drop intrinsic mana and swarms/casters use bounded flight rather than upward drift. The arena starts with one designated rival; the objective replaces it after a ten-second respawn delay while its castle survives, and ecosystem wizard spawning stays disabled to avoid duplicate rivals. Thieves/wizards have retreat/deposit loops; fireballs damage enemies and the rival castle; attack checks use horizontal distance; and castles are separated for readable siege pressure. Fine tuning remains pending.
 
 Core work:
 
@@ -175,13 +180,13 @@ Deliverable: a small spellbook with meaningful tactical tradeoffs.
 
 Goal: turn arenas into a full game loop.
 
-Status: the initial arena's rival/castle elimination objective pass is accepted by the user (2026-10-10): the rival is visible and defeatable, and castle destruction objective behavior works in playtesting. `LevelObjective` requires both rival castle destruction and designated wizard defeat in either order; player death or home castle destruction causes defeat. Terminal results pause gameplay, release the mouse, and show an R-to-restart overlay. Headless/rendered regressions verify transitions and actual arena reload. Deeper rival AI is deferred; broader balance, multiple realms, and progression remain pending.
+Status: the initial rival/castle elimination pass was accepted by the user; the subsequent requested playtest mechanics are implemented pending hands-on tuning. `LevelObjective` requires rival castle destruction and designated wizard defeat, tracking that wizard through ten-second castle-backed respawns. Player death starts recovery while its castle survives; home castle destruction causes defeat. Rival respawn clears the earlier kill, making wizard-first victory time-sensitive. Terminal results pause gameplay, release the mouse, and show an R-to-restart overlay. Headless, real-frame, and rendered regressions verify respawns, objective transitions, and arena reload. Deeper rival AI is deferred; broader balance, multiple realms, and progression remain pending.
 
 Core work:
 
 - island/realm level model
 - objective variants
-- finite world mana as a strategic resource; rival castle AND wizard elimination win condition
+- tracked world mana as a strategic resource (intrinsic neutral-creature spawns introduce supply); rival castle AND wizard elimination win condition with castle-backed respawns
 - biome themes
 - escalating enemy wizard setups
 - persistent unlocks and spell progression

@@ -34,6 +34,7 @@ public partial class ManaBalloon : Node3D
     private float _dockTimer;
     private Vector3 _homeAnchor;
     private bool _homeAnchorSet;
+    private HeightmapArena? _arena;
 
     public override void _Ready()
     {
@@ -43,6 +44,8 @@ public partial class ManaBalloon : Node3D
         SetPhysicsProcess(true);
         _castle = GetTree().GetFirstNodeInGroup(UsePlayerMana ? "player_castle" : "enemy_castle") as CastleKeep;
         BuildVisuals();
+        _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        if (_arena != null) GlobalPosition = _arena.ClampFlightPosition(GlobalPosition);
     }
 
     public override void _PhysicsProcess(double delta)
@@ -207,14 +210,14 @@ public partial class ManaBalloon : Node3D
 
     private void Pop()
     {
+        int amount = 0;
         foreach (ManaPickup pickup in _carried)
         {
-            Vector3 offset = new Vector3(GD.Randf() * 2.4f - 1.2f, 1.0f, GD.Randf() * 2.4f - 1.2f);
-            pickup.SpillAt(GlobalPosition + offset);
-            pickup.ReassignOwnership(ManaOwnership.Neutral);
+            amount += pickup.TakeMana(pickup.ManaAmount);
         }
 
         _carried.Clear();
+        ManaScatter.Spawn(GetParent(), GlobalPosition, amount, name: "BalloonManaSpill");
 
         var burst = new SpellImpactBurst
         {
@@ -256,6 +259,7 @@ public partial class ManaBalloon : Node3D
         // Turn from the departure position: a capped step can land exactly on
         // target, which would make LookAt(target) invalid after moving.
         GlobalPosition = GlobalPosition.MoveToward(target, MoveSpeed * delta);
+        if (_arena != null) GlobalPosition = _arena.ClampFlightPosition(GlobalPosition);
     }
 
     private void BuildVisuals()

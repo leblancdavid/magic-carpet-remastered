@@ -29,6 +29,8 @@ public partial class ManaPhysicsChecks : Node3D
             await CheckCarryAndBalloonOnlyCollection();
             await ClearActors();
             await CheckLiveTerrain();
+            await ClearActors();
+            await CheckCastleSpills();
             GD.Print($"Mana physics checks passed: {_checks}");
             GetTree().Quit();
         }
@@ -107,6 +109,26 @@ public partial class ManaPhysicsChecks : Node3D
         orb.LinearVelocity = new Vector3(8, 0, 0);
         await Frames(60);
         Check(orb.GlobalPosition.X < 9.5f - orb.Radius + 0.05f, "Mana collides with ordinary world objects");
+    }
+
+    private async Task CheckCastleSpills()
+    {
+        var arena = Add(new HeightmapArena { CellsPerSide = 24, CellSize = 2, HeightScale = 0, WaterHeight = -20 }, Vector3.Zero);
+        arena.FlattenTerrain(Vector3.Zero, 100000, 0);
+        var castle = Add(new CastleKeep { IsPlayerCastle = false, InitialStoredMana = 37, MaxHealth = 100 }, new Vector3(0, 2.5f, 0));
+        var tracker = Add(new WorldManaTracker(), Vector3.Zero);
+        await Frames(2);
+        castle.ApplyDamage(100);
+        await Frames(120);
+        tracker.Refresh();
+        Check(tracker.TotalMana == 37 && tracker.NeutralLooseMana == 37, "Destroyed castle spills conserve mana through real solver frames");
+        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+        {
+            if (node is not ManaPickup orb || !orb.IsAvailable) continue;
+            Check(Mathf.Abs(orb.GlobalPosition.Y - orb.Radius) < 0.06f, "Castle spill settles on heightmap terrain");
+            Check(new Vector2(orb.GlobalPosition.X, orb.GlobalPosition.Z).Length() > 5.7f + orb.Radius,
+                "Castle spill remains outside keep collision after settling");
+        }
     }
 
     private async Task CheckMerging()

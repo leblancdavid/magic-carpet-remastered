@@ -74,8 +74,8 @@ public partial class CarpetFlightController : CharacterBody3D
 
     public int Mana { get; private set; } = 40;
     public int ClaimedMana { get; private set; }
-    // Physical world mana absorbed from orbs; castle storage is tallied separately.
-    public bool CanClaimMana => ClaimedMana < MaxClaimedMana;
+    // Derived spell power only; physical world mana stays in castle storage.
+    public int CastleManaBonus => ClaimedMana - _baseManaPower;
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : GlobalPosition.Y - _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z);
@@ -138,6 +138,9 @@ private float _feedbackTimer;
 private SpellDefinition _summonSpell = null!;
     private SpellDefinition _terrainSpell = null!;
     private SpellDefinition _possessSpell = null!;
+    private int _baseManaPower;
+    private uint _aliveCollisionLayer;
+    private uint _aliveCollisionMask;
 
     public override void _Ready()
     {
@@ -145,9 +148,8 @@ private SpellDefinition _summonSpell = null!;
         Input.MouseMode = Input.MouseModeEnum.Captured;
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         _manaWell = GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
-        ClaimedMana = Mathf.Clamp(Mathf.Max(InitialClaimedMana, ManaCapacity), 1, MaxClaimedMana);
-        ManaCapacity = ClaimedMana;
-        Mana = Mathf.Clamp(Mana, 0, ManaCapacity);
+        _baseManaPower = Mathf.Clamp(Mathf.Max(InitialClaimedMana, ManaCapacity), 1, Mathf.Max(1, MaxClaimedMana));
+        RefreshCastleManaPower();
         _primarySpell = new SpellDefinition("firebolt", "Firebolt", SpellKind.Projectile, PrimarySpellManaCost, FireCooldownSeconds, "Fast projectile damage spell.");
         _areaSpell = new SpellDefinition("arcane-burst", "Arcane Burst", SpellKind.Projectile, AreaSpellManaCost, AreaSpellCooldownSeconds, "Area damage blast at the aimed point.");
         _shieldSpell = new SpellDefinition("mana-shield", "Mana Shield", SpellKind.Defense, ShieldSpellManaCost, ShieldSpellCooldownSeconds, "Briefly reduces incoming damage.");
@@ -171,6 +173,9 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
         _camera.LookAt(_cameraPivot.GlobalPosition, Vector3.Up);
 
         AddCarpetVisual();
+        _aliveCollisionLayer = CollisionLayer;
+        _aliveCollisionMask = CollisionMask;
+        _arena?.ClampFlightBody(this, MinimumAltitude);
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -203,6 +208,7 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
 
     public override void _PhysicsProcess(double delta)
     {
+        if (Health <= 0) return;
         float deltaF = (float)delta;
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
         _areaSpellCooldown = Mathf.Max(0.0f, _areaSpellCooldown - deltaF);
@@ -277,29 +283,29 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
         }
     }
 
-    public int ClaimMana(int amount, float immediateRefillFraction = 0.0f)
+    public void RefreshCastleManaPower()
     {
-        if (amount <= 0 || ClaimedMana >= MaxClaimedMana)
+        long stored = 0;
+        foreach (Node node in GetTree().GetNodesInGroup("player_castle"))
         {
-            return 0;
+            if (node is CastleKeep castle && !castle.IsDestroyed && !castle.IsQueuedForDeletion())
+            {
+                stored += castle.StoredMana;
+            }
         }
-
-        int claimed = Mathf.Min(amount, MaxClaimedMana - ClaimedMana);
-        ClaimedMana += claimed;
+        int previous = ClaimedMana;
+        ClaimedMana = (int)System.Math.Min((long)_baseManaPower + stored, Mathf.Max(_baseManaPower, MaxClaimedMana));
         ManaCapacity = ClaimedMana;
-
-        int immediateRefill = Mathf.RoundToInt(claimed * Mathf.Clamp(immediateRefillFraction, 0.0f, 1.0f));
-        if (immediateRefill > 0)
+        Mana = Mathf.Clamp(Mana, 0, ManaCapacity);
+        if (ClaimedMana < previous) _manaRegenAccumulator = 0;
+        if (previous > 0 && previous != ClaimedMana)
         {
-            Mana = Mathf.Min(ManaCapacity, Mana + immediateRefill);
+            StatusMessage = ClaimedMana > previous
+                ? $"Castle power +{ClaimedMana - previous}"
+                : $"Castle power lost: {previous - ClaimedMana}";
+            _feedbackTimer = 1.5f;
+            if (ClaimedMana > previous) GameAudio.Instance?.PlayPickup();
         }
-
-        StatusMessage = immediateRefill > 0
-            ? $"Claimed {claimed} mana (+{immediateRefill})"
-            : $"Claimed {claimed} mana";
-        _feedbackTimer = 1.0f;
-        GameAudio.Instance?.PlayPickup();
-        return claimed;
     }
 
     public int SpendMana(int amount)
@@ -334,7 +340,7 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
 
     public void ApplyDamage(int amount)
     {
-        if (IsInvulnerable || Health == 0)
+        if (amount <= 0 || IsInvulnerable || Health == 0)
         {
             return;
         }
@@ -349,13 +355,31 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
 
         if (Health == 0)
         {
-            CallDeferred(nameof(ReloadSceneDeferred));
+            Velocity = Vector3.Zero;
+            _shieldTimer = 0;
+            CollisionLayer = 0;
+            CollisionMask = 0;
+            _carpetVisual.Visible = false;
         }
     }
 
-    private void ReloadSceneDeferred()
+    public void RespawnAt(Vector3 position)
     {
-        GetTree().ReloadCurrentScene();
+        GlobalPosition = position;
+        Health = 100;
+        RefreshCastleManaPower();
+        Mana = ManaCapacity;
+        Velocity = Vector3.Zero;
+        _shieldTimer = 0;
+        _manaRegenAccumulator = 0;
+        _fireCooldown = _areaSpellCooldown = _shieldSpellCooldown = _mobilitySpellCooldown = _summonSpellCooldown = _possessCooldown = 0;
+        _damageInvulnerabilityTimer = 2.0f;
+        CollisionLayer = _aliveCollisionLayer;
+        CollisionMask = _aliveCollisionMask;
+        _carpetVisual.Visible = true;
+        _arena?.ClampFlightBody(this, MinimumAltitude);
+        StatusMessage = "Respawned at your castle";
+        _feedbackTimer = 2.0f;
     }
 
 private void CycleQuickSpell()
@@ -801,13 +825,7 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
 
         if (_arena != null)
         {
-            float terrainMinimumY = _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z) + MinimumAltitude;
-            if (GlobalPosition.Y < terrainMinimumY)
-            {
-                GlobalPosition = new Vector3(GlobalPosition.X, terrainMinimumY, GlobalPosition.Z);
-                Velocity = new Vector3(Velocity.X, Mathf.Max(0.0f, Velocity.Y), Velocity.Z);
-            }
-
+            _arena.ClampFlightBody(this, MinimumAltitude);
             return;
         }
 
@@ -840,7 +858,12 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
             return;
         }
 
-        float targetAltitude = _arena.HeightAt(GlobalPosition.X, GlobalPosition.Z) + MinimumAltitude;
+        float surface = _arena.SurfaceHeight(GlobalPosition.X, GlobalPosition.Z);
+        if (GlobalPosition.Y >= surface + _arena.MaxFlightClearance)
+        {
+            desiredVelocity.Y = Mathf.Min(0, desiredVelocity.Y);
+        }
+        float targetAltitude = surface + MinimumAltitude;
         float altitudeError = targetAltitude - GlobalPosition.Y;
         if (altitudeError <= 0.0f)
         {

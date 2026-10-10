@@ -10,6 +10,28 @@ public partial class HeightmapArena : Node3D
     [Export] public float CellSize { get; set; } = 2.0f;
     [Export] public float HeightScale { get; set; } = 9.0f;
     [Export] public float WaterHeight { get; set; } = -0.8f;
+    [Export] public float MaxFlightClearance { get; set; } = 12.0f;
+
+    public float SurfaceHeight(float x, float z) => Mathf.Max(HeightAt(x, z), WaterHeight);
+
+    public Vector3 ClampFlightPosition(Vector3 position, float minimumClearance = 1.0f, float? maximumClearance = null)
+    {
+        float surface = SurfaceHeight(position.X, position.Z);
+        float maximum = Mathf.Max(minimumClearance, Mathf.Min(MaxFlightClearance, maximumClearance ?? MaxFlightClearance));
+        position.Y = Mathf.Clamp(position.Y, surface + minimumClearance, surface + maximum);
+        return position;
+    }
+
+    public void ClampFlightBody(CharacterBody3D body, float minimumClearance = 1.0f, float? maximumClearance = null)
+    {
+        Vector3 before = body.GlobalPosition;
+        body.GlobalPosition = ClampFlightPosition(before, minimumClearance, maximumClearance);
+        if (!Mathf.IsEqualApprox(before.Y, body.GlobalPosition.Y))
+        {
+            body.Velocity = new Vector3(body.Velocity.X,
+                body.GlobalPosition.Y < before.Y ? Mathf.Min(0, body.Velocity.Y) : Mathf.Max(0, body.Velocity.Y), body.Velocity.Z);
+        }
+    }
 
     public int LastEditedVertexCount { get; private set; }
     public int LastRebuiltChunkCount { get; private set; }

@@ -1,5 +1,6 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
+using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Spells;
 
@@ -15,11 +16,14 @@ public partial class SummonedGuardian : CharacterBody3D
     private StandardMaterial3D _material = null!;
     private float _lifeRemaining;
     private float _attackCooldown;
+    private HeightmapArena? _arena;
 
     public override void _Ready()
     {
         _lifeRemaining = LifetimeSeconds;
         AddCollisionAndVisuals();
+        _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        _arena?.ClampFlightBody(this);
     }
 
     public override void _PhysicsProcess(double delta)
@@ -38,6 +42,7 @@ public partial class SummonedGuardian : CharacterBody3D
         {
             Velocity = Velocity.MoveToward(Vector3.Zero, MoveSpeed * deltaF);
             MoveAndSlide();
+            _arena?.ClampFlightBody(this);
             PulseMaterial(deltaF);
             return;
         }
@@ -62,6 +67,7 @@ public partial class SummonedGuardian : CharacterBody3D
         }
 
         PulseMaterial(deltaF);
+        _arena?.ClampFlightBody(this);
     }
 
     private EnemyEcosystemEnemy? FindNearestTarget()

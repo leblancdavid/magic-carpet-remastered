@@ -45,7 +45,7 @@ public partial class WizardFlightChecks : Node3D
                     GD.Print($"Wizard frame {frame + 1}: position {wizard.GlobalPosition}, clearance {clearance:0.0}, reserve {wizard.ManaReserve}");
                 }
             }
-            Check(highest <= 17, "Wizard remains within reachable flight altitude instead of ascending indefinitely");
+            Check(highest <= arena.MaxFlightClearance + 0.01f, "Wizard remains within shared reachable flight altitude instead of ascending indefinitely");
             Check(highestReserve == 8 && wizard.ManaReserve + enemyCastle.StoredMana == 8,
                 "Wizard reaches, collects, and banks its targeted globe without losing mana");
             Check(wizard.GetNodeOrNull<MeshInstance3D>("Carpet") != null
@@ -60,7 +60,7 @@ public partial class WizardFlightChecks : Node3D
             {
                 await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
                 float clearance = wizard.GlobalPosition.Y - Surface(arena, wizard.GlobalPosition.X, wizard.GlobalPosition.Z).Y;
-                bounded &= clearance >= wizard.GroundClearance - 0.01f && clearance <= wizard.WizardMaxFlightClearance + 0.01f;
+                bounded &= clearance >= wizard.GroundClearance - 0.01f && clearance <= arena.MaxFlightClearance + 0.01f;
             }
             Check(bounded, "Combat height tracking cannot chase a high player out of the playable altitude band");
             enemyCastle.ApplyDamage(1000);

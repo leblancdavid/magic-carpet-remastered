@@ -43,6 +43,7 @@ public partial class EnemyProjectile : Area3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (IsQueuedForDeletion()) return;
         float deltaF = (float)delta;
         GlobalPosition += _direction * Speed * deltaF;
         _lifeRemaining -= deltaF;
@@ -65,7 +66,7 @@ public partial class EnemyProjectile : Area3D
 
     private void OnBodyEntered(Node3D body)
     {
-        if (body == _owner)
+        if (body == _owner || IsQueuedForDeletion())
         {
             return;
         }

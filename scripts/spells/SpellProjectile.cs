@@ -44,6 +44,7 @@ public partial class SpellProjectile : Area3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (IsQueuedForDeletion()) return;
         float deltaF = (float)delta;
         Vector3 previous = GlobalPosition;
         GlobalPosition += _direction * Speed * deltaF;

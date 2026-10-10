@@ -32,12 +32,15 @@ public partial class SimpleMonster : CharacterBody3D
     private float _manaContestCooldown;
     private float _hitFlashTimer;
     private int _manaReserve;
+    private HeightmapArena? _arena;
 
     public override void _Ready()
     {
         AddToGroup("simple_monster");
         _manaReserve = Mathf.Max(0, ManaDroppedOnDeath);
+        _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         AddCollisionAndVisuals();
+        _arena?.ClampFlightBody(this);
     }
 
     public override void _PhysicsProcess(double delta)
@@ -70,6 +73,7 @@ public partial class SimpleMonster : CharacterBody3D
                 direction = wellDistance > 0.1f ? toWell.Normalized() : Vector3.Zero;
                 Velocity = direction * (MoveSpeed * 1.15f);
                 MoveAndSlide();
+                _arena?.ClampFlightBody(this);
                 UpdateRangedAttack(deltaF, wellDistance, direction);
                 return;
             }
@@ -77,6 +81,7 @@ public partial class SimpleMonster : CharacterBody3D
 
         Velocity = direction * MoveSpeed;
         MoveAndSlide();
+        _arena?.ClampFlightBody(this);
 
         UpdateRangedAttack(deltaF, distance, direction);
 
@@ -123,20 +128,9 @@ public partial class SimpleMonster : CharacterBody3D
             return;
         }
 
-        int dropCount = Mathf.Clamp(_manaReserve / 5, 1, 4);
-        for (int i = 0; i < dropCount; i++)
-        {
-            float angle = Mathf.Tau * i / dropCount;
-            Vector3 offset = new Vector3(Mathf.Cos(angle), 0.25f, Mathf.Sin(angle)) * 1.4f;
-            var mana = new ManaPickup
-            {
-                Name = "DroppedMana",
-                ManaAmount = _manaReserve / dropCount + (i < _manaReserve % dropCount ? 1 : 0)
-            };
-            GetTree().CurrentScene.AddChild(mana);
-            mana.GlobalPosition = GlobalPosition + offset;
-        }
+        int amount = _manaReserve;
         _manaReserve = 0;
+        ManaScatter.Spawn(GetParent(), GlobalPosition, amount, name: "DroppedMana");
     }
 
     private void SpawnDeathBurst()

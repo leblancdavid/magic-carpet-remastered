@@ -129,10 +129,11 @@ public partial class Hud : CanvasLayer
         }
 
         _vitals.Text = $"Health  {_player.Health}     Mana  {_player.Mana} / {_player.ManaCapacity}\n"
-            + (_player.IsShielded ? _player.ShieldStatusText : _player.IsInvulnerable ? "Protected after hit" : "Carpet ready");
+            + (_player.Health <= 0 ? $"Respawn in {_levelObjective?.PlayerRespawnRemaining:0.0}s"
+                : _player.IsShielded ? _player.ShieldStatusText : _player.IsInvulnerable ? "Protected after hit" : "Carpet ready");
         _objective.Text = _levelObjective == null ? "Eliminate the rival\nDestroy castle and wizard"
             : $"Rival castle: {(_levelObjective.RivalCastleDestroyed ? "Destroyed" : $"{_enemyCastle?.Health} HP")}\n"
-                + $"Rival wizard: {(_levelObjective.RivalWizardDefeated ? "Defeated" : "Alive")}";
+                + $"Rival wizard: {(_levelObjective.RivalWizardDefeated ? _levelObjective.RivalCastleDestroyed ? "Defeated" : $"Respawn {_levelObjective.RivalRespawnRemaining:0}s" : "Alive")}";
         _resultPanel.Visible = _levelObjective != null && _levelObjective.State != LevelObjective.LevelState.Playing;
         if (_resultPanel.Visible)
         {
@@ -140,7 +141,7 @@ public partial class Hud : CanvasLayer
                 + $"{_levelObjective.ResultMessage}\n\nPress R to restart";
         }
         _loadout.Text = $"LMB  {_player.PrimarySpellName}   ·   Tab cycle\nRMB  {_player.PossessSpellName}   ·   claim mana";
-        _feedback.Text = _player.Health <= 0 ? "Defeated — press R to restart" : _player.ActiveFeedbackMessage;
+        _feedback.Text = _player.Health <= 0 ? "Wizard down — your castle will respawn you" : _player.ActiveFeedbackMessage;
         _feedbackPanel.Visible = !_resultPanel.Visible && !string.IsNullOrEmpty(_feedback.Text);
 
         if (!_debugPanel.Visible)
@@ -150,9 +151,9 @@ public partial class Hud : CanvasLayer
 
         string details = Section("FLIGHT / PLAYER")
             + $"Camera: {_player.CameraMode}\nSpeed: {_player.Speed:0.0}\nTerrain clearance: {_player.AltitudeAboveTerrain:0.0}\n"
-            + $"Claimed power: {_player.ClaimedMana}\nMana collection: balloon delivery\n{_player.ShieldStatusText}\n\n"
+            + $"Spell power: {_player.ClaimedMana} (castle +{_player.CastleManaBonus})\nMana collection: balloon delivery\n{_player.ShieldStatusText}\n\n"
             + Section("MANA ECONOMY")
-            + (_manaTracker == null ? "Tracker unavailable\n" : $"World total: {_manaTracker.TotalMana}\nNeutral: {_manaTracker.NeutralLooseMana}\nPlayer: {_manaTracker.PlayerControlledMana}\nRival: {_manaTracker.EnemyControlledMana}\n")
+            + (_manaTracker == null ? "Tracker unavailable\n" : $"World total: {_manaTracker.TotalMana}\nNeutral loose: {_manaTracker.NeutralLooseMana}\nNeutral creatures: {_manaTracker.NeutralCreatureMana}\nPlayer: {_manaTracker.PlayerControlledMana}\nRival: {_manaTracker.EnemyControlledMana}\n")
             + (_well == null ? "Well: unavailable\n\n" : "Well: finite neutral landmark\n\n")
             + Section("CASTLES / ENEMIES")
             + CastleDetails(_playerCastle, "Player") + CastleDetails(_enemyCastle, "Rival")
@@ -164,7 +165,7 @@ public partial class Hud : CanvasLayer
             + $"LMB — {_player.PrimarySpellName}\nTab — cycle quick spell\nQ — {_player.AreaSpellName}\nE — {_player.ShieldSpellName}\nF — {_player.MobilitySpellName}\nG — {_player.SummonSpellName}\n"
             + $"RMB — Possess ({_player.PossessSpellManaCost} mana): aim at a globe or the ground before it; the bolt follows terrain after landing.\n\n"
             + Section("OWNERSHIP / ROLE GUIDE")
-            + "Mana: gray neutral · cyan yours · red rival\nBalloons haul owned mana to castles. Pop rivals to spill their cargo.\n\n"
+            + "Mana: gray neutral · cyan yours · red rival\nBalloons haul owned mana to castles. Castle damage reduces storage; excess spills neutral. Stored mana supports spell power. Pop rivals to spill their cargo.\n\n"
             + "Orange — swarm\nGreen — beast\nBlue — caster\nRed — sieger\nYellow — thief\nPurple — wizard";
         if (_debugText.Text != details)
         {
@@ -180,7 +181,8 @@ public partial class Hud : CanvasLayer
     private static string CastleDetails(CastleKeep? castle, string side) => castle == null
         ? $"{side} castle: unavailable\n"
         : $"{side} castle: {(castle.IsDestroyed ? "Destroyed" : $"HP {castle.Health}/{castle.MaxHealth}")}\n"
-            + $"Storage: {castle.StoredMana}/{castle.ManaStorageCapacity}  ·  Stage {castle.GrowthStage}\n\n";
+            + $"Storage: {castle.StoredMana}/{castle.EffectiveStorageCapacity} (intact {castle.ManaStorageCapacity})  ·  Stage {castle.GrowthStage}\n"
+            + $"Repair: {(castle.IsDestroyed ? "Ruined" : castle.IsRepairing ? "Repairing" : castle.Health < castle.MaxHealth ? "Waiting for quiet" : "Intact")}\n\n";
 
     private static Label CreateLabel(string text, int fontSize)
     {

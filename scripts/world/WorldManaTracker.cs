@@ -9,9 +9,10 @@ public partial class WorldManaTracker : Node
     [Export] public float EquilibriumFraction { get; set; } = 0.5f;
 
     public int NeutralLooseMana { get; private set; }
+    public int NeutralCreatureMana { get; private set; }
     public int PlayerControlledMana { get; private set; }
     public int EnemyControlledMana { get; private set; }
-    public int TotalMana => NeutralLooseMana + PlayerControlledMana + EnemyControlledMana;
+    public int TotalMana => NeutralLooseMana + NeutralCreatureMana + PlayerControlledMana + EnemyControlledMana;
     public bool EquilibriumMet => TotalMana > 0 && PlayerControlledMana >= TotalMana * EquilibriumFraction;
 
     public float PlayerShare01 => TotalMana <= 0
@@ -42,6 +43,7 @@ public partial class WorldManaTracker : Node
     public void Refresh()
     {
         NeutralLooseMana = 0;
+        NeutralCreatureMana = 0;
         PlayerControlledMana = 0;
         EnemyControlledMana = 0;
 
@@ -86,7 +88,10 @@ public partial class WorldManaTracker : Node
         {
             if (node is EnemyEcosystemEnemy enemy)
             {
-                EnemyControlledMana += enemy.ManaReserve;
+                if (enemy.Role is EnemyEcosystemEnemy.EnemyRole.ManaThief or EnemyEcosystemEnemy.EnemyRole.EnemyWizard)
+                    EnemyControlledMana += enemy.ManaReserve;
+                else
+                    NeutralCreatureMana += enemy.ManaReserve;
             }
         }
 
@@ -94,7 +99,7 @@ public partial class WorldManaTracker : Node
         {
             if (node is SimpleMonster monster)
             {
-                EnemyControlledMana += monster.ManaReserve;
+                NeutralCreatureMana += monster.ManaReserve;
             }
         }
     }

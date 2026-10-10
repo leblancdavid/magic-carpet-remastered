@@ -11,25 +11,50 @@ public partial class CastleKeep : StaticBody3D
     [Export] public int MaxHealth { get; set; } = 140;
     [Export] public float GrowthManaPerStage { get; set; } = 40.0f;
     [Export] public float GrowthScalePerStage { get; set; } = 0.18f;
+    [Export] public float RepairDelaySeconds { get; set; } = 5.0f;
+    [Export] public float RepairHealthPerSecond { get; set; } = 3.0f;
 
     public int StoredMana { get; private set; }
     public int Health { get; private set; }
     public int GrowthStage { get; private set; } = 1;
+    // Round up so the last point of health can still retain a small reserve.
+    public int EffectiveStorageCapacity => IsDestroyed ? 0
+        : (int)(((long)Mathf.Max(0, ManaStorageCapacity) * Health + MaxHealth - 1) / MaxHealth);
     public bool IsDestroyed => Health <= 0;
     public string CastleLabel => IsPlayerCastle ? "Player Castle" : "Enemy Castle";
+    public bool IsRepairing => !IsDestroyed && Health < MaxHealth && _secondsSinceHit >= RepairDelaySeconds;
+    private float _secondsSinceHit;
+    private float _repairAccumulator;
 
     private StandardMaterial3D _baseMaterial = null!;
     private StandardMaterial3D _towerMaterial = null!;
     private MeshInstance3D _keep = null!;
     private MeshInstance3D _tower = null!;
+    private MeshInstance3D _roof = null!;
 
     public override void _Ready()
     {
         AddToGroup(IsPlayerCastle ? "player_castle" : "enemy_castle");
-        StoredMana = Mathf.Clamp(InitialStoredMana, 0, ManaStorageCapacity);
+        MaxHealth = Mathf.Max(1, MaxHealth);
         Health = MaxHealth;
+        StoredMana = Mathf.Clamp(InitialStoredMana, 0, EffectiveStorageCapacity);
         BuildCastleVisuals();
         UpdateGrowth();
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {
+        if (IsDestroyed || Health >= MaxHealth || RepairHealthPerSecond <= 0) return;
+        float before = _secondsSinceHit;
+        _secondsSinceHit += (float)delta;
+        // Only the part of this tick after the quiet delay contributes repair.
+        float activeTime = Mathf.Max(0, _secondsSinceHit - Mathf.Max(before, RepairDelaySeconds));
+        _repairAccumulator += activeTime * RepairHealthPerSecond;
+        int restored = Mathf.FloorToInt(_repairAccumulator);
+        if (restored <= 0) return;
+        _repairAccumulator -= restored;
+        Health = Mathf.Min(MaxHealth, Health + restored);
+        UpdateGrowth(); // Capacity returns, but spilled mana is never recreated.
     }
 
     public int DepositMana(int amount)
@@ -39,7 +64,7 @@ public partial class CastleKeep : StaticBody3D
             return 0;
         }
 
-        int accepted = Mathf.Min(amount, ManaStorageCapacity - StoredMana);
+        int accepted = Mathf.Min(amount, EffectiveStorageCapacity - StoredMana);
         if (accepted <= 0)
         {
             return 0;
@@ -47,7 +72,6 @@ public partial class CastleKeep : StaticBody3D
 
         StoredMana += accepted;
         UpdateGrowth();
-        ClaimPlayerManaFromDeposit(accepted);
         return accepted;
     }
 
@@ -72,19 +96,24 @@ public partial class CastleKeep : StaticBody3D
         }
 
         Health = Mathf.Max(0, Health - amount);
-        UpdateVisualState();
+        _secondsSinceHit = 0;
+        _repairAccumulator = 0;
+        int spilled = Mathf.Max(0, StoredMana - EffectiveStorageCapacity);
+        StoredMana -= spilled;
+        SpillMana(spilled);
+        UpdateGrowth();
     }
 
     public string GetStatusText()
     {
         string destruction = IsDestroyed ? "Destroyed" : $"HP {Health}/{MaxHealth}";
-        return $"{CastleLabel}: {destruction}   Mana {StoredMana}/{ManaStorageCapacity}   Stage {GrowthStage}";
+        return $"{CastleLabel}: {destruction}   Mana {StoredMana}/{EffectiveStorageCapacity}   Stage {GrowthStage}";
     }
 
     private void UpdateGrowth()
     {
-        int desiredStage = 1 + Mathf.FloorToInt(StoredMana / GrowthManaPerStage);
-        desiredStage = Mathf.Clamp(desiredStage, 1, 4);
+        int desiredStage = IsDestroyed ? 0
+            : Mathf.Clamp(1 + Mathf.FloorToInt(StoredMana / Mathf.Max(1.0f, GrowthManaPerStage)), 1, 4);
         if (desiredStage != GrowthStage)
         {
             GrowthStage = desiredStage;
@@ -92,17 +121,16 @@ public partial class CastleKeep : StaticBody3D
         }
 
         UpdateVisualState();
+        if (IsPlayerCastle)
+        {
+            var player = GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
+            player?.RefreshCastleManaPower();
+        }
     }
 
-    private void ClaimPlayerManaFromDeposit(int amount)
+    private void SpillMana(int amount)
     {
-        if (!IsPlayerCastle || amount <= 0)
-        {
-            return;
-        }
-
-        CarpetFlightController? player = GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
-        player?.ClaimMana(amount);
+        ManaScatter.Spawn(GetParent(), GlobalPosition, amount, minimumRadius: 6.0f, name: "CastleManaSpill");
     }
 
     private void UpdateCastleScale()
@@ -110,6 +138,13 @@ public partial class CastleKeep : StaticBody3D
         float scale = 1.0f + GrowthScalePerStage * (GrowthStage - 1);
         _keep.Scale = new Vector3(scale, 1.0f + 0.1f * (GrowthStage - 1), scale);
         _tower.Scale = new Vector3(scale, scale, scale);
+        if (IsDestroyed)
+        {
+            _keep.Scale = new Vector3(1, 0.3f, 1);
+            _tower.Scale = new Vector3(0.6f, 0.3f, 0.6f);
+            _tower.Position = new Vector3(0, 1.5f, 0);
+            _roof.Visible = false;
+        }
     }
 
     private void UpdateVisualState()
@@ -157,16 +192,16 @@ public partial class CastleKeep : StaticBody3D
         _tower.MaterialOverride = _towerMaterial;
         AddChild(_tower);
 
-        var roof = new MeshInstance3D
+        _roof = new MeshInstance3D
         {
             Mesh = new CylinderMesh { TopRadius = 0.2f, BottomRadius = 1.8f, Height = 2.5f }
         };
-        roof.Position = new Vector3(0.0f, 8.0f, 0.0f);
-        roof.MaterialOverride = new StandardMaterial3D
+        _roof.Position = new Vector3(0.0f, 8.0f, 0.0f);
+        _roof.MaterialOverride = new StandardMaterial3D
         {
             AlbedoColor = IsPlayerCastle ? new Color(0.68f, 0.82f, 1.0f) : new Color(1.0f, 0.62f, 0.58f),
             Roughness = 0.8f
         };
-        AddChild(roof);
+        AddChild(_roof);
     }
 }

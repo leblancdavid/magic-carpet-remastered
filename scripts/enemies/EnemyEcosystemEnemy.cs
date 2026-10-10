@@ -25,6 +25,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public int ContactDamage { get; set; } = 6;
     [Export] public int RangedDamage { get; set; } = 8;
     [Export] public int ManaReserve { get; set; } = 0;
+    [Export] public int NeutralManaValue { get; set; } = 12;
     [Export] public float AwarenessRadius { get; set; } = 48.0f;
     [Export] public float AttackRadius { get; set; } = 2.0f;
     [Export] public float RangedMinDistance { get; set; } = 6.0f;
@@ -42,7 +43,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public float ManaTargetAcquireInterval { get; set; } = 0.6f;
     [Export] public float MaxOrbSeekRadius { get; set; } = 42.0f;
     [Export] public float WizardHoverClearance { get; set; } = 5.5f;
-    [Export] public float WizardMaxFlightClearance { get; set; } = 16.0f;
+    [Export] public float WizardMaxFlightClearance { get; set; } = 12.0f;
     [Export] public float WizardVerticalSpeed { get; set; } = 6.0f;
 
     public event Action? Defeated;
@@ -79,6 +80,11 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         AddCollisionAndVisuals();
         ConfigureForRole();
+        if (Role is not (EnemyRole.ManaThief or EnemyRole.EnemyWizard))
+        {
+            ManaReserve += Mathf.Max(0, NeutralManaValue);
+        }
+        _arena?.ClampFlightBody(this, GroundClearance);
     }
 
     public override void _PhysicsProcess(double delta)
@@ -112,9 +118,9 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             Velocity = Vector3.Zero;
         }
 
-        if (Role == EnemyRole.EnemyWizard)
+        if (Role is EnemyRole.EnemyWizard or EnemyRole.FlyingSwarm or EnemyRole.RangedCaster)
         {
-            UpdateWizardFlightVelocity(move);
+            UpdateFlyingVelocity(move);
         }
 
         MoveAndSlide();
@@ -123,6 +129,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             ClampWizardAltitude();
         }
         ClampToGroundIfNeeded();
+        _arena?.ClampFlightBody(this, GroundClearance);
         UpdateVisualColor(deltaF);
         HandleAttacks(deltaF);
     }
@@ -382,17 +389,18 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
         return direction * MoveSpeed;
     }
 
-    private void UpdateWizardFlightVelocity(Vector3 desiredMove)
+    private void UpdateFlyingVelocity(Vector3 desiredMove)
     {
         // Horizontal steering and altitude correction must not be normalized together:
         // a tiny upward hover bias otherwise becomes full-speed perpetual ascent.
         Vector3 horizontal = new(desiredMove.X, 0, desiredMove.Z);
         horizontal = horizontal.LengthSquared() > 0.0001f ? horizontal.Normalized() * MoveSpeed : Vector3.Zero;
         float surface = WizardSurfaceHeight();
-        float targetHeight = surface + WizardHoverClearance;
+        float maxClearance = Mathf.Min(WizardMaxFlightClearance, _arena?.MaxFlightClearance ?? 12.0f);
+        float targetHeight = surface + Mathf.Min(WizardHoverClearance, maxClearance);
         if (_targetOrb == null && !ShouldRetreat() && _player != null && _player.Health > 0)
         {
-            targetHeight = Mathf.Clamp(_player.GlobalPosition.Y, targetHeight, surface + WizardMaxFlightClearance);
+            targetHeight = Mathf.Clamp(_player.GlobalPosition.Y, targetHeight, surface + maxClearance);
         }
         float vertical = Mathf.Clamp((targetHeight - GlobalPosition.Y) * 2.0f, -WizardVerticalSpeed, WizardVerticalSpeed);
         Velocity = new Vector3(horizontal.X, vertical, horizontal.Z);
@@ -409,7 +417,7 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
     {
         float surface = WizardSurfaceHeight();
         GlobalPosition = new Vector3(GlobalPosition.X,
-            Mathf.Clamp(GlobalPosition.Y, surface + GroundClearance, surface + WizardMaxFlightClearance), GlobalPosition.Z);
+            Mathf.Clamp(GlobalPosition.Y, surface + GroundClearance, surface + Mathf.Min(WizardMaxFlightClearance, _arena?.MaxFlightClearance ?? 12.0f)), GlobalPosition.Z);
     }
 
     private bool ShouldRetreat()
@@ -867,27 +875,12 @@ private void TryAbsorbLooseMana()
             return;
         }
 
-        int drops = Mathf.Clamp(ManaReserve / 6, 1, 4);
-        int amountPerDrop = ManaReserve / drops;
-        int remainder = ManaReserve % drops;
         ManaOwnership dropOwnership = Role is EnemyRole.ManaThief or EnemyRole.EnemyWizard
             ? ManaOwnership.Enemy
             : ManaOwnership.Neutral;
-        for (int i = 0; i < drops; i++)
-        {
-            float angle = Mathf.Tau * i / drops;
-            Vector3 offset = new Vector3(Mathf.Cos(angle), 0.25f, Mathf.Sin(angle)) * 1.2f;
-            var pickup = new ManaPickup
-            {
-                Name = "EnemyManaDrop",
-                ManaAmount = amountPerDrop + (i < remainder ? 1 : 0),
-                Ownership = dropOwnership
-            };
-            GetTree().CurrentScene.AddChild(pickup);
-            pickup.GlobalPosition = GlobalPosition + offset;
-        }
-
+        int amount = ManaReserve;
         ManaReserve = 0;
+        ManaScatter.Spawn(GetParent(), GlobalPosition, amount, dropOwnership, name: "EnemyManaDrop");
     }
 
     private int GetBaseHealth()

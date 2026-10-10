@@ -26,6 +26,8 @@ public partial class ManaLoopChecks : Node3D
             ClearActors();
             CheckBalloonDelivery();
             ClearActors();
+            CheckCastleEconomy();
+            ClearActors();
             CheckBalloonArrival();
             ClearActors();
             CheckBalloonPop();
@@ -149,8 +151,96 @@ public partial class ManaLoopChecks : Node3D
         Check(orb.GlobalPosition.Y < balloon.GlobalPosition.Y, "Cargo sits below balloon mesh");
         balloon.ApplyDamage(balloon.MaxHealth);
         tracker.Refresh();
-        Check(!orb.IsCarried && orb.Ownership == ManaOwnership.Neutral && orb.ManaAmount == 17, "Pop releases intact neutral cargo");
+        Check(orb.ManaAmount == 0 && orb.IsQueuedForDeletion() && balloon.CarriedCount == 0, "Pop consumes cargo exactly once for fragmentation");
         Check(tracker.TotalMana == total && tracker.NeutralLooseMana == 17, "Pop changes ownership without creating mana");
+    }
+
+    private void CheckCastleEconomy()
+    {
+        // Castle first: initial storage must contribute even before any delivery.
+        var castle = AddActor(new CastleKeep { InitialStoredMana = 120, MaxHealth = 100 });
+        var player = AddActor(new CarpetFlightController());
+        var tracker = AddActor(new WorldManaTracker());
+        Check(player.ClaimedMana == 200 && player.CastleManaBonus == 120, "Initial stored mana backs power regardless of spawn order");
+        Check(castle.GrowthStage == 4, "Full intact castle reaches growth stage four");
+        Invoke(player, "RegenerateMana", 100.0f);
+        castle.ApplyDamage(50);
+        tracker.Refresh();
+        Check(castle.Health == 50 && castle.EffectiveStorageCapacity == 60 && castle.StoredMana == 60, "Half health halves capacity and releases excess storage");
+        Check(castle.GrowthStage == 2 && player.ClaimedMana == 140 && player.Mana == 140, "Damage regresses castle growth, power, and current mana cap");
+        Check(tracker.TotalMana == 120 && tracker.NeutralLooseMana == 60, "Castle damage conserves mana and neutralizes spill");
+        Check(castle.DepositMana(10) == 0, "Damage-reduced capacity rejects further deposits when full");
+        int withdrawn = castle.WithdrawMana(15);
+        var cargo = AddActor(new ManaPickup { ManaAmount = withdrawn });
+        tracker.Refresh();
+        Check(withdrawn == 15 && player.ClaimedMana == 125 && tracker.TotalMana == 120, "Withdrawal removes power while transferred physical mana stays accounted");
+        var balloon = AddActor(new ManaBalloon { CarryCapacity = 1 });
+        cargo.ReassignOwnership(ManaOwnership.Player);
+        Invoke(balloon, "Scoop", cargo);
+        Invoke(balloon, "DepositAll");
+        tracker.Refresh();
+        Check(castle.StoredMana == 60 && player.ClaimedMana == 140 && tracker.TotalMana == 120, "Re-delivery restores retained power without permanently stacking it");
+        player.SpendMana(player.Mana);
+        Invoke(player, "RegenerateMana", 1.0f);
+        Check(player.Mana == 5, "Regeneration uses reduced retained-mana power");
+        // Recover a real damage spill through the same bolt/balloon path as play.
+        ManaPickup? spill = null;
+        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+        {
+            if (node is ManaPickup orb && orb.IsAvailable && orb.Name == "CastleManaSpill")
+            {
+                spill = orb;
+                break;
+            }
+        }
+        Check(spill != null, "Damage creates a recoverable loose globe");
+        var withdrawnOrb = AddActor(new ManaPickup { ManaAmount = castle.WithdrawMana(spill!.ManaAmount) });
+        withdrawnOrb.GlobalPosition = new Vector3(100, 10, 100);
+        var bolt = AddActor(new PossessProjectile());
+        bolt.GlobalPosition = spill.GlobalPosition;
+        bolt.Launch(Vector3.Right);
+        bolt._PhysicsProcess(0.1);
+        Check(spill.Ownership == ManaOwnership.Player && bolt.IsQueuedForDeletion(), "Actual possession bolt can reclaim a castle spill");
+        Invoke(balloon, "Scoop", spill);
+        Invoke(balloon, "DepositAll");
+        tracker.Refresh();
+        Check(castle.StoredMana == 60 && player.ClaimedMana == 140 && tracker.TotalMana == 120,
+            "Balloon can re-deliver a reclaimed damage spill up to damaged capacity");
+        castle.ApplyDamage(1000);
+        tracker.Refresh();
+        Check(castle.StoredMana == 0 && castle.EffectiveStorageCapacity == 0 && castle.GrowthStage == 0, "Destruction empties storage and leaves stage-zero ruins");
+        Check(player.ClaimedMana == 80 && player.CastleManaBonus == 0, "Castle destruction removes bonus but preserves starting allowance");
+        Check(tracker.TotalMana == 120 && tracker.NeutralLooseMana == 120, "Destruction releases the entire remaining reserve");
+        castle.ApplyDamage(1000);
+        Check(castle.DepositMana(10) == 0 && castle.WithdrawMana(10) == 0, "Destroyed castle rejects storage transfers");
+        tracker.Refresh();
+        Check(tracker.TotalMana == 120, "Repeated destruction cannot duplicate mana");
+
+        ClearActors();
+        player = AddActor(new CarpetFlightController { MaxClaimedMana = 100 });
+        castle = AddActor(new CastleKeep { InitialStoredMana = 37, ManaStorageCapacity = 37, MaxHealth = 7 });
+        var enemyCastle = AddActor(new CastleKeep { IsPlayerCastle = false, InitialStoredMana = 19, ManaStorageCapacity = 19, MaxHealth = 7 });
+        tracker = AddActor(new WorldManaTracker());
+        Check(player.ClaimedMana == 100 && castle.StoredMana == 37, "Power cap does not discard physical storage (player-first spawn)");
+        castle.ApplyDamage(6);
+        tracker.Refresh();
+        Check(castle.EffectiveStorageCapacity == 6 && castle.StoredMana == 6 && player.ClaimedMana == 86, "Power recomputes below cap after loss rather than subtracting from capped history");
+        enemyCastle.ApplyDamage(1);
+        tracker.Refresh();
+        Check(enemyCastle.StoredMana == 17 && tracker.TotalMana == 56 && tracker.NeutralLooseMana == 33, "Uneven capacities round consistently and rival damage conserves mana");
+        Check(player.ClaimedMana == 86, "Rival storage changes cannot alter player power");
+        enemyCastle.ApplyDamage(100);
+        castle.ApplyDamage(100);
+        tracker.Refresh();
+        Check(tracker.TotalMana == 56 && tracker.NeutralLooseMana == 56, "Remainders survive both castle destruction spills exactly");
+        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+        {
+            if (node is not ManaPickup orb || !orb.IsAvailable) continue;
+            Check(orb.ManaAmount > 0 && orb.Ownership == ManaOwnership.Neutral && !orb.IsCarried && !orb.Freeze,
+                "Castle spill is a positive, possessable physical neutral globe");
+            Check(new Vector2(orb.GlobalPosition.X, orb.GlobalPosition.Z).Length() > 6 + orb.Radius - 0.01f,
+                "Castle spill clears the solid keep footprint");
+        }
     }
 
     private void CheckEnemyTransfers()
