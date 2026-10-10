@@ -64,13 +64,14 @@ Remaining Phase 2 work before signoff:
 
 Goal: make mana control the strategic loop.
 
-Status: first-pass implementation now has verified mana-transfer correctness and a projectile-based possession pass. Mana pickups carry explicit `Neutral`/`Player`/`Enemy` ownership with distinct colors; claimed mana grows spell capacity/regeneration; the well seeds a finite neutral orb field; and RMB `Possess` launches a terrain/water-skimming bolt that converts the first neutral/rival loose globe hit into player-owned mana. Unclaimed globes sit near the surface so they can be hit. Player-owned homing, balloon scoop/dock/delivery, partial deposits, pop spills, rival collection/deposit, exact death drops, and possession movement/hits are covered by a headless Godot regression scene. World-mana accounting includes loose/carried orbs, castle storage, enemy reserves, and physically absorbed player mana once each; initial spell capacity and castle-derived capacity bonuses are not additional world mana. Repeated ecosystem wizard spawning no longer creates fresh reserves. Remaining work is hands-on playtest tuning and gating the win/loss objective on quota state.
+Status: first-pass implementation has verified mana-transfer correctness, grounded amount-scaled physics spheres, same-owner merging, and projectile-based possession. Mana carries explicit `Neutral`/`Player`/`Enemy` ownership with distinct colors; the well seeds a finite neutral orb field; and RMB `Possess` launches a terrain/water-skimming bolt that converts the first neutral/rival loose globe hit into player-owned mana. Per user direction (2026-10-10), the player cannot absorb or attract mana: possessed spheres remain in the world for balloons to scoop and deliver to castles, where deliveries grow spell capacity/regeneration. Player contact/proximity rejection, balloon delivery/overflow/pop, rival transfers, exact death drops, possession, and sphere physics are covered by headless Godot regression scenes. World-mana accounting includes loose/carried spheres, castle storage, and enemy reserves once each; initial spell capacity and castle-derived capacity bonuses are not additional world mana. Repeated ecosystem wizard spawning does not create fresh reserves. Remaining work is hands-on playtest tuning and gating the win/loss objective on quota state.
 
 Core work:
 
 - mana orb drops from enemies
+- grounded, amount-scaled physics spheres with downhill rolling, solid-object collision, and same-ownership contact merging (implemented; runtime tuning pending)
 - mana wells or ambient sources
-- pickup attraction and collection rules
+- possession marks mana for balloon-only player collection; player contact/proximity never collects it
 - spell costs and storage limits
 - mana routing to player castle/storage
 - enemy contesting behavior
@@ -81,6 +82,7 @@ Deliverable: fights happen because mana is valuable and contested.
 
 Remaining Phase 3 work before signoff:
 
+- runtime playtest grounded globe sizes, rolling/friction, merge readability, large-globe balloon cargo, and balloon-only collection pacing; automated real-physics and mana-conservation checks pass
 - runtime playtest possession bolt aiming, surface clearance, hit tolerance, speed/range, cost/cooldown, and ownership colors in Godot
 - runtime playtest balloon scoop/return/dock pacing and pop-spill behavior
 - tune enemy thief/wizard orb acquisition, absorb amounts, and retreat thresholds around the claimed-mana loop

@@ -1,6 +1,5 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
-using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
@@ -64,14 +63,6 @@ public partial class WorldManaTracker : Node
                 case ManaOwnership.Enemy:
                     EnemyControlledMana += pickup.ManaAmount;
                     break;
-            }
-        }
-
-        foreach (Node node in GetTree().GetNodesInGroup("player"))
-        {
-            if (node is CarpetFlightController player)
-            {
-                PlayerControlledMana += player.CollectedWorldMana;
             }
         }
 

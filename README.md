@@ -29,7 +29,9 @@ Open `project.godot` in Godot .NET, build the C# project, and run `scenes/Game.t
 
 The compact HUD shows health/mana, mana-control progress, and selected spells. Press **F3** to show/hide the debug and controls panel (off by default); **PgUp / PgDn** scroll its grouped diagnostics.
 
-**Right-click casts Possess** (2 mana, 0.4-second cooldown). Aim at a mana globe or the ground before it: the cyan bolt flies along the aim direction, then skims terrain/water along a fixed horizontal heading and claims the first neutral/rival loose globe it hits. Misses expire after 120 units or 4 seconds. Unclaimed globes sit near the surface; claimed globes turn cyan and can home to you or be hauled by your balloon. **Tab** cycles the five LMB combat/utility spells. Direct terrain-shaping controls are hidden for now; firebolt impact craters still work.
+**Right-click casts Possess** (2 mana, 0.4-second cooldown). Aim at a mana globe or the ground before it: the cyan bolt flies along the aim direction, then skims terrain/water along a fixed horizontal heading and claims the first neutral/rival loose globe it hits. Misses expire after 120 units or 4 seconds. Claimed globes turn cyan and remain in the world for your balloon to collect and deliver to the castle. The player cannot directly collect mana or attract globes; castle delivery increases spell capacity/regeneration. **Tab** cycles the five LMB combat/utility spells. Direct terrain-shaping controls are hidden for now; firebolt impact craters still work.
+
+Loose mana spheres touch the ground/water, roll downhill, and collide with terrain, castles, and solid objects. Their volume scales with mana amount (10 mana has a 0.45-unit radius; 80 mana has a 0.9-unit radius). Same-color spheres merge on physical contact and retain all their mana; different colors stay separate. Carried spheres suspend physics until released.
 
 From the repository root in PowerShell:
 
@@ -38,7 +40,8 @@ dotnet build MagicCarpetRemastered.sln
 $godot = 'D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_mono_win64_console.exe'
 & $godot --headless --path . --editor --import --quit
 & $godot --headless --path . 'res://tools/ManaLoopChecks.tscn'
+& $godot --headless --path . 'res://tools/ManaPhysicsChecks.tscn'
 & $godot --headless --path . --quit-after 600
 ```
 
-The regression scene checks mana conservation, orb homing, balloon delivery/overflow/pop, rival collection, exact death drops, possession bolt movement/hits/expiry, and possession controls; it exits nonzero on failure. The final command is an arena startup/processing smoke run. Manual playtesting is still needed for control feel, readability, and balance.
+The mana-loop regression scene checks mana conservation, player contact/proximity rejection, balloon delivery/overflow/pop, rival collection, exact death drops, possession bolt movement/hits/expiry, and possession controls. The physics scene advances real solver frames to check ground contact, size changes, rolling, obstacle collisions, same-color/chained merges, cargo release, balloon-only player collection, live terrain deformation, and water support. Both exit nonzero on failure. The final command is an arena startup/processing smoke run. Manual playtesting is still needed for control feel, readability, and balance.

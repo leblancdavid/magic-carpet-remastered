@@ -152,7 +152,7 @@ public partial class ManaBalloon : Node3D
 
     private void Scoop(ManaPickup pickup)
     {
-        if (_carried.Count >= CarryCapacity)
+        if (_carried.Count >= CarryCapacity || !pickup.IsAvailable)
         {
             return;
         }
@@ -197,7 +197,8 @@ public partial class ManaBalloon : Node3D
             pickup.TakeMana(accepted);
             if (pickup.ManaAmount > 0)
             {
-                pickup.SpillAt(_castle.GlobalPosition + new Vector3(GD.Randf() * 2.0f - 1.0f, 2.0f, GD.Randf() * 2.0f - 1.0f));
+                // Release overflow outside the solid keep, not inside its collider.
+                pickup.SpillAt(_castle.GlobalPosition + new Vector3(5.0f + pickup.Radius, 2.0f, GD.Randf() * 2.0f - 1.0f));
                 pickup.ReassignOwnership(ManaOwnership.Neutral);
             }
         }

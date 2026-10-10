@@ -125,7 +125,7 @@ public partial class Hud : CanvasLayer
 
         string details = Section("FLIGHT / PLAYER")
             + $"Camera: {_player.CameraMode}\nSpeed: {_player.Speed:0.0}\nTerrain clearance: {_player.AltitudeAboveTerrain:0.0}\n"
-            + $"Claimed power: {_player.ClaimedMana}\nAbsorbed world mana: {_player.CollectedWorldMana}\n{_player.ShieldStatusText}\n\n"
+            + $"Claimed power: {_player.ClaimedMana}\nMana collection: balloon delivery\n{_player.ShieldStatusText}\n\n"
             + Section("MANA ECONOMY")
             + (_manaTracker == null ? "Tracker unavailable\n" : $"World total: {_manaTracker.TotalMana}\nNeutral: {_manaTracker.NeutralLooseMana}\nPlayer: {_manaTracker.PlayerControlledMana}\nRival: {_manaTracker.EnemyControlledMana}\n")
             + (_well == null ? "Well: unavailable\n\n" : "Well: finite neutral landmark\n\n")

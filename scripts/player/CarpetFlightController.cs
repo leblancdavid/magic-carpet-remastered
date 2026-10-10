@@ -49,7 +49,6 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public int InitialClaimedMana { get; set; } = 80;
     [Export] public int MaxClaimedMana { get; set; } = 400;
     [Export] public float ManaRegenPerClaimedManaPerSecond { get; set; } = 0.04f;
-    [Export] public float ImmediatePickupRefillFraction { get; set; } = 0.3f;
     [Export] public int ManaDepositReserve { get; set; } = 20;
     [Export] public float ManaDepositRadius { get; set; } = 6.0f;
     [Export] public int PrimarySpellManaCost { get; set; } = 5;
@@ -76,7 +75,6 @@ public partial class CarpetFlightController : CharacterBody3D
     public int Mana { get; private set; } = 40;
     public int ClaimedMana { get; private set; }
     // Physical world mana absorbed from orbs; castle storage is tallied separately.
-    public int CollectedWorldMana { get; private set; }
     public bool CanClaimMana => ClaimedMana < MaxClaimedMana;
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
@@ -277,18 +275,6 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
             _possessCooldown = _possessSpell.CooldownSeconds;
             CastPossessSpell();
         }
-    }
-
-    public int AddMana(int amount)
-    {
-        return CollectWorldMana(amount, ImmediatePickupRefillFraction);
-    }
-
-    public int CollectWorldMana(int amount, float immediateRefillFraction = 0.0f)
-    {
-        int accepted = ClaimMana(amount, immediateRefillFraction);
-        CollectedWorldMana += accepted;
-        return accepted;
     }
 
     public int ClaimMana(int amount, float immediateRefillFraction = 0.0f)

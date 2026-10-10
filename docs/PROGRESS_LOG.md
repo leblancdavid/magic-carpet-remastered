@@ -4,6 +4,14 @@
 
 ### Completed
 
+- Removed player mana pickup/homing per user direction: possession marks world mana for balloon collection, and proximity or physical player contact never absorbs any color or grants spell power/refill. All loose ownership colors retain gravity/collisions; balloon castle delivery remains the player-side power-growth route. This supersedes the earlier player-homing/absorption entries below.
+- Removed the unused player pickup APIs/settings, absorbed-world-mana reserve/accounting, and HUD absorbed-mana readout. Updated regression checks and current README/roadmap/learnings for balloon-only collection.
+- Converted loose mana from bobbing `Area3D` pickups into `RigidBody3D` spheres. Initial loose placement uses terrain/water height + sphere radius, removing the hover gap. Gravity, friction, angular rotation, and continuous collision detection let mana roll downhill and collide with castles/world objects; water retains surface support.
+- Made sphere volume and physical mass proportional to mana amount: radius is `0.45 * cbrt(amount / 10)`. Visual mesh and collider resize together after partial transfers and merges.
+- Added deferred same-ownership contact merging with a stable survivor, exact amount conservation, weighted linear momentum, and immediate consumption of the donor. Different colors remain solid separate spheres; carried/consumed orbs cannot merge. Sustained contacts also allow merging after an ownership change.
+- Changed owned-orb homing to physics velocity so solid obstacles block it. Balloon cargo freezes/disables collisions while carried, resumes gravity on release, and castle overflow spills outside the keep collider. Possession sweeps include each globe's current radius.
+- Corrected heightmap triangle winding to Godot's clockwise upward-facing convention. The formerly downward-facing concave collision surface prevented actual rigid-body slope contacts despite the player's height-clearance fallback making terrain appear functional.
+- Added `tools/ManaPhysicsChecks.cs` / `.tscn` for real-solver regression checks; adapted the existing manual mana-loop checks for velocity-driven homing and grounded radius clearance. Documented the new verification command in README.
 - Fixed balloon arrival `LookAt` errors reported during playtesting: orient from the departure position before capped movement reaches the target. Already-arrived and vertical-only moves preserve facing.
 - Replaced instant aim-weighted possession with `PossessProjectile`: a visible cyan bolt flies along the camera aim, then follows terrain/water at fixed clearance and a straight horizontal heading. Short heightmap substeps and swept sphere hits claim the first eligible neutral/rival globe, preserving its mana amount; carried, consumed, and already-owned globes are skipped.
 - Dedicated RMB to Possess (2 mana, 0.4-second cooldown); removed Possess from the five-slot LMB/Tab cycle. Disabled direct terrain casting and 1–4 bindings, hid its gameplay/help hints, and retained the internal shaping tools and firebolt craters.
@@ -24,6 +32,9 @@
 
 ### Verified
 
+- Balloon-only collection pass: `dotnet build MagicCarpetRemastered.sln` passed with zero warnings/errors; 93 mana-loop assertions and 31 real-physics assertions passed. Checks cover all three colors ignoring player proximity/contact, unchanged power/refill, possessed mana falling rather than attracting, and actual balloon pickup/castle delivery preserving physical mana while increasing spell power. A 600-frame arena smoke run completed without gameplay errors; the previously known exit-time ObjectDB leak warning appeared.
+- Mana physics pass: clean `dotnet build MagicCarpetRemastered.sln` (zero warnings/errors), Godot headless editor import, 88 passing mana-loop assertions, and 28 passing real-physics assertions. Covered ground rest/no bobbing, volume/collider scaling and shrinking, physical rotation/rolling on slopes, castle/object collision, neutral/player/enemy merges, chained merges and conservation, ownership-change contact merging, carry/release, actual homing collection and wall blocking, raised terrain, water support, heightmap hills, and crater falls.
+- A 2,400-frame headless main-arena smoke run completed without gameplay or shutdown errors. `git diff --check` passed. Hands-on rolling/size/merge readability and pacing remain to be tuned.
 - Balloon arrival fix: clean `dotnet build MagicCarpetRemastered.sln` (zero warnings/errors) and 88 passing headless mana-loop assertions, including four new exact-arrival/facing/idle/vertical-motion checks. A 2,400-frame headless arena smoke run completed without `LookAt` or gameplay errors; the previously known exit-time ObjectDB leak warning remains.
 - Possession pass: `dotnet build MagicCarpetRemastered.sln` passed with zero warnings/errors; Godot headless editor import passed; `res://tools/ManaLoopChecks.tscn` passed 84 assertions. New checks cover airborne-to-ground transition, straight heading, hill/crater following against the live height grid, neutral/rival first hits, ignored carried/consumed/owned/off-path globes, no repeat claims, range/lifetime expiry, water skim, RMB binding, hidden terrain bindings, five-slot Tab wrap, and cast cost.
 - Possession arena smoke run (`--headless --path . --quit-after 600`) completed without gameplay errors. Visual bolt readability and hands-on aiming still need playtesting.
@@ -36,7 +47,8 @@
 
 ### Current Gaps And Next Recommended Work
 
-- Hands-on Godot playtest: RMB possession bolt aiming (aim down to land before distant globes), speed/range/hit tolerance, owned-orb homing, balloon cargo readability, scoop/return/dock pacing, and rival mana pressure. Horizontal/upward shots remain airborne until they meet a surface or expire; the bolt does not auto-target or steer toward globes.
+- Playtest grounded mana sizes, downhill rolling/friction, cluster merging, balloon hauling of large merged spheres, and possession tolerance. The player now only possesses mana; balloons handle collection and castle delivery.
+- Hands-on Godot playtest: RMB possession bolt aiming (aim down to land before distant globes), speed/range/hit tolerance, balloon-only collection pacing, cargo readability, scoop/return/dock pacing, and rival mana pressure. Horizontal/upward shots remain airborne until they meet a surface or expire; the bolt does not auto-target or steer toward globes.
 - Playtest HUD legibility during flight/combat and at other window sizes. Use `F3` for diagnostics/control help and `PgUp`/`PgDn` to browse the debug panel.
 - Tune the resource loop from playtest feedback, then connect the 50% quota to an explicit win/loss level flow and director response.
 - Initial spell capacity is a prototype starting-power allowance, not physical world mana. Castle deliveries still increase capacity cumulatively; castle damage/withdrawal does not yet reduce that power.

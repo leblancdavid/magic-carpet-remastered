@@ -127,7 +127,8 @@ public partial class PossessProjectile : Node3D
 
             // Segment/sphere entry, rather than endpoint distance or group order.
             Vector3 offset = from - pickup.GlobalPosition;
-            float c = offset.LengthSquared() - HitRadius * HitRadius;
+            float hitRadius = HitRadius + pickup.Radius;
+            float c = offset.LengthSquared() - hitRadius * hitRadius;
             float entry = 0;
             if (c > 0)
             {

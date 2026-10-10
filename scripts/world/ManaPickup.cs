@@ -1,6 +1,5 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
-using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
@@ -11,43 +10,57 @@ public enum ManaOwnership
     Enemy
 }
 
-public partial class ManaPickup : Area3D
+public partial class ManaPickup : RigidBody3D
 {
-    [Export] public int ManaAmount { get; set; } = 10;
+    private int _manaAmount = 10;
+    [Export] public int ManaAmount
+    {
+        get => _manaAmount;
+        set
+        {
+            _manaAmount = Mathf.Max(0, value);
+            UpdateSize();
+        }
+    }
     [Export] public ManaOwnership Ownership { get; set; } = ManaOwnership.Neutral;
-    [Export] public float CollectionRadius { get; set; } = 1.4f;
-    [Export] public float PlayerHomingRadius { get; set; } = 8.0f;
-    [Export] public float HomingSpeed { get; set; } = 13.0f;
-    [Export] public float BobHeight { get; set; } = 0.5f;
-    [Export] public float BobSpeed { get; set; } = 1.7f;
+    // Constant mana density: eight times the mana doubles the radius.
+    public float Radius => 0.45f * Mathf.Pow(Mathf.Max(1, ManaAmount) / 10.0f, 1.0f / 3.0f);
 
     public Node3D? Hauler { get; private set; }
     public bool IsCarried => Hauler != null;
     public bool IsAvailable => ManaAmount > 0 && !IsQueuedForDeletion() && !IsCarried;
 
-    private CarpetFlightController? _player;
     private HeightmapArena? _arena;
     private MeshInstance3D _mesh = null!;
     private StandardMaterial3D _material = null!;
     private Vector3 _carryOffset;
-    private Vector3 _homePosition;
-    private float _bobPhase;
-    private bool _homePositionInitialized;
+    private SphereShape3D _sphere = null!;
+    private SphereMesh _sphereMesh = null!;
+    private bool _surfaceInitialized;
 
     public override void _Ready()
     {
         AddToGroup("loose_mana");
-        BodyEntered += OnBodyEntered;
+        ContactMonitor = true;
+        MaxContactsReported = 16;
+        ContinuousCd = true;
+        CanSleep = false; // React to terrain edits even when previously resting.
+        LinearDamp = 0.15f;
+        AngularDamp = 0.2f;
+        PhysicsMaterialOverride = new PhysicsMaterial { Friction = 0.35f, Bounce = 0.05f };
+        BodyEntered += body => Callable.From(() => OnBodyEntered(body)).CallDeferred();
 
+        _sphere = new SphereShape3D { Radius = Radius };
         var collision = new CollisionShape3D
         {
-            Shape = new SphereShape3D { Radius = 0.8f }
+            Shape = _sphere
         };
         AddChild(collision);
 
+        _sphereMesh = new SphereMesh { Radius = Radius, Height = Radius * 2 };
         _mesh = new MeshInstance3D
         {
-            Mesh = new SphereMesh { Radius = 0.45f, Height = 0.9f }
+            Mesh = _sphereMesh
         };
         _material = new StandardMaterial3D
         {
@@ -57,6 +70,7 @@ public partial class ManaPickup : Area3D
         AddChild(_mesh);
 
         ApplyOwnershipVisual();
+        UpdateSize();
         SetPhysicsProcess(true);
     }
 
@@ -67,53 +81,66 @@ public partial class ManaPickup : Area3D
             return;
         }
 
-        float deltaF = (float)delta;
-
-        if (!_homePositionInitialized)
-        {
-            _homePosition = GlobalPosition;
-            _homePositionInitialized = true;
-        }
-
         if (IsCarried && Hauler != null)
         {
             GlobalPosition = Hauler.GlobalPosition + _carryOffset;
             return;
         }
 
-        _bobPhase += deltaF * BobSpeed;
-        if (Ownership != ManaOwnership.Player)
+        _arena ??= GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        if (!_surfaceInitialized)
         {
-            _arena ??= GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
             if (_arena != null)
             {
-                _homePosition.Y = Mathf.Max(_arena.HeightAt(_homePosition.X, _homePosition.Z), _arena.WaterHeight) + 1.3f;
+                Vector3 position = GlobalPosition;
+                position.Y = SurfaceHeight(position) + Radius;
+                GlobalPosition = position;
             }
+            _surfaceInitialized = true;
         }
-        float bob = Mathf.Sin(_bobPhase) * BobHeight * 0.5f;
-        GlobalPosition = _homePosition + Vector3.Up * bob;
 
-        _player ??= GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
-        if (Ownership != ManaOwnership.Player || _player == null)
+        // Also check sustained contacts: ownership can change while two orbs
+        // are already touching, without a second BodyEntered signal.
+        foreach (Node3D body in GetCollidingBodies())
         {
-            return;
+            Callable.From(() => OnBodyEntered(body)).CallDeferred();
         }
+    }
 
-        Vector3 toPlayer = _player.GlobalPosition - GlobalPosition;
-        float distance = toPlayer.Length();
-        if (distance <= CollectionRadius)
+    public override void _IntegrateForces(PhysicsDirectBodyState3D state)
+    {
+        if (IsCarried || !IsAvailable || _arena == null) return;
+        Transform3D transform = state.Transform;
+        float terrain = _arena.HeightAt(transform.Origin.X, transform.Origin.Z);
+        bool onWater = _arena.WaterHeight >= terrain;
+        float floor = Mathf.Max(terrain, _arena.WaterHeight) + Radius;
+        // Leave ordinary terrain contacts to the solver. Snapping away tiny
+        // penetrations every tick cancels gravity before it can produce rolling.
+        if (transform.Origin.Y < floor - (onWater ? 0 : 0.15f))
         {
-            TakeMana(_player.CollectWorldMana(ManaAmount));
-
-            return;
+            // Water has no collider. The live height grid also protects against
+            // terrain being raised before its deferred collision rebuild.
+            transform.Origin = new Vector3(transform.Origin.X, floor, transform.Origin.Z);
+            state.Transform = transform;
+            Vector3 velocity = state.LinearVelocity;
+            if (velocity.Y < 0) velocity.Y = 0;
+            state.LinearVelocity = velocity;
         }
+    }
 
-        if (distance <= PlayerHomingRadius)
-        {
-            Vector3 nextPosition = GlobalPosition.MoveToward(_player.GlobalPosition, HomingSpeed * deltaF);
-            _homePosition += nextPosition - GlobalPosition;
-            GlobalPosition = nextPosition;
-        }
+    private float SurfaceHeight(Vector3 position)
+    {
+        return Mathf.Max(_arena!.HeightAt(position.X, position.Z), _arena.WaterHeight);
+    }
+
+    private void UpdateSize()
+    {
+        if (_sphere == null) return;
+        _sphere.Radius = Radius;
+        _sphereMesh.Radius = Radius;
+        _sphereMesh.Height = Radius * 2;
+        Mass = Mathf.Max(0.1f, ManaAmount / 10.0f);
+        Inertia = Vector3.Zero; // Recalculate for the new sphere and mass.
     }
 
     public int TakeMana(int amount)
@@ -135,21 +162,32 @@ public partial class ManaPickup : Area3D
 
     public void BeginCarry(Node3D hauler, Vector3 carryOffset)
     {
+        if (!IsAvailable) return;
         Hauler = hauler;
         _carryOffset = carryOffset;
+        Freeze = true;
+        CollisionLayer = 0;
+        CollisionMask = 0;
+        LinearVelocity = Vector3.Zero;
+        AngularVelocity = Vector3.Zero;
     }
 
     public void EndCarry()
     {
         Hauler = null;
+        Freeze = false;
+        CollisionLayer = 1;
+        CollisionMask = 1;
+        GravityScale = 1;
     }
 
     public void SpillAt(Vector3 position)
     {
-        Hauler = null;
-        _homePosition = position;
+        EndCarry();
         GlobalPosition = position;
-        _homePositionInitialized = true;
+        LinearVelocity = Vector3.Zero;
+        AngularVelocity = Vector3.Zero;
+        _surfaceInitialized = true; // Spilled cargo falls from its release height.
     }
 
     public void ReassignOwnership(ManaOwnership ownership)
@@ -158,8 +196,24 @@ public partial class ManaPickup : Area3D
         ApplyOwnershipVisual();
     }
 
-    private void OnBodyEntered(Node3D body)
+    private void OnBodyEntered(Node body)
     {
+        if (!IsInstanceValid(body) || !IsAvailable) return;
+        if (body is ManaPickup other && other.IsAvailable && Ownership == other.Ownership)
+        {
+            // Stable survivor avoids two reciprocal contact callbacks merging
+            // the same amounts twice. Deferred callbacks may refer to freed nodes.
+            ManaPickup survivor = GetInstanceId() < other.GetInstanceId() ? this : other;
+            ManaPickup consumed = survivor == this ? other : this;
+            if ((long)survivor.ManaAmount + consumed.ManaAmount > int.MaxValue) return;
+            float oldRadius = survivor.Radius;
+            Vector3 momentum = survivor.LinearVelocity * survivor.ManaAmount + consumed.LinearVelocity * consumed.ManaAmount;
+            int amount = consumed.TakeMana(consumed.ManaAmount);
+            survivor.ManaAmount += amount;
+            survivor.LinearVelocity = momentum / survivor.ManaAmount;
+            survivor.GlobalPosition += Vector3.Up * (survivor.Radius - oldRadius);
+            return;
+        }
         if (body is SimpleMonster monster && monster.Health > 0 && Ownership == ManaOwnership.Neutral && IsAvailable)
         {
             monster.AbsorbMana(TakeMana(ManaAmount));

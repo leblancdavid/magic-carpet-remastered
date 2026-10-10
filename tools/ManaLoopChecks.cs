@@ -22,7 +22,7 @@ public partial class ManaLoopChecks : Node3D
     {
         try
         {
-            CheckCollection();
+            CheckPlayerCannotCollect();
             ClearActors();
             CheckBalloonDelivery();
             ClearActors();
@@ -61,41 +61,36 @@ public partial class ManaLoopChecks : Node3D
         }
     }
 
-    private void CheckCollection()
+    private void CheckPlayerCannotCollect()
     {
         var player = AddActor(new CarpetFlightController());
         player.GlobalPosition = new Vector3(0, 20, 0);
-        var orb = AddActor(new ManaPickup { Ownership = ManaOwnership.Player, ManaAmount = 10 });
-        orb.GlobalPosition = player.GlobalPosition + new Vector3(6, 0, 0);
         var tracker = AddActor(new WorldManaTracker());
-        int total = tracker.TotalMana;
         int claimed = player.ClaimedMana;
-        orb._PhysicsProcess(1.0 / 60);
-        float firstDistance = orb.GlobalPosition.DistanceTo(player.GlobalPosition);
-        orb._PhysicsProcess(1.0 / 60);
-        Check(orb.GlobalPosition.DistanceTo(player.GlobalPosition) < firstDistance, "Orb homing accumulates");
-        for (int i = 0; i < 120 && orb.IsAvailable; i++)
+        int mana = player.Mana;
+        foreach (ManaOwnership owner in new[] { ManaOwnership.Neutral, ManaOwnership.Player, ManaOwnership.Enemy })
         {
+            var orb = AddActor(new ManaPickup { Ownership = owner, ManaAmount = 10 });
+            orb.GlobalPosition = player.GlobalPosition + new Vector3(6, 0, 0);
+            Vector3 position = orb.GlobalPosition;
             orb._PhysicsProcess(1.0 / 60);
+            Check(orb.GlobalPosition.IsEqualApprox(position) && orb.LinearVelocity.IsZeroApprox(), $"{owner} mana is not attracted to player");
+            orb.GlobalPosition = player.GlobalPosition;
+            orb._PhysicsProcess(1.0 / 60);
+            Invoke(orb, "OnBodyEntered", player);
+            Check(orb.IsAvailable && orb.ManaAmount == 10, $"Player proximity/contact cannot absorb {owner} mana");
+            Check(player.ClaimedMana == claimed && player.Mana == mana, "Player contact grants no spell power or refill");
         }
         tracker.Refresh();
-        Check(player.CollectedWorldMana == 10 && player.ClaimedMana == claimed + 10, "Pickup transfers to held mana and power");
-        Check(tracker.TotalMana == total && tracker.PlayerControlledMana == 10, "Collected orb stays counted exactly once");
-        Check(orb.ManaAmount == 0 && !orb.IsAvailable && orb.TakeMana(10) == 0, "Consumed orb cannot transfer twice");
+        int total = tracker.TotalMana;
+        Check(total == 30 && tracker.PlayerControlledMana == 10, "Uncollected owned mana stays counted in world exactly once");
         player.SpendMana(5);
         Invoke(player, "RegenerateMana", 1.0f);
         tracker.Refresh();
         Check(tracker.TotalMana == total, "Spell spending and regeneration do not change world mana");
 
-        var capped = AddActor(new ManaPickup { Ownership = ManaOwnership.Player, ManaAmount = 9 });
-        capped.GlobalPosition = player.GlobalPosition;
-        player.ClaimMana(player.MaxClaimedMana - player.ClaimedMana - 3);
-        tracker.Refresh();
-        total = tracker.TotalMana;
-        capped._PhysicsProcess(1.0 / 60);
-        tracker.Refresh();
-        Check(capped.ManaAmount == 6 && player.CollectedWorldMana == 13, "Player capacity leaves unaccepted orb mana");
-        Check(tracker.TotalMana == total, "Partial player collection conserves mana");
+        var consumed = AddActor(new ManaPickup { ManaAmount = 9 });
+        Check(consumed.TakeMana(9) == 9 && !consumed.IsAvailable && consumed.TakeMana(9) == 0, "Consumed orb cannot transfer twice");
     }
 
     private void CheckBalloonDelivery()
@@ -121,7 +116,7 @@ public partial class ManaLoopChecks : Node3D
             Check(tracker.TotalMana == total, "Scoop/transit/deposit conserves mana");
         }
         Check(castle.StoredMana == 19 && balloon.CarriedCount == 0, "Multiple orbs scoop, dock, and deposit without enumeration errors");
-        Check(player.ClaimedMana == claimed + 19 && player.CollectedWorldMana == 0, "Castle delivery grows power without held-mana double counting");
+        Check(player.ClaimedMana == claimed + 19, "Castle delivery grows power without double counting world mana");
 
         castle.DepositMana(castle.ManaStorageCapacity - castle.StoredMana - 4);
         var partial = AddActor(new ManaPickup { Ownership = ManaOwnership.Player, ManaAmount = 10 });
@@ -243,10 +238,10 @@ public partial class ManaLoopChecks : Node3D
         arena.FlattenTerrain(Vector3.Zero, 100000, 0);
         // Add farther orb first to catch group-order selection, then skip owned,
         // carried, spent, and off-path orbs before hitting the nearer rival.
-        var farther = AddActor(new ManaPickup { ManaAmount = 9, BobHeight = 0 });
+        var farther = AddActor(new ManaPickup { ManaAmount = 9 });
         farther.GlobalPosition = new Vector3(9, 12, 0);
         farther._PhysicsProcess(0);
-        Check(Mathf.Abs(farther.GlobalPosition.Y - 1.3f) < 0.001f, "Unclaimed floating mana settles to terrain for possession");
+        Check(Mathf.Abs(farther.GlobalPosition.Y - farther.Radius) < 0.001f, "Unclaimed mana touches terrain for possession");
         var owned = AddActor(new ManaPickup { Ownership = ManaOwnership.Player });
         owned.GlobalPosition = new Vector3(1, 0.9f, 0);
         var carried = AddActor(new ManaPickup());
