@@ -75,7 +75,7 @@ public partial class SpellProjectile : Area3D
         float stepDistance = GlobalPosition.DistanceTo(previous);
         foreach (Node node in GetTree().GetNodesInGroup("balloon"))
         {
-            if (node is not ManaBalloon balloon)
+            if (node is not ManaBalloon balloon || balloon.UsePlayerMana)
             {
                 continue;
             }

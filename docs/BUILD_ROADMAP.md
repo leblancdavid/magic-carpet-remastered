@@ -84,8 +84,8 @@ Status: first-pass implementation has verified mana-transfer correctness, ground
 Core work:
 
 - mana orb drops from enemies
-- intrinsic neutral-creature reserves and outward many-small-sphere destruction bursts; mana is counted from spawn and conserved through transfers/deaths, while recurring neutral spawns introduce new supply
-- grounded, amount-scaled physics spheres with downhill rolling, solid-object collision, and same-ownership contact merging (implemented; runtime tuning pending)
+- intrinsic neutral-creature reserves and outward randomly sized destruction fragments with exact-total accounting; mana is counted from spawn and conserved through transfers/deaths, while recurring neutral spawns introduce new supply
+- dramatically value-scaled physics spheres at one-third the accepted overall size, with downhill rolling, solid-object collision, visible six-unit same-owner attraction, and three-second supported-contact merging followed by 0.9-second smooth mesh/collider growth; shared rolling/solver jitter tolerated and destruction bursts remain non-overlapping (size ratios/clustering accepted; latest scale/animation/random-fragment tuning awaits hands-on acceptance)
 - mana wells or ambient sources
 - possession marks mana for balloon-only player collection; player contact/proximity never collects it
 - spell costs and storage limits

@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 using MagicCarpetRemastered.Scripts.Enemies;
 
 namespace MagicCarpetRemastered.Scripts.World;
@@ -23,8 +24,17 @@ public partial class ManaPickup : RigidBody3D
         }
     }
     [Export] public ManaOwnership Ownership { get; set; } = ManaOwnership.Neutral;
-    // Constant mana density: eight times the mana doubles the radius.
-    public float Radius => 0.45f * Mathf.Pow(Mathf.Max(1, ManaAmount) / 10.0f, 1.0f / 3.0f);
+    // Deliberately exaggerate resource value rather than using constant density.
+    public float TargetRadius => (0.35f / 3) * Mathf.Pow(Mathf.Max(1, ManaAmount), 0.65f);
+    public float Radius => _sphere?.Radius ?? TargetRadius;
+    public bool IsGrowing { get; private set; }
+    public const float MergeGrowthSeconds = 0.6f;
+    public const float MergeContactSeconds = 1.25f;
+    private const float MergeRelativeSpeed = 0.8f;
+    private const float ContactSkin = 0.12f;
+    private const float AttractionGap = 6.0f;
+    private const float AttractionAcceleration = 3.0f;
+    private const float AttractionSpeed = 1.5f;
 
     public Node3D? Hauler { get; private set; }
     public bool IsCarried => Hauler != null;
@@ -38,6 +48,10 @@ public partial class ManaPickup : RigidBody3D
     private SphereMesh _sphereMesh = null!;
     private bool _surfaceInitialized;
     private float _mergeGraceRemaining;
+    private Dictionary<ulong, float> _contactSeconds = new();
+    private Vector3 _attractionAcceleration;
+    private float _growthStartRadius;
+    private float _growthElapsed;
 
     public override void _Ready()
     {
@@ -84,6 +98,7 @@ public partial class ManaPickup : RigidBody3D
         {
             return;
         }
+        UpdateMergeGrowth((float)delta);
 
         if (IsCarried && Hauler != null)
         {
@@ -101,17 +116,81 @@ public partial class ManaPickup : RigidBody3D
             _surfaceInitialized = true;
         }
 
-        // Also check sustained contacts: ownership can change while two orbs
-        // are already touching, without a second BodyEntered signal.
-        foreach (Node3D body in GetCollidingBodies())
+        _attractionAcceleration = Vector3.Zero;
+        bool grounded = IsGrounded();
+        var contacts = new Dictionary<ulong, float>();
+        if (grounded)
         {
-            Callable.From(() => OnBodyEntered(body)).CallDeferred();
+            Vector3 up = _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
+            float nearestGap = float.MaxValue;
+            Vector3 attractionDirection = Vector3.Zero;
+            foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+            {
+                if (node is not ManaPickup other || other == this || !other.IsAvailable
+                    || other.Ownership != Ownership) continue;
+                Vector3 offset = other.GlobalPosition - GlobalPosition;
+                float gap = offset.Length() - Radius - other.Radius;
+                if (gap > AttractionGap || !other.IsGrounded()) continue;
+                // Support/contact jitter and shared downhill motion must not
+                // continually reset the timer. Fast relative impacts still wait.
+                if (!IsGrowing && !other.IsGrowing && gap <= ContactSkin && GetInstanceId() < other.GetInstanceId()
+                    && LinearVelocity.DistanceTo(other.LinearVelocity) <= MergeRelativeSpeed)
+                {
+                    ulong id = other.GetInstanceId();
+                    float seconds = _contactSeconds.GetValueOrDefault(id) + (float)delta;
+                    contacts[id] = seconds;
+                    if (seconds >= MergeContactSeconds)
+                        Callable.From(() => MergeWith(other)).CallDeferred();
+                }
+                if (gap < nearestGap)
+                {
+                    nearestGap = gap;
+                    attractionDirection = offset.Slide(up).Normalized();
+                }
+            }
+            // Nearest-neighbor attraction avoids cancellation inside dense fields.
+            // Limit only speed toward the neighbor, not unrelated downhill rolling.
+            float approachSpeed = LinearVelocity.Dot(attractionDirection);
+            if (nearestGap < float.MaxValue && approachSpeed < AttractionSpeed)
+                _attractionAcceleration = attractionDirection * Mathf.Min(
+                    AttractionAcceleration * (1 - 0.75f * Mathf.Clamp(nearestGap / AttractionGap, 0, 1)),
+                    (AttractionSpeed - approachSpeed) / (float)delta);
         }
+
+        // Only the stable survivor tracks each pair. Losing contact, changing
+        // ownership, or fast relative motion/falling resets the contact dwell.
+        _contactSeconds = contacts;
+    }
+
+    private bool IsGrounded()
+    {
+        if (!IsAvailable || _mergeGraceRemaining > 0) return false;
+        Vector3 up = _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
+        if (Mathf.Abs(LinearVelocity.Dot(up)) > 1.5f) return false;
+        foreach (Node3D body in GetCollidingBodies())
+            if (body is StaticBody3D) return true;
+        if (_arena != null) return _arena.Clearance(GlobalPosition) <= Radius + 0.35f;
+        // Resting solver manifolds can briefly omit the floor while spheres
+        // press against each other. Verify support instead of losing the dwell.
+        using var ray = PhysicsRayQueryParameters3D.Create(GlobalPosition,
+            GlobalPosition - up * (Radius + 0.35f), CollisionMask);
+        ray.Exclude = new Godot.Collections.Array<Rid> { GetRid() };
+        using var hit = GetWorld3D().DirectSpaceState.IntersectRay(ray);
+        return hit.Count > 0 && hit["collider"].AsGodotObject() is StaticBody3D;
+    }
+
+    private bool CanMergeWith(ManaPickup other)
+    {
+        return IsInstanceValid(other) && !IsGrowing && !other.IsGrowing && IsGrounded() && other.IsGrounded()
+            && Ownership == other.Ownership
+            && LinearVelocity.DistanceTo(other.LinearVelocity) <= MergeRelativeSpeed;
     }
 
     public override void _IntegrateForces(PhysicsDirectBodyState3D state)
     {
-        if (IsCarried || !IsAvailable || _arena == null) return;
+        if (IsCarried || !IsAvailable) return;
+        state.LinearVelocity += _attractionAcceleration * state.Step;
+        if (_arena == null) return;
         if (_arena.IsSpherical)
         {
             Vector3 position = state.Transform.Origin;
@@ -120,9 +199,10 @@ public partial class ManaPickup : RigidBody3D
             float clearance = _arena.Clearance(position);
             float radial = state.LinearVelocity.Dot(up);
             Transform3D spherical = state.Transform;
-            if (clearance > _arena.MaxFlightClearance)
+            float maximumClearance = Mathf.Max(Radius, _arena.MaxFlightClearance);
+            if (clearance > maximumClearance)
             {
-                spherical.Origin = _arena.OnSurface(position, _arena.MaxFlightClearance);
+                spherical.Origin = _arena.OnSurface(position, maximumClearance);
                 state.LinearVelocity -= up * Mathf.Max(0, radial);
                 state.Transform = spherical;
             }
@@ -140,7 +220,7 @@ public partial class ManaPickup : RigidBody3D
         float terrain = _arena.HeightAt(transform.Origin.X, transform.Origin.Z);
         bool onWater = _arena.WaterHeight >= terrain;
         float floor = Mathf.Max(terrain, _arena.WaterHeight) + Radius;
-        float ceiling = _arena.SurfaceHeight(transform.Origin.X, transform.Origin.Z) + _arena.MaxFlightClearance;
+        float ceiling = _arena.SurfaceHeight(transform.Origin.X, transform.Origin.Z) + Mathf.Max(Radius, _arena.MaxFlightClearance);
         if (transform.Origin.Y > ceiling)
         {
             transform.Origin = new Vector3(transform.Origin.X, ceiling, transform.Origin.Z);
@@ -168,12 +248,37 @@ public partial class ManaPickup : RigidBody3D
 
     private void UpdateSize()
     {
+        IsGrowing = false;
         if (_sphere == null) return;
-        _sphere.Radius = Radius;
-        _sphereMesh.Radius = Radius;
-        _sphereMesh.Height = Radius * 2;
+        SetRadius(TargetRadius);
+        UpdateMass();
+    }
+
+    private void SetRadius(float radius)
+    {
+        _sphere.Radius = radius;
+        _sphereMesh.Radius = radius;
+        _sphereMesh.Height = radius * 2;
+        Inertia = Vector3.Zero;
+    }
+
+    private void UpdateMass()
+    {
         Mass = Mathf.Max(0.1f, ManaAmount / 10.0f);
         Inertia = Vector3.Zero; // Recalculate for the new sphere and mass.
+    }
+
+    private void UpdateMergeGrowth(float delta)
+    {
+        if (!IsGrowing) return;
+        float oldRadius = Radius;
+        _growthElapsed = Mathf.Min(MergeGrowthSeconds, _growthElapsed + delta);
+        float t = _growthElapsed / MergeGrowthSeconds;
+        float smooth = t * t * (3 - 2 * t);
+        SetRadius(Mathf.Lerp(_growthStartRadius, TargetRadius, smooth));
+        // Lift gradually with the collider so the growing globe stays grounded.
+        if (!IsCarried) GlobalPosition += (_arena?.UpAt(GlobalPosition) ?? Vector3.Up) * (Radius - oldRadius);
+        if (_growthElapsed >= MergeGrowthSeconds) IsGrowing = false;
     }
 
     public int TakeMana(int amount)
@@ -196,6 +301,8 @@ public partial class ManaPickup : RigidBody3D
     public void BeginCarry(Node3D hauler, Vector3 carryOffset)
     {
         if (!IsAvailable) return;
+        _contactSeconds.Clear();
+        _attractionAcceleration = Vector3.Zero;
         Hauler = hauler;
         _carryOffset = carryOffset;
         Freeze = true;
@@ -216,6 +323,8 @@ public partial class ManaPickup : RigidBody3D
 
     public void SpillAt(Vector3 position)
     {
+        _contactSeconds.Clear();
+        _attractionAcceleration = Vector3.Zero;
         EndCarry();
         GlobalPosition = position;
         LinearVelocity = Vector3.Zero;
@@ -232,6 +341,7 @@ public partial class ManaPickup : RigidBody3D
 
     public void ReassignOwnership(ManaOwnership ownership)
     {
+        _contactSeconds.Clear();
         Ownership = ownership;
         ApplyOwnershipVisual();
     }
@@ -239,26 +349,27 @@ public partial class ManaPickup : RigidBody3D
     private void OnBodyEntered(Node body)
     {
         if (!IsInstanceValid(body) || !IsAvailable) return;
-        if (body is ManaPickup other && other.IsAvailable && Ownership == other.Ownership
-            && _mergeGraceRemaining <= 0 && other._mergeGraceRemaining <= 0)
-        {
-            // Stable survivor avoids two reciprocal contact callbacks merging
-            // the same amounts twice. Deferred callbacks may refer to freed nodes.
-            ManaPickup survivor = GetInstanceId() < other.GetInstanceId() ? this : other;
-            ManaPickup consumed = survivor == this ? other : this;
-            if ((long)survivor.ManaAmount + consumed.ManaAmount > int.MaxValue) return;
-            float oldRadius = survivor.Radius;
-            Vector3 momentum = survivor.LinearVelocity * survivor.ManaAmount + consumed.LinearVelocity * consumed.ManaAmount;
-            int amount = consumed.TakeMana(consumed.ManaAmount);
-            survivor.ManaAmount += amount;
-            survivor.LinearVelocity = momentum / survivor.ManaAmount;
-            survivor.GlobalPosition += (_arena?.UpAt(survivor.GlobalPosition) ?? Vector3.Up) * (survivor.Radius - oldRadius);
-            return;
-        }
         if (body is SimpleMonster monster && monster.Health > 0 && Ownership == ManaOwnership.Neutral && IsAvailable)
         {
             monster.AbsorbMana(TakeMana(ManaAmount));
         }
+    }
+
+    private void MergeWith(ManaPickup other)
+    {
+        if (!CanMergeWith(other) || !_contactSeconds.TryGetValue(other.GetInstanceId(), out float seconds)
+            || seconds < MergeContactSeconds || GlobalPosition.DistanceTo(other.GlobalPosition) > Radius + other.Radius + ContactSkin
+            || (long)ManaAmount + other.ManaAmount > int.MaxValue) return;
+        _growthStartRadius = Radius;
+        Vector3 momentum = LinearVelocity * ManaAmount + other.LinearVelocity * other.ManaAmount;
+        int amount = other.TakeMana(other.ManaAmount);
+        // Accounting commits once; only physical/visual growth is animated.
+        _manaAmount += amount;
+        UpdateMass();
+        _growthElapsed = 0;
+        IsGrowing = true;
+        LinearVelocity = momentum / ManaAmount;
+        _contactSeconds.Clear();
     }
 
     private void ApplyOwnershipVisual()

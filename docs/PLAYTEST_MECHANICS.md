@@ -5,11 +5,19 @@ Current defaults for the playable arena (2026-10-10).
 ## Loot And Burst Spillage
 
 - Swarms, ground beasts, ranged casters, and castle attackers carry an intrinsic neutral mana value, currently 12 each. Killing one releases that reserve as neutral globes. Legacy monsters retain their configured starting reserve. Thieves and rival wizards release only the mana they actually acquired, with rival ownership.
-- Enemy deaths, castle spills, and balloon destruction share a physical scatter burst. Normally each fragment contains 1–2 mana; count grows with total amount. The burst is capped at 128 bodies for unusually large reserves, distributing every integer remainder without losing or creating mana.
-- Fragments launch in varied horizontal directions at 6–9.9 units/second, with 5–7 units/second upward velocity. They preserve airborne release height, fall naturally, and ignore same-owner merging for 0.8 seconds so the burst spreads before recombining.
+- Enemy deaths, castle spills, and balloon destruction share a physical scatter burst. Fragment count remains `ceil(total / 2)`, capped at 128 bodies. Random integer cuts partition the reserve into positive, varied amounts that sum exactly to the original total. Equal partitions are adjusted by transferring one mana between two fragments when variation is possible. One/two-mana drops necessarily produce one ball; larger drops mix small and larger fragments.
+- Fragments launch in varied horizontal directions at **2–3.2 units/second**, with **2.5–3.3 units/second** upward velocity. They preserve airborne release height and fall naturally. Golden-angle placement checks sphere clearance to prevent enlarged fragments overlapping and causing a second solver-driven explosion. The initial 0.8-second merge grace remains, followed by the settled-contact rules below.
 - Castle fragments start beyond the keep collider. Balloon pops debit/consume carried globes and fragment their total into new neutral spheres exactly once. Ordinary partial-delivery overflow still releases its remaining cargo intact.
 - RMB possession and balloon-only collection remain the recovery path.
 - The tracker distinguishes neutral loose mana from mana still inside neutral creatures. Recurring neutral spawns introduce their configured reserve into the world; conservation applies to subsequent transfers/deaths, not across resource-bearing spawns. Wizard respawns do not introduce physical mana.
+
+## Mana Size, Magnetism, And Merging
+
+- Target sphere radius is **`(0.35 / 3) * pow(amount, 0.65)`**: 1 mana = 0.117, 2 = 0.183, 10 = 0.521, 80 = 2.014. All radii/diameters are one-third the previously accepted size, with the same dramatic ratios: eight times the mana gives about **3.86 times the radius**. Mesh and collider scale together; physical mass still follows mana amount.
+- Nearby **same-owner** grounded spheres attract across surface gaps of up to **6 units**. Acceleration is capped at **3 units/second²**, falling to 25% at the edge of range; added speed toward the neighbor is limited to **1.5 units/second**. Each ball selects its nearest eligible neighbor so opposing pulls do not cancel in dense fields. Attraction is tangent to the surface, preserves gravity/solid collisions, and works while rolling.
+- Merging requires **3 continuous seconds** touching while both spheres are supported and their **relative linear speed is at most 0.8 units/second**. Shared rolling and spin do not reset progress. A **0.12-unit contact skin** and terrain-height/support-ray fallback tolerate solver contact jitter. Separation, fast relative impacts/falling, carry, or mismatched ownership resets progress; a growing survivor starts fresh timers. Airborne scatter retains its initial grace period.
+- Merges conserve exact mana, ownership, and amount-weighted linear momentum. Different ownership colors do not attract or combine; player proximity still has no attraction/collection effect.
+- On merge, the survivor commits the combined mana immediately but grows from its current radius to its new target over **0.9 seconds**, using smooth easing. The mesh/collider resize together and the center lifts gradually to retain ground contact. Further merges wait until growth finishes, then begin a fresh contact delay. Growth continues while hauled, pauses with gameplay, and direct amount changes/partial transfers immediately resize to the remaining value.
 
 ## Castle Auto-Repair
 
@@ -36,7 +44,7 @@ Current defaults for the playable arena (2026-10-10).
 
 ## Suggested Hands-On Pass
 
-1. Kill a neutral creature and watch the small globes burst outward, fall, and settle. Possess a few and follow your balloon's collection.
+1. Kill a neutral creature and watch differently sized small fragments burst gently, fall, and cluster close to the death location. Watch same-color spheres visibly pull together and combine after three seconds of sustained contact, including when rolling together; the survivor should smoothly grow rather than snap. Compare the smaller overall scale and growing reserves against fresh fragments, then possess a few and follow your balloon's collection.
 2. Attack the rival castle enough to spill its reserve. Stop attacking for five seconds and watch its health recover. Claim the spill while it repairs.
 3. Kill the rival wizard while its castle is intact. Confirm the countdown and its return at that castle after ten seconds.
 4. Allow your wizard to die with your castle intact. Confirm automatic recovery without resetting the arena or mana economy.

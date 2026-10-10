@@ -81,9 +81,8 @@ public partial class PlaytestMechanicsChecks : Node3D
         foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
         {
             if (node is not ManaPickup orb || !orb.IsAvailable) continue;
-            Check(orb.ManaAmount >= 1 && orb.ManaAmount <= 2 && orb.LinearVelocity.Y > 0
-                && new Vector2(orb.LinearVelocity.X, orb.LinearVelocity.Z).Length() >= 5.99f,
-                $"Neutral death fragments are small and launch upward/outward (amount {orb.ManaAmount}, velocity {orb.LinearVelocity})");
+            Check(orb.ManaAmount >= 1 && orb.ManaAmount <= 9 && orb.LinearVelocity.IsZeroApprox(),
+                $"Neutral death fragments retain randomized amounts and drop without launch impulse (amount {orb.ManaAmount}, velocity {orb.LinearVelocity})");
         }
         var rival = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard });
         Check(rival.ManaReserve == 0, "Wizard respawn template has no minted reserve");
@@ -126,30 +125,82 @@ public partial class PlaytestMechanicsChecks : Node3D
         arena.FlattenTerrain(Vector3.Zero, 100000, 0);
         ManaScatter.Spawn(this, new Vector3(0, 4, 0), 61);
         var fragments = new List<ManaPickup>();
-        float nearestStart = float.MaxValue;
+        var releasePositions = new Dictionary<ManaPickup, Vector3>();
+        float maximumStartDistance = 0;
         foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
         {
             if (node is not ManaPickup orb) continue;
             fragments.Add(orb);
-            nearestStart = Mathf.Min(nearestStart, new Vector2(orb.GlobalPosition.X, orb.GlobalPosition.Z).Length());
+            Check(orb.LinearVelocity.IsZeroApprox(), "Mana drops start without outward or upward launch velocity");
+            releasePositions[orb] = orb.GlobalPosition;
+            maximumStartDistance = Mathf.Max(maximumStartDistance, new Vector2(orb.GlobalPosition.X, orb.GlobalPosition.Z).Length());
         }
         Check(fragments.Count == 31, "61 mana fragments into 31 small spheres with exact remainders");
+        var values = new HashSet<int>();
+        int initialTotal = 0;
+        foreach (ManaPickup orb in fragments)
+        {
+            values.Add(orb.ManaAmount);
+            initialTotal += orb.ManaAmount;
+            Check(orb.ManaAmount > 0, "Random fragments never contain zero mana");
+        }
+        Check(values.Count > 1 && initialTotal == 61, "Random-sized fragments vary while summing to the exact reserve");
         var tracker = Add(new WorldManaTracker());
         await Frames(20);
         int airborne = 0;
-        float farthest = 0;
+        bool fallingStraight = true;
         foreach (var orb in fragments)
         {
             if (!IsInstanceValid(orb) || !orb.IsAvailable) continue;
-            if (orb.GlobalPosition.Y > 4.5f) airborne++;
-            farthest = Mathf.Max(farthest, new Vector2(orb.GlobalPosition.X, orb.GlobalPosition.Z).Length());
+            if (orb.GlobalPosition.Y > orb.Radius + 0.5f) airborne++;
+            Vector3 departure = releasePositions[orb];
+            fallingStraight &= new Vector2(orb.GlobalPosition.X - departure.X, orb.GlobalPosition.Z - departure.Z).Length() < 0.05f
+                && orb.GlobalPosition.Y < departure.Y - 0.2f && orb.LinearVelocity.Y < -1;
         }
         tracker.Refresh();
-        Check(airborne > 10 && farthest > nearestStart + 2, "Real solver sends fragments through outward ballistic arcs instead of snapping to ground");
+        Check(airborne > 10 && fallingStraight && maximumStartDistance < 3.5f,
+            "Compact mana cluster falls straight down under gravity without outward scatter");
         Check(tracker.TotalMana == 61, "Scatter conserves mana during flight and contacts");
         await Frames(220);
         tracker.Refresh();
         Check(tracker.TotalMana == 61 && tracker.NeutralLooseMana == 61, "Settling/merging conserves all scattered mana");
+        await ClearActors();
+        arena = Add(new HeightmapArena { CellsPerSide = 40, CellSize = 2, HeightScale = 0, WaterHeight = -20 });
+        arena.FlattenTerrain(Vector3.Zero, 100000, 0);
+        ManaScatter.Spawn(this, new Vector3(0, 4, 0), 513);
+        fragments.Clear();
+        bool separated = true;
+        int total = 0;
+        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+        {
+            if (node is not ManaPickup orb || !orb.IsAvailable) continue;
+            foreach (ManaPickup previous in fragments)
+                separated &= orb.GlobalPosition.DistanceTo(previous.GlobalPosition) >= orb.Radius + previous.Radius;
+            fragments.Add(orb);
+            total += orb.ManaAmount;
+        }
+        Check(fragments.Count == 128 && total == 513, "Large bursts retain body cap and exact remainders");
+        Check(separated, "Enlarged dense fragments start without overlap-driven solver explosions");
+        await ClearActors();
+        foreach (int reserve in new[] { 1, 2, 3, 4, 10, 12, 17, 128, 257 })
+        {
+            ManaScatter.Spawn(this, Vector3.Zero, reserve);
+            int sum = 0;
+            int count = 0;
+            values.Clear();
+            foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+            {
+                if (node is not ManaPickup orb || !orb.IsAvailable) continue;
+                sum += orb.ManaAmount;
+                count++;
+                values.Add(orb.ManaAmount);
+                Check(orb.ManaAmount > 0, "Partition boundary cases contain only positive mana");
+            }
+            Check(sum == reserve && count == Mathf.Min(128, (reserve - 1) / 2 + 1),
+                $"Random partition preserves exact {reserve}-mana total and body cap");
+            Check(reserve < 3 || values.Count > 1, $"{reserve}-mana burst has distinct fragment sizes when possible");
+            await ClearActors();
+        }
     }
 
     private async Task CheckLiveRespawns()

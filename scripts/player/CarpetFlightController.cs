@@ -139,7 +139,7 @@ private float _feedbackTimer;
     private float _damageInvulnerabilityTimer;
     private float _manaRegenAccumulator;
     private float _possessCooldown;
-    private bool _firstPersonCamera;
+    private bool _firstPersonCamera = true;
     private TerrainSpellMode _terrainSpellMode = TerrainSpellMode.Crater;
     private QuickSpellSlot _selectedQuickSpell = QuickSpellSlot.Firebolt;
     private SpellDefinition _primarySpell = null!;
@@ -214,6 +214,7 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
         _aliveCollisionLayer = CollisionLayer;
         _aliveCollisionMask = CollisionMask;
         _arena?.ClampFlightBody(this, MinimumAltitude);
+        UpdateCamera(1.0f);
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -228,6 +229,7 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
         if (@event.IsActionPressed("toggle_camera"))
         {
             _firstPersonCamera = !_firstPersonCamera;
+            _carpetVisual.Visible = !_firstPersonCamera;
             StatusMessage = $"Camera: {CameraMode}";
             _feedbackTimer = 1.2f;
         }
@@ -862,7 +864,7 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
 
         foreach (Node node in GetTree().GetNodesInGroup("balloon"))
         {
-            if (node is not ManaBalloon balloon || balloon.GlobalPosition.DistanceTo(center) > radius)
+            if (node is not ManaBalloon balloon || balloon.UsePlayerMana || balloon.GlobalPosition.DistanceTo(center) > radius)
             {
                 continue;
             }
@@ -959,6 +961,7 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
 
     private void UpdateCamera(float delta)
     {
+        _carpetVisual.Visible = !_firstPersonCamera;
         Vector3 targetPosition = _firstPersonCamera
             ? new Vector3(0.0f, 0.25f, -0.45f)
             : new Vector3(0.0f, 2.1f, Mathf.Lerp(7.2f, 9.4f, Mathf.Clamp(Speed / MoveSpeed, 0.0f, 1.0f)));

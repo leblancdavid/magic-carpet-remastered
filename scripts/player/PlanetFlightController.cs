@@ -13,7 +13,7 @@ public partial class PlanetFlightController : Node3D
     public float SurfaceTravel { get; private set; }
     public float Speed => _tangentVelocity.Length();
     public float UpDegreesPerSecond => Mathf.RadToDeg(Speed / (Radius + Clearance));
-    public bool FirstPerson { get; private set; }
+    public bool FirstPerson { get; private set; } = true;
     public Vector3 LocalUp => PlanetGeometry.Up(GlobalPosition, Center);
     public Vector3 Gravity => PlanetGeometry.Gravity(GlobalPosition, Center, 9.8f);
 
@@ -65,7 +65,11 @@ public partial class PlanetFlightController : Node3D
             _forward = _forward.Rotated(_up, -mouse.Relative.X * 0.0025f);
             _pitch = Mathf.Clamp(_pitch - mouse.Relative.Y * 0.0025f, -1.1f, 1.1f);
         }
-        if (@event.IsActionPressed("toggle_camera")) FirstPerson = !FirstPerson;
+        if (@event.IsActionPressed("toggle_camera"))
+        {
+            FirstPerson = !FirstPerson;
+            _visual.Visible = !FirstPerson;
+        }
         if (@event.IsActionPressed("cast_mobility") && _dashCooldown <= 0 && Input.MouseMode == Input.MouseModeEnum.Captured)
         {
             _dashTimer = 0.4f;

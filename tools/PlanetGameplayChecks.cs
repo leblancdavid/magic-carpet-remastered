@@ -155,8 +155,15 @@ public partial class PlanetGameplayChecks : Node3D
             _player.GlobalPosition = _arena.OnSurface(home.GlobalPosition + home.GlobalBasis.X * 12, 6);
 
             ManaPickup mergeA = Add(new ManaPickup { ManaAmount = 5, Ownership = ManaOwnership.Player }, Offset(underside, 30, 800, Vector3.Forward), 1);
-            ManaPickup mergeB = Add(new ManaPickup { ManaAmount = 7, Ownership = ManaOwnership.Player }, Offset(underside, 30.6f, 800, Vector3.Forward), 1);
-            await Frames(90);
+            ManaPickup mergeB = Add(new ManaPickup { ManaAmount = 7, Ownership = ManaOwnership.Player }, Offset(underside, 36, 800, Vector3.Forward), 1);
+            float clusterDistance = mergeA.GlobalPosition.DistanceTo(mergeB.GlobalPosition);
+            await Frames(60);
+            Check(mergeA.GlobalPosition.DistanceTo(mergeB.GlobalPosition) < clusterDistance - 0.5f,
+                "Radial surface magnetism visibly closes a gap on the underside");
+            await Frames(30);
+            Check(IsInstanceValid(mergeA) && IsInstanceValid(mergeB) && mergeA.IsAvailable && mergeB.IsAvailable,
+                "Underside mana waits for sustained settled contact");
+            await Frames(600);
             Check(LooseTotal() == 22, "Real radial-physics merging conserves mana");
             Check(!IsInstanceValid(mergeA) || !IsInstanceValid(mergeB) || mergeA.IsQueuedForDeletion() || mergeB.IsQueuedForDeletion(), "Same-owner orbs merge on underside");
 
@@ -172,6 +179,23 @@ public partial class PlanetGameplayChecks : Node3D
             bolt._PhysicsProcess(0.6);
             Check(target.Ownership == ManaOwnership.Player && target.ManaAmount == 9, "Possession traverses cube seam and preserves amount");
             target.QueueFree();
+
+            int beforeDrop = LooseTotal();
+            var existingMana = GetTree().GetNodesInGroup("loose_mana").OfType<ManaPickup>().ToHashSet();
+            Vector3 dropOrigin = _arena.OnSurface(_arena.PlanetCenter
+                + Offset(underside, -35, 800, Vector3.Forward) * 800, 6);
+            ManaScatter.Spawn(_room, dropOrigin, 12, name: "UndersideDropCheck");
+            var deathDrops = GetTree().GetNodesInGroup("loose_mana").OfType<ManaPickup>()
+                .Where(orb => !existingMana.Contains(orb)).ToArray();
+            Check(deathDrops.Length == 6 && deathDrops.All(orb => orb.LinearVelocity.IsZeroApprox()),
+                "Underside death drop starts as six randomized fragments without launch impulses");
+            var departures = deathDrops.ToDictionary(orb => orb, orb => orb.GlobalPosition);
+            await Frames(12);
+            Check(deathDrops.All(orb => orb.LinearVelocity.Dot(_arena.UpAt(orb.GlobalPosition)) < -1
+                && orb.LinearVelocity.Slide(_arena.UpAt(orb.GlobalPosition)).Length() < 0.1f
+                && _arena.Clearance(orb.GlobalPosition) < _arena.Clearance(departures[orb]) - 0.1f),
+                "Death mana falls radially inward without tangential scatter on the globe underside");
+            Check(LooseTotal() == beforeDrop + 12, "Radial straight-down death drop preserves the exact mana total");
 
             foreach (Node node in GetTree().GetNodesInGroup("loose_mana")) if (node is ManaPickup orb) orb.QueueFree();
             await Frames(2);
@@ -265,8 +289,9 @@ public partial class PlanetGameplayChecks : Node3D
             Check(home.StoredMana + LooseTotal() == economicTotal && _player.ClaimedMana == 140, "Radial castle spill conserves resources and reduces current power");
             foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
                 if (node is ManaPickup orb && !orb.IsQueuedForDeletion())
-                    Check(orb.LinearVelocity.Dot(_arena.UpAt(orb.GlobalPosition)) > 4 && _arena.Clearance(orb.GlobalPosition) >= orb.Radius,
-                        "Castle fragments launch outward from underside surface");
+                    Check(orb.LinearVelocity.IsZeroApprox()
+                        && _arena.Clearance(orb.GlobalPosition) >= orb.Radius,
+                        "Castle fragments drop without launch impulse and retain underside surface clearance");
             home._PhysicsProcess(6);
             Check(home.Health == 73 && home.StoredMana == 60, "Quiet castle repairs health without recreating spilled mana");
 
