@@ -25,7 +25,9 @@ Godot is available locally at `D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\
 
 ## Run And Verify
 
-Explore the island outskirts for five labeled **gold spell beacons**. Fly within four horizontal units to discover a rank-II upgrade for Firebolt, Arcane Burst, Mana Shield, Wind Dash, or Guardian. Upgrades improve spell effects at the existing mana costs/cooldowns, survive wizard respawn, and reset with **R**. The selected spell shows its rank and **F3** lists progression. See `docs/SPELL_PROGRESSION.md` for upgrade values and playtest steps.
+Explore five **gold spell beacons** for rank-II upgrades. On the globe they accompany Windward Ridge, Wellfield, Tidal Reach, distant Redglass Spire and far-side Starfall Observatory; the flat reference retains outskirts placement. Fly within four surface units to collect. Costs/cooldowns remain, upgrades survive wizard respawn, and **R** resets them. **F3** lists progression. See `docs/SPELL_PROGRESSION.md`.
+
+The globe's **All-Seeing Eye** local radar shows forward-up navigation and waypoint distance/bearing. Press **M** for the paused world survey; left click a marker or surface position to set a waypoint, right click/Delete to clear, and M/Esc to resume. Sites begin as anonymous hints and reveal names within 65 m. Owned mana/allied balloons are tracked globally; neutral/rival mana and threats reveal locally. Balloon search reaches the full globe, with longer distant delivery trips. See `docs/STRATEGIC_NAVIGATION.md` for layout, visibility rules and controls.
 
 Open `project.godot` in Godot .NET, build the C# project, and press **F5 (Run Project)** to launch `scenes/PlanetGame.tscn`. **F2** pauses and opens planet-size selection; **Start new planet** resets the match at that size. **R** restarts at the selected size. Selection lasts for the application session. Running `scenes/Game.tscn` directly opens the flat-island reference arena. Current controls are listed in `docs/PROGRESS_LOG.md`.
 
@@ -57,6 +59,7 @@ $godot = 'D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_m
 & $godot --headless --path . 'res://tools/WizardFlightChecks.tscn'
 & $godot --headless --path . 'res://tools/PlaytestMechanicsChecks.tscn'
 & $godot --headless --path . 'res://tools/SpellProgressionChecks.tscn'
+& $godot --headless --path . 'res://tools/StrategicNavigationChecks.tscn'
 & $godot --headless --path . 'res://tools/PlanetFlightChecks.tscn'
 & $godot --headless --path . 'res://tools/PlanetGameplayChecks.tscn'
 & $godot --headless --path . --quit-after 1200

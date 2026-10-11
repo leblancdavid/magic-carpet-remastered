@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Player;
@@ -15,6 +16,7 @@ public partial class Game : Node3D
     private CastleKeep _playerCastle = null!;
     private CastleKeep _enemyCastle = null!;
     private CarpetFlightController _player = null!;
+    private readonly List<WorldLandmark> _landmarks = new();
 
     public override void _UnhandledInput(InputEvent @event)
     {
@@ -37,6 +39,7 @@ public partial class Game : Node3D
         SpellImpactPool.Prepare(this);
         AddChild(new GameAudio { Name = "GameAudio" });
         CreateArena();
+        if (UseSphericalWorld) CreateLandmarks();
         CreateManaWell();
         CreateCastles();
         CreatePlayer();
@@ -48,11 +51,17 @@ public partial class Game : Node3D
         AddChild(new WorldManaTracker { Name = "WorldManaTracker" });
         AddChild(new Hud { Name = "Hud" });
         if (UseSphericalWorld) AddChild(new PlanetSettings { Name = "PlanetSettings" });
+        if (UseSphericalWorld)
+        {
+            var navigation = new WorldNavigation { Name = "WorldNavigation" };
+            AddChild(navigation);
+            AddChild(new TacticalMap { Name = "TacticalMap", Navigation = navigation });
+        }
         _arena.RefreshPlanetDetail();
         ProcessMode = ProcessModeEnum.Pausable;
         foreach (Node child in GetChildren())
         {
-            child.ProcessMode = child is Hud or PlanetSettings ? ProcessModeEnum.Always : ProcessModeEnum.Pausable;
+            child.ProcessMode = child is Hud or PlanetSettings or TacticalMap ? ProcessModeEnum.Always : ProcessModeEnum.Pausable;
         }
     }
 
@@ -140,7 +149,7 @@ public partial class Game : Node3D
             Name = "PlayerBalloon",
             UsePlayerMana = true,
             Position = AboveTerrain(UseSphericalWorld ? -130 : -16, 4, 5),
-            MaxSeekRadius = UseSphericalWorld ? 200 : 46
+            MaxSeekRadius = UseSphericalWorld ? Mathf.Pi * _arena.PlanetRadius : 46
         });
 
         AddChild(new ManaBalloon
@@ -148,12 +157,28 @@ public partial class Game : Node3D
             Name = "EnemyBalloon",
             UsePlayerMana = false,
             Position = AboveTerrain(UseSphericalWorld ? 130 : 16, -8, 5),
-            MaxSeekRadius = UseSphericalWorld ? 200 : 46
+            MaxSeekRadius = UseSphericalWorld ? Mathf.Pi * _arena.PlanetRadius : 46
         });
     }
 
     private void CreateManaPickups()
     {
+        if (UseSphericalWorld)
+        {
+            foreach (WorldLandmark landmark in _landmarks)
+            {
+                if (landmark.SiteId is not ("ridge" or "wellfield" or "shore")) continue;
+                for (int i = 0; i < 4; i++)
+                {
+                    float angle = Mathf.Tau * i / 4;
+                    Vector3 position = landmark.GlobalPosition + landmark.GlobalBasis * new Vector3(Mathf.Cos(angle) * 12, 0, Mathf.Sin(angle) * 12);
+                    var orb = new ManaPickup { Name = "SiteMana", ManaAmount = 12, Ownership = ManaOwnership.Neutral };
+                    orb.Position = _arena.OnSurface(position, orb.Radius);
+                    AddChild(orb);
+                }
+            }
+            return;
+        }
         Vector3[] wellClusters =
         {
             AboveTerrain(-10.0f, -3.0f, 4.0f),
@@ -198,6 +223,21 @@ public partial class Game : Node3D
 
     private void CreateSpellDiscoveries()
     {
+        if (UseSphericalWorld)
+        {
+            var sites = PlanetLayout.Sites(_arena);
+            for (int i = 0; i < sites.Length; i++)
+            {
+                WorldLandmark landmark = _landmarks[i];
+                AddChild(new SpellDiscovery
+                {
+                    Name = $"SpellDiscovery{sites[i].SpellName.Replace(" ", "")}",
+                    SpellId = sites[i].SpellId, SpellName = sites[i].SpellName,
+                    Position = _arena.OnSurface(landmark.GlobalPosition + landmark.GlobalBasis * Vector3.Right * 15, 6)
+                });
+            }
+            return;
+        }
         (string Id, string Title, float X, float Z)[] discoveries =
         {
             ("firebolt", "Firebolt", -42, -20),
@@ -235,6 +275,21 @@ public partial class Game : Node3D
             GetTree().Paused = true;
         };
         AddChild(objective);
+    }
+
+    private void CreateLandmarks()
+    {
+        foreach (var site in PlanetLayout.Sites(_arena))
+        {
+            var landmark = new WorldLandmark
+            {
+                Name = $"Landmark{site.Id}", SiteId = site.Id, Title = site.Title, Description = site.Description,
+                Habitat = site.Habitat, LandmarkColor = site.Color,
+                Position = _arena.PlanetCenter + site.Up * _arena.PlanetRadius
+            };
+            AddChild(landmark);
+            _landmarks.Add(landmark);
+        }
     }
 
     private void AddPillar(Vector3 position)

@@ -47,6 +47,7 @@ public partial class EnemyEcosystemDirector : Node
     private float _spawnTimer;
     private float _intensity = 0.25f;
     private readonly int[] _activeByRole = new int[6];
+    private WorldLandmark? _habitat;
 
     public override void _Ready()
     {
@@ -100,13 +101,24 @@ public partial class EnemyEcosystemDirector : Node
         {
             Name = $"{role}Enemy",
             Role = role,
-            Position = AboveTerrain(zone.Position.X, zone.Position.Z, role is Enemies.EnemyEcosystemEnemy.EnemyRole.GroundBeast or Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker ? 1.1f : 5.5f)
+            Position = SpawnPosition(zone, role)
         };
-        GetTree().CurrentScene.AddChild(enemy);
+        GetParent().AddChild(enemy);
     }
 
     private SpawnZone SelectSpawnZone()
     {
+        _habitat = null;
+        if (_arena?.IsSpherical == true && GetTree().GetFirstNodeInGroup("player") is Node3D player)
+        {
+            float nearest = 120;
+            foreach (Node node in GetTree().GetNodesInGroup("world_landmark"))
+            {
+                if (node is not WorldLandmark landmark || landmark.IsQueuedForDeletion()) continue;
+                float distance = _arena.SurfaceDistance(player.GlobalPosition, landmark.GlobalPosition);
+                if (distance < nearest) { nearest = distance; _habitat = landmark; }
+            }
+        }
         float pressure = Mathf.Clamp(_intensity, 0.0f, 1.0f);
         if (pressure < 0.35f)
         {
@@ -133,6 +145,8 @@ public partial class EnemyEcosystemDirector : Node
                 _ => Enemies.EnemyEcosystemEnemy.EnemyRole.ManaThief
             };
         }
+
+        if (_habitat != null && GD.Randf() < 0.65f) return _habitat.Habitat;
 
         float zonePressure = Mathf.Clamp(_intensity + zone.IntensityBias, 0.0f, 1.0f);
         if (zone.Name == "Wellfield")
@@ -244,5 +258,18 @@ public partial class EnemyEcosystemDirector : Node
         }
         float height = _arena == null ? 0.0f : _arena.HeightAt(x, z);
         return new Vector3(x, height + clearance, z);
+    }
+
+    private Vector3 SpawnPosition(SpawnZone zone, Enemies.EnemyEcosystemEnemy.EnemyRole role)
+    {
+        float clearance = role is Enemies.EnemyEcosystemEnemy.EnemyRole.GroundBeast or Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker ? 1.1f : 5.5f;
+        if (_arena != null && _habitat != null)
+        {
+            float angle = GD.Randf() * Mathf.Tau;
+            float radius = 24 + GD.Randf() * 16;
+            Vector3 offset = _habitat.GlobalBasis * new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
+            return _arena.OnSurface(_habitat.GlobalPosition + offset, clearance);
+        }
+        return AboveTerrain(zone.Position.X, zone.Position.Z, clearance);
     }
 }

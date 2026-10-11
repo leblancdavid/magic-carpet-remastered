@@ -71,7 +71,7 @@ public partial class ManaWell : StaticBody3D
                 ManaAmount = amountPerOrb,
                 Ownership = ManaOwnership.Neutral
             };
-            GetTree().CurrentScene.AddChild(orb);
+            GetParent().AddChild(orb);
             orb.GlobalPosition = GlobalPosition + GlobalBasis * (offset + Vector3.Up * PickupSpawnHeight);
         }
     }

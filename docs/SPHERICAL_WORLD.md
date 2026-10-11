@@ -16,11 +16,11 @@ User direction (2026-10-10): 800 radius felt good during flight playtesting. Ado
 - Amount-scaled physical mana spheres, ownership colors, real contacts/rolling, same-owner merging, collision with world/castles, and ballistic death/spill fragments. Player contact never collects mana.
 - Possession starts along the aim direction, transitions to surface skimming, transports its tangent heading around the globe, and preserves mana amounts when claiming a globe.
 - Upright player/rival castles, retained-storage-derived power/regeneration, growth/ruins, reduced capacity/spills on damage, and delayed surviving-castle repairs.
-- Both balloon haulers use curved surface routes, radial hover/scoop/dock positions, locally oriented cargo offsets, delivery, overflow, and pop spills. Their spherical seek radius is 200 units to serve the wider strategic layout; flat-arena tuning remains 46.
+- Both balloon haulers use curved surface routes, radial hover/scoop/dock positions, local cargo offsets, delivery, overflow, and pop spills. Spherical seek range now covers half the circumference to reach remote claimed drops; distant hauling takes longer. Flat-arena tuning remains 46.
 - All existing enemy roles and the designated rival wizard use tangent steering and radial altitude. Creature spawns follow the player into distant regions. Surface distance replaces horizontal X/Z checks. Ranged spherical attacks check line of sight and preserve their full aim direction.
 - Ten-second castle-backed wizard respawns, rival-defeat reset on respawn, victory requiring rival castle plus wizard elimination, home-castle defeat, result pause/restart, HUD/debug controls, VFX, and placeholder audio.
 
-The starting strategic area remains compact rather than filling the entire globe with combat. Castles are approximately 280–290 surface units apart across the approved radii; the player starts near home. The well, neutral fields, pillars, and exploration beacons occupy the surrounding region. Terrain extends around the complete globe, and ecosystem pressure continues near a travelling player. Size currently changes geometry, not participant count or victory rules.
+The starting duel remains compact: castles are approximately 280–290 surface units apart and the player starts near home. Three resource/encounter fields branch around that loop, while Redglass Spire and far-side Starfall Observatory provide distant upgrades. Landmarks bias regional encounter roles. All-Seeing Eye radar and the M-key world survey provide discovery/ownership markers and waypoints. See `docs/STRATEGIC_NAVIGATION.md` for layout, navigation and long-route tuning. Size changes geometry/travel distance, not participant count or victory rules.
 
 ## Terrain Implementation
 

@@ -1,0 +1,66 @@
+# Strategic Planet Layout And Navigation
+
+## First playable milestone (2026-10-10)
+
+User approved proceeding with planet layout and tactical navigation after the combat optimization pass. The spherical match now has five authored landmarks, distributed upgrades, regional encounter bias, a local radar and a world survey with waypoints. There is still one designated rival and the castle-plus-wizard elimination objective. Layout, exploration reward pacing and long-haul logistics await hands-on acceptance.
+
+## Layout
+
+| Site | Role | Upgrade | Placement |
+| --- | --- | --- | --- |
+| Windward Ridge | Swarm habitat; four 12-mana neutral globes | Firebolt II | Home-side approach; projected coordinates -140 / -100 |
+| Wellfield | Contested central well; thieves; four 12-mana globes plus six 10-mana well globes | Arcane Burst II | Starting hemisphere center |
+| Tidal Reach | Beast habitat; four 12-mana neutral globes | Mana Shield II | Branch from central/rival approach; projected coordinates 40 / 155 |
+| Redglass Spire | Caster habitat; distant exploration | Wind Dash II | 0.9 radians from starting hemisphere center |
+| Starfall Observatory | Far-side caster habitat and exploration | Guardian II | 2.25 radians from starting hemisphere center |
+
+The initial loose field has **204 mana in 18 physical globes**, redistributed rather than filling the globe with active bodies. Castle and creature reserves are separate. Outer sites have no seeded loose field; their reward is the existing rank-II upgrade, and combat can introduce creature drops. All spells still start at rank I; costs, upgrade effects, respawn retention and restart reset remain as before.
+
+First three sites have similar strategic travel distances across presets. Outer sites use angular placement so travel distance grows with planet size. At 24-unit/second cruise, the observatory is roughly a 40–110-second direct trip from the player start across the presets. Castles retain the previous approximately 280–290-unit duel route.
+
+Each landmark uses three original primitive stone columns, a colored crystal and label. Columns are visual silhouettes, not new solid obstacles. The gold spell beacon is fifteen surface units beside the site. Landmark/beacon placement follows terrain/water with radial orientation and live deformation.
+
+Within 120 surface units of a site, the ecosystem favors its role for 65% of non-initial selections and spawns in a local 24–40-unit ring. Existing role caps, ten-active-enemy limit, pressure ramp and one-rival rule remain. Initial waves retain mixed roles; away from sites, roaming-player pressure still applies. Persistent territorial populations/despawning are not implemented yet.
+
+Spherical balloon search covers half the circumference, allowing possession anywhere to trigger a curved collection route. Speed, cargo capacity and docking remain. One balloon can be absent for minutes on a far-side route: tune this tradeoff before adding more haulers/outposts. Flat-arena hauling retains its old range.
+
+## Controls and information
+
+- Heading-relative **220 m local radar** sits below vitals. Forward is up; distant castles/landmarks/upgrades sit on the rim. Gold target line/ring and text give surface distance and left/right bearing. Default guidance is home.
+- **M** opens/closes the world survey; **Esc** closes. The match pauses and cursor releases while open; closing restores the prior mouse mode. It cannot open over a size menu or terminal result.
+- **Left click** a marker or surface location for a static waypoint (twelve-pixel marker snap). **Right click / Delete** clears it, returning guidance to home. Waypoints do not automate flight or command balloons.
+- **R** restarts with the map open. Input is modal: close the map before F2/F3/F6. It cannot steal/unpause another menu's pause.
+- Castles show known locations plus health/storage/ruins. Owned loose mana and allied balloon are globally tracked. Balloon cargo uses a count rather than duplicate loose dots.
+- Neutral/rival loose mana, rival balloons and threats reveal within **120 surface units**. Pending/carried/consumed globes are excluded. Ownership colors update when claiming, and deleted actors disappear.
+- Five sites begin as anonymous survey hints. Map name/habitat is retained after a living player approaches within **65 surface units**. Nearby upgrades reveal within 120 m; a visited site's uncollected upgrade remains charted afterward. Collected upgrades disappear; landmarks remain.
+- Restart clears chart knowledge/waypoints/upgrades. Wizard respawn retains them.
+
+## Geometry and performance
+
+The full survey is a starting-hemisphere-centered equirectangular map of both hemispheres with horizontal wrapping. Inverse projection converts clicks to surface directions; heading differences wrap at the seam. The local radar projects angular surface distance into the player's tangent frame, working on the underside and through pole travel.
+
+The 192×96 terrain survey texture is generated once during loading; it is an initial coarse survey, not a live crater display. Marker snapshots refresh at five Hz and UI redraws at ten Hz, including paused feedback. Opening the map never regenerates terrain meshes or the noise atlas.
+
+Well seeds/director spawns attach to their owning world parent instead of whichever scene is `CurrentScene` during construction. This prevents dynamic scene tests/restarts leaving actors outside their world with removed player/castle references.
+
+## Verification and acceptance
+
+```powershell
+dotnet build MagicCarpetRemastered.sln
+$godot = 'D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_mono_win64_console.exe'
+& $godot --headless --path . 'res://tools/StrategicNavigationChecks.tscn'
+& $godot --headless --path . 'res://tools/PlanetGameplayChecks.tscn'
+& $godot --headless --path . 'res://tools/SpellProgressionChecks.tscn'
+```
+
+Navigation checks cover projection/seam/pole geometry, multi-hemisphere radar, all-radius layouts, actual grounded resource totals, ownership/local visibility, pending/carried exclusion, chart persistence, far-side upgrades, actual curved distant hauling, habitat spawn placement, waypoint snapping, viewport-routed M/Esc/F2 input, pause/mouse ownership, and restart. Optional rendered capture: append `-- --capture=<absolute-existing-directory>/survey.png` without `--headless`; it also saves `survey_radar.png`.
+
+Hands-on next:
+
+1. On Medium, select Windward Ridge with M, fly there and collect Firebolt II. Check bearing/distance, landmark naming and upgrade disappearance.
+2. Claim fields and watch ownership/hauling. Compare home, Wellfield and Tidal routes; contest resources with thieves/rival.
+3. Visit spire/observatory on Small and XL. Judge reward/travel pacing and balloon absence after claiming a remote kill drop.
+4. Cross survey edges and globe poles in both cameras; compare radar bearing with actual flight.
+5. Check map opening during combat, free-surface waypoints/clear, F2 size changes, R resets and complete-match respawn/victory behavior. Keep watching impact/kill/possession hitches during longer sessions.
+
+After acceptance: tune routes/habitats/logistics and spell assignment/progression, then broaden realm/campaign structure. Participant expansion, networking, richer biomes and original art/audio remain later work/decisions.

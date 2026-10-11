@@ -18,7 +18,9 @@ User-approved direction: spherical planets with radial gravity and surface-relat
 
 Playable conversion implemented: default `scenes/PlanetGame.tscn` includes patch-based procedural spherical terrain/oceans/deformation/collision, upright carpet flight/cameras, radial physical mana/merging/spills, curved possession and balloon routes, castles/storage/power/repair, all spells/discoveries, enemy roles/rival wizard, respawns, objectives, HUD/VFX/audio, and F2 size selection. `PlanetFlightTest.tscn` remains a diagnostic lab with the same presets. Geometry and integrated gameplay regressions pass; hands-on tuning of the converted full loop remains pending. See `docs/SPHERICAL_WORLD.md`.
 
-Active next priorities: integrated spherical playtest across the four sizes → longer-session deformation/LOD/collision profiling → distributed strategic content and participant-count decisions → remaining spell/campaign/presentation work. The original phase statuses below retain their historical prototype scope and tuning backlog; their shared systems now also run on the globe.
+Active next priorities: integrated spherical playtest across the four sizes, including strategic layout/map and combat spike acceptance → route/habitat/long-haul tuning and longer-session profiling → remaining spell/campaign/presentation work and participant-count decisions. The original phase statuses below retain their historical prototype scope and tuning backlog; their shared systems now also run on the globe.
+
+Strategic navigation milestone (2026-10-10): implemented five named resource/exploration landmarks, regional encounter bias, three resource fields, and relocated rank-II upgrades including distant/far-side rewards. Added All-Seeing Eye local radar, paused M-key whole-world survey, exploration/ownership visibility, static waypoints with surface-distance/bearing guidance, and globe-wide balloon reach for remote claimed drops. One rival and existing elimination/respawn rules remain. Implementation is regression-verified; hands-on pacing/readability acceptance is pending. See `docs/STRATEGIC_NAVIGATION.md`.
 
 Combat hitch follow-up (2026-10-10): first optimization pass adds pooled impact/death/possession effects, shared low-poly mana/combat resources, spatial mana/deformation lookups, localized vertex resampling, and frame-budgeted terrain rebuilds. Next priority is rendered Medium/XL combat spike profiling and user acceptance; atomic collision rebuilds and immediate fragment-body creation remain candidates if hitches persist. See `docs/COMBAT_PERFORMANCE.md`.
 
@@ -212,7 +214,7 @@ Deliverable: several levels connected by progression and escalating challenge.
 
 Goal: establish the remastered identity.
 
-Status: presentation remains placeholder-based. A compact edge HUD now shows gameplay essentials, with diagnostics and control help in a formatted `F3` debug panel hidden by default. Rendered layout and toggle/scroll behavior have been checked; further readability playtesting, tactical map, original assets/audio, and polish remain.
+Status: presentation remains placeholder-based. A compact edge HUD shows gameplay essentials, with diagnostics/control help in a formatted `F3` debug panel. Spherical gameplay now has heading-relative radar and a paused M-key world survey with ownership/exploration markers and waypoint guidance. Rendered captures and navigation regressions have been checked; hands-on readability/travel tuning, richer map features, original assets/audio, and polish remain.
 
 Core work:
 

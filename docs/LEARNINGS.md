@@ -12,6 +12,13 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 
 ## Spherical Flight Lessons
 
+- Whole-world UI must project radial directions, not world X/Z. Use a fixed survey frame and seam-wrapped equirectangular UVs for the overview, and angular distance in the player's tangent heading frame for radar; round-trip both hemispheres/poles and test actual far-side destinations.
+- Distributing resource drops requires compatible hauler reach. Expanding search to the whole globe solves unreachable possessed mana but introduces long balloon absence, so treat travel/delivery pacing as a separate playtest question.
+- Spawn into the owning world parent rather than `SceneTree.CurrentScene` when constructing a world dynamically. CurrentScene can still be the previous scene during Ready, leaving orphan actors holding removed player/castle references on reload.
+- A paused interactive map must own/release pause and mouse mode, consume modal input, refuse opening over existing menus/results, and reset scene-lifetime chart/waypoint state on restart. Test routed viewport input, not only direct method calls; global synthetic input may lack a valid window route in headless mode.
+- Do not synthesize pause/menu/reload input reentrantly in a rendering post-draw callback; wait for a subsequent simulation frame after taking captures to avoid render dirty-list reentrancy.
+- Grounded enemies reposition during Ready. Explicit combat-radius probes should be positioned after Ready and held still so camera-default changes do not inadvertently change the intended test geometry.
+
 - Globe movement needs a location-dependent up vector. Apply the great-circle step rotation to up, heading, and tangential velocity together; this preserves orientation through poles without a geographic-north bias.
 - Radius and speed control different aspects of comfort: angular up rate is `speed / (radius + clearance)`, while visible curvature remains a geometric property even when movement is slowed. Tune castle travel distance independently of circumference.
 - Radial carpet lift can counter constant inward gravity and regulate clearance without introducing orbital mechanics. This analytic flight constraint is separate from terrain collision and rigid-body mana physics.

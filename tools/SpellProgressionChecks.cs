@@ -89,9 +89,13 @@ public partial class SpellProgressionChecks : Node3D
             };
             AddChild(burstTarget);
             burstTarget.SetPhysicsProcess(false);
+            // Ground beasts initialize on terrain in Ready. Explicitly position
+            // this 3D radius probe afterward so first-person/chase aim defaults
+            // do not silently move it out of the intended nine-unit test range.
+            burstTarget.GlobalPosition = areaBurst.GlobalPosition + Vector3.Right * 9;
             Invoke(player, "CastAreaSpell");
             Check(burstTarget.Health == 2 && areaBurst.EndScale == 10,
-                "Actual upgraded Burst deals 40 damage beyond the base eight-unit radius and enlarges feedback");
+                $"Actual upgraded Burst deals 40 damage beyond the base eight-unit radius and enlarges feedback (health {burstTarget.Health}, radius {areaBurst.EndScale}, status {player.StatusMessage})");
 
             typeof(CarpetFlightController).GetField("_damageInvulnerabilityTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(player, 0f);
             player.ApplyDamage(1000);

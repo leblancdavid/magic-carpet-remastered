@@ -164,7 +164,7 @@ public partial class Hud : CanvasLayer
             + Section("TERRAIN") + _player.TerrainDebugText.Replace("   ", "\n")
             + "\n\n"
             + Section("CONTROLS")
-            + "WASD — fly\nSpace / C — ascend / descend\nMouse — look\nV — camera mode\nEsc — capture / release mouse\nR — restart arena\n\n"
+            + "WASD — fly\nSpace / C — ascend / descend\nMouse — look\nV — camera mode\nM — world map / waypoint (planet)\nEsc — capture / release mouse\nR — restart arena\n\n"
             + $"LMB — {_player.PrimarySpellName}\nTab — cycle quick spell\nQ — {_player.AreaSpellName}\nE — {_player.ShieldSpellName}\nF — {_player.MobilitySpellName}\nG — {_player.SummonSpellName}\n"
             + $"RMB — Possess ({_player.PossessSpellManaCost} mana): aim at a globe or the ground before it; the bolt follows terrain after landing.\n\n"
             + Section("OWNERSHIP / ROLE GUIDE")
