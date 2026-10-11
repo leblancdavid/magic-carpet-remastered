@@ -441,7 +441,7 @@ public partial class AntimatterLoopChecks : Node3D
         Check(InputMap.ActionHasEvent("activate_claim", new InputEventMouseButton { ButtonIndex = MouseButton.Right }), "RMB binds claim");
         Check(!InputMap.HasAction("cast_terrain") && !InputMap.HasAction("terrain_raise"), "Terrain tool input is hidden");
         for (int i = 0; i < 5; i++) Invoke(player, "CycleQuickEquipment");
-        Check(player.PrimaryEquipmentName == "Plasma Bolt", "Tab wraps through five combat/utility equipment");
+        Check(player.PrimaryEquipmentName == "Plasma Bolt", "Tab cycles only the installed starter item");
         int antimatter = player.Energy;
         Invoke(player, "CastClaimEquipment");
         Check(player.Energy == antimatter - player.ClaimEquipmentEnergyCost, "Casting a miss still spends claim antimatter");

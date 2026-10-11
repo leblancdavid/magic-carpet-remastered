@@ -148,7 +148,7 @@ public partial class StrategicNavigationChecks : Node
             navigation.Refresh();
             Check(remoteSite.IsDiscovered && navigation.Markers.Any(marker => marker.Title.StartsWith("Starfall Observatory")),
                 "Visiting a landmark reveals its name and habitat");
-            Check(navigation.Markers.Any(marker => marker.Title == "Guardian Drone II"), "Discovered landmark exposes its uncollected upgrade");
+            Check(navigation.Markers.Any(marker => marker.Title == "Guardian Drone signal"), "Discovered landmark exposes its signal");
             Check(navigation.Markers.Any(marker => marker.Title == "Neutral antimatter · 98"), "Remote resources reveal when approached on the other hemisphere");
             object zone = typeof(EnemyEcosystemDirector).GetMethod("SelectSpawnZone", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(director, null)!;
             var habitat = (WorldLandmark?)typeof(EnemyEcosystemDirector).GetField("_habitat", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(director);
@@ -166,7 +166,7 @@ public partial class StrategicNavigationChecks : Node
                 && Mathf.Abs(arena.Clearance(spawn) - 5.5f) < 0.001f, "Habitat spawning uses its radial local frame on the far side");
             player.GlobalPosition = start;
             navigation.Refresh();
-            Check(navigation.Markers.Any(marker => marker.Title == "Guardian Drone II"), "Discovered upgrade remains charted after leaving the site");
+            Check(navigation.Markers.Any(marker => marker.Title == "Guardian Drone signal"), "Discovered signal remains charted after leaving the site");
 
             var previousMouse = Input.MouseMode;
             Check(map.SetExpanded(true) && !GetTree().Paused && player.GameplayInputBlocked && Input.MouseMode == Input.MouseModeEnum.Visible,
@@ -217,14 +217,14 @@ public partial class StrategicNavigationChecks : Node
             Check(!map.IsExpanded && !GetTree().Paused, "Actual Escape input closes only the map and resumes the match");
             GetViewport().PushInput(new InputEventKey { Keycode = Key.Escape, Pressed = false });
             foreach (var orb in new[] { nearby, hidden, owned }) orb.QueueFree();
-            Check(discoveries.Single(discovery => discovery.EquipmentId == "guardian-drone").TryCollect(TeleportForCollection()),
-                "Far-side upgrade remains physically collectible");
+            Check(!discoveries.Single(discovery => discovery.EquipmentId == "guardian-drone").TryCollect(TeleportForCollection()),
+                "Legacy signal cannot grant purchased equipment ranks");
             ShipFlightController TeleportForCollection()
             {
                 player.GlobalPosition = discoveries.Single(discovery => discovery.EquipmentId == "guardian-drone").GlobalPosition;
                 return player;
             }
-            Check(player.GetEquipmentRank("guardian-drone") == 2, "Far-side collection grants the existing rank-II effect");
+            Check(player.GetEquipmentRank("guardian-drone") == 0, "Far-side signal does not install equipment");
             navigation.SetWaypoint(Vector3.Down);
             map.SetExpanded(true);
             // Scene restart from an open map must not leave the next match paused.
@@ -234,7 +234,7 @@ public partial class StrategicNavigationChecks : Node
             var newNavigation = restarted.GetNode<WorldNavigation>("WorldNavigation");
             Check(!GetTree().Paused && !newNavigation.WaypointUp.HasValue
                 && restarted.GetChildren().OfType<WorldLandmark>().All(landmark => !landmark.IsDiscovered), "Restart clears waypoint/chart knowledge and restores gameplay");
-            Check(restarted.GetNode<ShipFlightController>("PlayerShip").GetEquipmentRank("guardian-drone") == 1,
+            Check(restarted.GetNode<ShipFlightController>("PlayerShip").GetEquipmentRank("guardian-drone") == 0,
                 "Restart resets upgrades alongside the strategic layout");
             Check(!restarted.GetNode<BaseManagement>("BaseManagement").IsOpen
                 && !restarted.GetNode<ShipFlightController>("PlayerShip").GameplayInputBlocked

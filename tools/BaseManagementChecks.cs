@@ -41,7 +41,7 @@ public partial class BaseManagementChecks : Node3D
             var panel = game.GetNode<BaseManagement>("BaseManagement");
             var map = game.GetNode<TacticalMap>("TacticalMap");
             await Frames(3);
-            Check(!panel.IsOpen && hub.Construction.Catalog.Count() == 5, "Fresh match has starter catalog and closed management");
+            Check(!panel.IsOpen && hub.Construction.Catalog.Count() == 19, "Fresh match has starter/equipment catalog and closed management");
             hub.DepositAntimatter(90);
             player.RespawnAt(player.GlobalPosition);
             Key(Godot.Key.B); await Frames(2);

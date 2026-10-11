@@ -1,5 +1,7 @@
 # Project Learnings
 
+- Keep researched equipment rank separate from applied ship rank and slot occupancy. Construction completion grants ownership without changing remote combat stats; home installation explicitly applies the latest researched rank. Query durable completion records directly rather than prerequisite-gated active effects so siege cannot revoke owned or installed gear. Every activation path, including direct item hotkeys, must honor the shared slot limit; Tab must skip unequipped items. Verify replacement/movement, free re-equipping, pending ranks, death, tier loss and real GUI clicks independently.
+
 Durable lessons from implementation, playtesting, and research. Use this for understanding that should guide future decisions, not for daily changelog entries.
 
 ## Documentation Practice

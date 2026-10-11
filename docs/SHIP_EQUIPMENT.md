@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved design, 2026-10-11; implementation pending. Existing combat/utility abilities and exploration upgrades remain the current playable baseline until this milestone replaces their progression/loadout rules. See `BASE_DEVELOPMENT.md` for construction costs, tier access and the ship research slot.
+Implemented 2026-10-11: owned equipment research, sequential ranks I–III, four-slot management UI and home installation. A new match owns/installs Plasma Bolt I only. Claim remains built in. Shift booster and wreck/boon progression are later milestones. See `BASE_DEVELOPMENT.md` for construction costs, tier access and the ship research slot.
 
 ## Four-Slot Loadout
 
@@ -14,7 +14,7 @@ Approved design, 2026-10-11; implementation pending. Existing combat/utility abi
 - Unequipped items remain owned for the match and can be re-equipped at the base without paying to build them again.
 - Installation and loadout changes require returning to the player's home base; remote research ordering is allowed.
 
-The legacy five-ability LMB/Tab cycle is preserved after the completed terminology conversion. A four-slot limit must be implemented with the new inventory/loadout UI rather than silently dropping an existing ability.
+**1–4 selects the corresponding equipped slot; LMB activates the selected item.** Selection never casts or spends energy. Tab cycles occupied slots in slot order, skipping empties. Selecting an empty slot displays Empty and LMB does nothing. Q/E/F/G no longer directly activate gameplay equipment (the separate flight lab retains F dash). The Ship tab selects an explicit destination slot before installation/replacement; moving an installed item clears its old slot. Replacing the selected slot follows its new occupant; removing/moving that occupant selects the first remaining item if necessary.
 
 ## Ownership And Death
 
@@ -37,7 +37,23 @@ Keep researched/built ownership separate from the equipped loadout and base rese
 - Research pays stored antimatter through the ship construction slot, reducing the player's energy limit.
 - Completion makes the equipment/upgrade ready for home-base collection/installation; it does not auto-install remotely.
 
-Approved progression update (2026-10-11): equipment unlocks and equipment ranks come from base research. Random exploration rewards grant permanent stacking boons, not equipment or equipment ranks; see `EXPLORATION_BOONS.md`. The current rank-II beacons remain functional through the behavior-preserving rename and are replaced in the boon milestone. Do not treat a boon modifier as a purchased rank or apply the legacy discovery bonus a second time.
+Equipment unlocks and ranks now come exclusively from base research. Legacy gold beacons remain as non-reward signal landmarks pending wreck/boon conversion; they cannot unlock items or grant purchased ranks. Future random exploration rewards grant permanent stacking boons; see `EXPLORATION_BOONS.md`.
+
+### Provisional Catalog And Installation Rules
+
+All items have ranks I–III. Plasma Bolt I is free starter equipment; every later project uses the Ship slot, requires the previous researched rank and is non-repeatable. Definition tuning lives in `scripts/equipment/ShipEquipmentCatalog.cs`.
+
+| Item | Rank-I cost / tier | Rank-II cost / tier | Rank-III cost / tier |
+| --- | --- | --- | --- |
+| Plasma Bolt | Starter / 1 | 30 / 2 | 45 / 3 |
+| Pulse Burst | 25 / 1 | 50 / 2 | 75 / 3 |
+| Energy Shield | 20 / 1 | 40 / 2 | 60 / 3 |
+| Dash | 20 / 1 | 40 / 2 | 60 / 3 |
+| Guardian Drone | 40 / 2 | 80 / 3 | 120 / 4 |
+
+Research durations are 10 / 14 / 18 seconds for ranks I / II / III. Activation costs/cooldowns retain the baseline: Plasma 5/0.25s, Burst 18/2.5s, Shield 14/6s, Dash 10/3s, Guardian 24/8s. Rank effects: Plasma damage 25/35/45; Burst damage 32/40/48 and radius 8/10/12; Shield duration 4/6/8s; Dash speed 46/55.2/64.4; Guardian damage 12/16/20 and lifetime 12/18/24s. No damage-specialization taxonomy is introduced yet.
+
+Installation is allowed while alive, in unpaused live gameplay, within **18 surface units** of the living home base and **16 elevation units** of its origin. Spherical distance/elevation use the arena's radial helpers; flat gameplay uses horizontal distance/height. Distance is exported on `ShipFlightController`. No automatic installation occurs on completion, return, death or respawn. Completed research permanently records ownership on the home construction state, even through tier loss; the ship stores installed ranks separately. Applying a rank uses the latest researched rank. Previously researched items can be installed after losing their prerequisite tier. Completed uninstalled items/ranks survive death and tier loss; active projects still obey siege destruction/refund rules.
 
 ## Boon Modifiers
 
@@ -80,7 +96,7 @@ At the base, show:
 - Built-in Claim and booster separately from the four-slot loadout.
 - Applicable boon modifiers and effective stats separately from purchased equipment ranks.
 
-The exact activation bindings for four equipped items remain an implementation/UI decision. Retain legacy bindings until a replacement is designed. Management remains real time and must prevent clicks/keys intended for the panel from activating equipment.
+Bindings use 1–4 selection, LMB activation and Tab cycling. Management remains real time and blocks selection/activation while handling GUI input. The HUD shows the selected slot number/item and selection/activation hints. The Ship tab displays owned/installed ranks, pending installation, kind, cost, effect summaries, four slots and cost-above-limit warnings.
 
 ## Verification Requirements
 
@@ -98,8 +114,6 @@ The exact activation bindings for four equipped items remain an implementation/U
 
 ## Remaining Decisions
 
-- Installation range/docking interaction and how completed research waits at the base.
-- Four-slot activation bindings and whether remote UI may preview loadouts without applying them.
-- Handling completed but uninstalled items/ranks during base damage or player death.
 - Damage types/source tags and researched-stat interactions with boon stacking.
-- Initial equipment catalog, ranks, energy costs and booster/Dash balance.
+- Hands-on catalog, installation-distance, UI scrolling and rank/cost balance.
+- Booster/Dash balance and wreck/boon conversion.

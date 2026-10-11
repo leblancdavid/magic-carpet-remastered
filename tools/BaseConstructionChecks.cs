@@ -118,7 +118,6 @@ public partial class BaseConstructionChecks : Node3D
         hub.TryCompleteTierUpgrade(3);
         hub.DepositAntimatter(180);
         var player = Add(new ShipFlightController { InitialEnergy = 300 });
-        player.DiscoverEquipmentUpgrade("plasma-bolt");
         var tracker = Add(new WorldAntimatterTracker());
         var build = hub.Construction;
         foreach (var slot in new[] { ConstructionSlot.Defense, ConstructionSlot.Resources, ConstructionSlot.Offense, ConstructionSlot.Ship })
@@ -138,7 +137,7 @@ public partial class BaseConstructionChecks : Node3D
             "Odd investment splits floor-half spill and exact remainder loss per project");
         Check(LooseTotal(AntimatterOwnership.Neutral) == 105 && hub.StoredAntimatter == 120,
             "Storage spill is separate from construction spill");
-        Check(player.EnergyCapacity == 120 && player.Energy == 120 && player.GetEquipmentRank("plasma-bolt") == 2,
+        Check(player.EnergyCapacity == 120 && player.Energy == 120 && player.GetEquipmentRank("plasma-bolt") == 1,
             "Siege clamps energy but retains installed equipment/rank");
         Balanced(tracker, 300);
         Check(tracker.DestroyedInvestmentLoss == 75 && tracker.ActiveConstructionInvestment == 0,

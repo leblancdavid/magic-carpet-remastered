@@ -212,7 +212,22 @@ public partial class PlanetGameplayChecks : Node3D
 
             EquipmentDiscovery discovery = Add(new EquipmentDiscovery { EquipmentId = "plasma-bolt", EquipmentName = "Plasma Bolt" }, Offset(underside, 22, 800, Vector3.Back), 6);
             _player.GlobalPosition = _arena.OnSurface(discovery.GlobalPosition, 11);
-            Check(discovery.TryCollect(_player) && _player.PlasmaBoltDamage == 35, "Equipment discovery works in radial flight column");
+            Check(!discovery.TryCollect(_player), "Legacy signals cannot bypass research on the globe");
+            _player.GlobalPosition = _arena.OnSurface(home.GlobalPosition, 6);
+            home.TryCompleteTierUpgrade(2);
+            foreach (string id in new[] { "plasma-bolt", "energy-shield", "dash", "guardian-drone", "pulse-burst" })
+            {
+                home.DepositAntimatter(200);
+                int rank = id == "plasma-bolt" ? 2 : 1;
+                Check(home.Construction.TryStart(MagicCarpetRemastered.Scripts.Equipment.ShipEquipmentCatalog.ProjectId(id, rank), out _), "Research spherical equipment");
+                home.Construction.Advance(100);
+            }
+            foreach (var item in new[] { ("plasma-bolt", 0), ("energy-shield", 1), ("dash", 2), ("guardian-drone", 3) })
+                Check(_player.TryInstallEquipment(item.Item1, item.Item2, out _), "Install equipment in radial home column");
+            home.WithdrawAntimatter(home.StoredAntimatter);
+            home.ApplyDamage(140);
+            home._PhysicsProcess(1000);
+            home.DepositAntimatter(40);
             await Frames(2);
             Vector3 shotUp = Offset(underside, 35, 800, Vector3.Back);
             _arena.RefreshPlanetDetail();
@@ -252,6 +267,7 @@ public partial class PlanetGameplayChecks : Node3D
             burstTarget.SetPhysicsProcess(false);
             int burstHealth = burstTarget.Health;
             _player.RespawnAt(_player.GlobalPosition);
+            Check(_player.TryInstallEquipment("pulse-burst", 3, out _), "Replace guardian with researched Burst at home");
             Cast(_player, "CastAreaEquipment");
             Check(burstTarget.Health == burstHealth - 32, "Actual Pulse Burst targets spherical ground and damages enemies");
             burstTarget.QueueFree(); await Frames(2);

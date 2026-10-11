@@ -113,7 +113,7 @@ public partial class WorldNavigation : Node
             bool revealed = Nearby(discovery);
             foreach (var landmark in _landmarks)
                 if (landmark.IsDiscovered && Arena.SurfaceDistance(landmark.GlobalPosition, discovery.GlobalPosition) < 30) revealed = true;
-            if (revealed) Add(discovery, $"{discovery.EquipmentName} II", MapMarkerKind.Upgrade, new Color(1, 0.8f, 0.2f));
+            if (revealed) Add(discovery, $"{discovery.EquipmentName} signal", MapMarkerKind.Upgrade, new Color(1, 0.8f, 0.2f));
         }
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {

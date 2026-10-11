@@ -141,7 +141,7 @@ public partial class Hud : CanvasLayer
             _result.Text = $"{(_levelObjective!.State == LevelObjective.LevelState.Victory ? "VICTORY" : "DEFEAT")}\n"
                 + $"{_levelObjective.ResultMessage}\n\nPress R to restart";
         }
-        _loadout.Text = $"LMB  {_player.PrimaryEquipmentName}   ·   Tab cycle\nRMB  {_player.ClaimEquipmentName}   ·   claim antimatter\nGold beacons: equipment upgrades";
+        _loadout.Text = $"Slot {_player.SelectedEquipmentSlot + 1}: {_player.PrimaryEquipmentName}   ·   LMB activate\n1–4 select   ·   Tab cycle   ·   RMB Claim\nB → Ship: research / install at home";
         _feedback.Text = _player.Health <= 0 ? "Pilot down — your base will respawn you"
             : !string.IsNullOrEmpty(_player.DiscoveryFeedbackMessage) ? _player.DiscoveryFeedbackMessage : _player.ActiveFeedbackMessage;
         _feedbackPanel.Visible = !_resultPanel.Visible && !string.IsNullOrEmpty(_feedback.Text);
@@ -166,7 +166,7 @@ public partial class Hud : CanvasLayer
             + "\n\n"
             + Section("CONTROLS")
             + "WASD — fly\nSpace / C — ascend / descend\nMouse — look\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nR — restart arena\n\n"
-            + $"LMB — {_player.PrimaryEquipmentName}\nTab — cycle quick equipment\nQ — {_player.AreaEquipmentName}\nE — {_player.ShieldEquipmentName}\nF — {_player.MobilityEquipmentName}\nG — {_player.SummonEquipmentName}\n"
+            + $"1–4 — select equipped slot (no activation)\nLMB — activate {_player.PrimaryEquipmentName}\nTab — cycle installed slots\n"
             + $"RMB — Claim ({_player.ClaimEquipmentEnergyCost} energy): aim at a globe or the ground before it; the bolt follows terrain after landing.\n\n"
             + Section("OWNERSHIP / ROLE GUIDE")
             + "Antimatter: gray neutral · cyan yours · red rival\nDrones haul owned antimatter to bases. Base damage reduces storage; excess spills neutral. Stored antimatter supports equipment power. Pop rivals to spill their cargo.\n\n"

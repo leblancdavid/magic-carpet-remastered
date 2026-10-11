@@ -17,15 +17,6 @@ public partial class ShipFlightController : CharacterBody3D
         Flatten
     }
 
-    private enum QuickEquipmentSlot
-    {
-        PlasmaBolt,
-        PulseBurst,
-        EnergyShield,
-        Dash,
-        Guardian
-    }
-
     [Export] public float MoveSpeed { get; set; } = 24.0f;
     [Export] public float VerticalSpeed { get; set; } = 11.0f;
     [Export] public float Acceleration { get; set; } = 28.0f;
@@ -70,6 +61,57 @@ public partial class ShipFlightController : CharacterBody3D
     [Export] public float SummonDistance { get; set; } = 5.0f;
     [Export] public int ClaimEquipmentEnergyCost { get; set; } = 2;
     [Export] public float ClaimEquipmentCooldownSeconds { get; set; } = 0.4f;
+    [Export] public float EquipmentInstallationRadius { get; set; } = 18;
+    private readonly string?[] _equipmentSlots = { "plasma-bolt", null, null, null };
+    private static readonly string[] EquipmentSelectionActions = { "select_equipment_1", "select_equipment_2", "select_equipment_3", "select_equipment_4" };
+    private int _selectedEquipmentSlot;
+    public int SelectedEquipmentSlot => _selectedEquipmentSlot;
+    public System.Collections.Generic.IReadOnlyList<string?> EquipmentSlots => System.Array.AsReadOnly(_equipmentSlots);
+    public bool IsEquipmentInstalled(string id) => _equipmentSlots.Contains(id);
+    public bool CanInstallEquipment => Health > 0 && !GetTree().Paused && IsInstanceValid(_homeBase)
+        && !_homeBase!.IsDestroyed && (_arena?.SurfaceDistance(GlobalPosition, _homeBase.GlobalPosition)
+            ?? new Vector2(GlobalPosition.X - _homeBase.GlobalPosition.X, GlobalPosition.Z - _homeBase.GlobalPosition.Z).Length()) <= EquipmentInstallationRadius
+        && Mathf.Abs((_arena?.Elevation(GlobalPosition) ?? GlobalPosition.Y)
+            - (_arena?.Elevation(_homeBase.GlobalPosition) ?? _homeBase.GlobalPosition.Y)) <= 16;
+
+    public int GetOwnedEquipmentRank(string id)
+    {
+        if (!ShipEquipmentCatalog.ItemIds.Contains(id)) return 0;
+        int rank = id == "plasma-bolt" ? 1 : 0;
+        if (IsInstanceValid(_homeBase))
+            for (int next = 1; next <= ShipEquipmentCatalog.MaximumRank; next++)
+                if (_homeBase!.Construction.IsCompleted(ShipEquipmentCatalog.ProjectId(id, next))) rank = next;
+        return rank;
+    }
+
+    public bool TryInstallEquipment(string id, int slot, out string reason)
+    {
+        reason = !CanInstallEquipment ? $"Return to your home base ({EquipmentInstallationRadius:0} units) while alive to install."
+            : slot < 0 || slot >= 4 ? "Choose one of four slots."
+            : GetOwnedEquipmentRank(id) == 0 ? "Research this item first." : string.Empty;
+        if (reason.Length > 0) return false;
+        // Moving an already installed item never duplicates it.
+        for (int i = 0; i < 4; i++) if (_equipmentSlots[i] == id) _equipmentSlots[i] = null;
+        _equipmentSlots[slot] = id;
+        FindEquipment(id)!.InstallRank(GetOwnedEquipmentRank(id));
+        SelectInstalledEquipment();
+        return true;
+    }
+
+    public bool TryRemoveEquipment(int slot)
+    {
+        if (!CanInstallEquipment || slot < 0 || slot >= 4) return false;
+        _equipmentSlots[slot] = null;
+        SelectInstalledEquipment();
+        return true;
+    }
+
+    private void SelectInstalledEquipment()
+    {
+        if (IsEquipmentInstalled(GetSelectedQuickEquipment()?.Id ?? "")) return;
+        int first = System.Array.FindIndex(_equipmentSlots, id => id != null);
+        if (first >= 0) _selectedEquipmentSlot = first;
+    }
 
     public int Energy { get; private set; }
     public int EnergyCapacity { get; private set; }
@@ -86,7 +128,7 @@ public partial class ShipFlightController : CharacterBody3D
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : _arena.Elevation(GlobalPosition) - _arena.HeightAt(GlobalPosition);
     public bool IsInvulnerable => _damageInvulnerabilityTimer > 0.0f;
     public string CameraMode => _firstPersonCamera ? "First Person" : "Chase";
-    public string PrimaryEquipmentName => GetSelectedQuickEquipment()?.RankedName ?? "Plasma Bolt";
+    public string PrimaryEquipmentName => IsEquipmentInstalled(GetSelectedQuickEquipment()?.Id ?? "") ? GetSelectedQuickEquipment()!.RankedName : "Empty";
     public string TerrainEquipmentName => _terrainEquipment?.DisplayName ?? "Terrain Shape";
     public string AreaEquipmentName => _areaEquipment?.RankedName ?? "Pulse Burst";
     public string ShieldEquipmentName => _shieldEquipment?.RankedName ?? "Energy Shield";
@@ -97,17 +139,19 @@ public string SummonEquipmentName => _summonEquipment?.RankedName ?? "Guardian D
     public string ShieldStatusText => IsShielded ? $"Shield {_shieldTimer:0.0}s" : "Shield ready";
     public string EquipmentLoadoutText => _primaryEquipment == null || _terrainEquipment == null || _areaEquipment == null || _shieldEquipment == null || _mobilityEquipment == null || _summonEquipment == null || _claimEquipment == null
         ? "Equipment: loading"
-        : $"Quick: LMB {GetSelectedQuickEquipment()!.DisplayName} ({GetSelectedQuickEquipment()!.EnergyCost})   Tab: Plasma Bolt/Burst/Shield/Dash/Guardian Drone   Q {_areaEquipment.DisplayName}   E {_shieldEquipment.DisplayName}   F {_mobilityEquipment.DisplayName}   G {_summonEquipment.DisplayName}   RMB {_claimEquipment.DisplayName} ({_claimEquipment.EnergyCost})";
+        : $"LMB: {PrimaryEquipmentName} · 1–4 select slot · Tab cycles installed\n"
+            + string.Join(" · ", _equipmentSlots.Select((id, i) => $"{i + 1}: {(id == null ? "Empty" : FindEquipment(id)!.RankedName)}"))
+            + "\nRMB Claim · B research/install at home";
     public string StatusMessage { get; private set; } = "Claim antimatter for your collector drone and defend your base.";
     public string ActiveFeedbackMessage => _feedbackTimer > 0.0f ? StatusMessage : string.Empty;
     public string DiscoveryFeedbackMessage => _discoveryFeedbackTimer > 0 ? _discoveryFeedback : string.Empty;
     public string EquipmentProgressionText => string.Join("\n", new[] { _primaryEquipment, _areaEquipment, _shieldEquipment, _mobilityEquipment, _summonEquipment }
-        .Select(equipment => $"{equipment.RankedName} — rank {equipment.Rank}/2"));
-    public int PlasmaBoltDamage => GetEquipmentRank("plasma-bolt") == 2 ? 35 : 25;
-    public int EffectiveAreaDamage => Mathf.RoundToInt(AreaEquipmentDamage * (GetEquipmentRank("pulse-burst") == 2 ? 1.25f : 1));
-    public float EffectiveAreaRadius => AreaEquipmentRadius * (GetEquipmentRank("pulse-burst") == 2 ? 1.25f : 1);
-    public float EffectiveShieldDuration => ShieldDurationSeconds + (GetEquipmentRank("energy-shield") == 2 ? 2 : 0);
-    public float EffectiveDashSpeed => MobilityDashSpeed * (GetEquipmentRank("dash") == 2 ? 1.2f : 1);
+        .Select(equipment => $"{equipment.DisplayName} — owned {GetOwnedEquipmentRank(equipment.Id)}/3 · installed {(IsEquipmentInstalled(equipment.Id) ? equipment.Rank : 0)}"));
+    public int PlasmaBoltDamage => 25 + 10 * Mathf.Max(0, GetEquipmentRank("plasma-bolt") - 1);
+    public int EffectiveAreaDamage => Mathf.RoundToInt(AreaEquipmentDamage * (1 + 0.25f * Mathf.Max(0, GetEquipmentRank("pulse-burst") - 1)));
+    public float EffectiveAreaRadius => AreaEquipmentRadius * (1 + 0.25f * Mathf.Max(0, GetEquipmentRank("pulse-burst") - 1));
+    public float EffectiveShieldDuration => ShieldDurationSeconds + 2 * Mathf.Max(0, GetEquipmentRank("energy-shield") - 1);
+    public float EffectiveDashSpeed => MobilityDashSpeed * (1 + 0.2f * Mathf.Max(0, GetEquipmentRank("dash") - 1));
     public string TerrainDebugText => _arena == null
         ? "Terrain: unavailable"
         : $"Terrain edit: {_arena.LastEditedVertexCount} verts   Chunks: {_arena.LastRebuiltChunkCount}   Rebuild: {_arena.LastRebuildMilliseconds:0.00} ms";
@@ -145,7 +189,6 @@ private float _feedbackTimer;
     private float _claimCooldown;
     private bool _firstPersonCamera = true;
     private TerrainEquipmentMode _terrainEquipmentMode = TerrainEquipmentMode.Crater;
-    private QuickEquipmentSlot _selectedQuickEquipment = QuickEquipmentSlot.PlasmaBolt;
     private EquipmentDefinition _primaryEquipment = null!;
     private EquipmentDefinition _areaEquipment = null!;
     private EquipmentDefinition _shieldEquipment = null!;
@@ -172,17 +215,12 @@ private EquipmentDefinition _summonEquipment = null!;
         _ => null
     };
 
-    public int GetEquipmentRank(string id) => FindEquipment(id)?.Rank ?? 0;
+    public int GetEquipmentRank(string id) => IsEquipmentInstalled(id) ? FindEquipment(id)?.Rank ?? 0 : 0;
 
     public bool DiscoverEquipmentUpgrade(string id)
     {
-        if (Health <= 0 || IsQueuedForDeletion()) return false;
-        EquipmentDefinition? equipment = FindEquipment(id);
-        if (equipment == null || !equipment.TryUpgrade()) return false;
-        _discoveryFeedback = $"Discovered {equipment.RankedName}!";
-        _discoveryFeedbackTimer = 4;
-        GameAudio.Instance?.PlayPickup();
-        return true;
+        // Legacy landmarks remain until wreck/boon conversion. Purchased ranks come only from research.
+        return false;
     }
 
     public override void _Ready()
@@ -226,6 +264,18 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
     public override void _UnhandledInput(InputEvent @event)
     {
         if (GameplayInputBlocked) return;
+        for (int i = 0; i < EquipmentSelectionActions.Length; i++)
+        {
+            if (!@event.IsActionPressed(EquipmentSelectionActions[i]) || @event.IsEcho()) continue;
+            if (Health > 0 && !GetTree().Paused)
+            {
+                _selectedEquipmentSlot = i;
+                StatusMessage = $"Slot {i + 1}: {PrimaryEquipmentName}";
+                _feedbackTimer = 1;
+            }
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (@event.IsActionPressed("ui_cancel"))
         {
             Input.MouseMode = Input.MouseMode == Input.MouseModeEnum.Captured
@@ -270,9 +320,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         _damageInvulnerabilityTimer = Mathf.Max(0.0f, _damageInvulnerabilityTimer - deltaF);
         RegenerateEnergy(deltaF);
         if (GameplayInputBlocked) _waitForEquipmentRelease = true;
-        else if (_waitForEquipmentRelease && !Input.IsActionPressed("activate_primary") && !Input.IsActionPressed("activate_claim")
-            && !Input.IsActionPressed("activate_area") && !Input.IsActionPressed("activate_shield")
-            && !Input.IsActionPressed("activate_mobility") && !Input.IsActionPressed("activate_guardian")) _waitForEquipmentRelease = false;
+        else if (_waitForEquipmentRelease && !Input.IsActionPressed("activate_primary") && !Input.IsActionPressed("activate_claim")) _waitForEquipmentRelease = false;
 
         if (_arena?.IsSpherical == true)
         {
@@ -316,30 +364,6 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         if (Input.IsActionPressed("activate_primary"))
         {
             CastSelectedQuickEquipment();
-        }
-
-        if (Input.IsActionPressed("activate_area") && _areaEquipmentCooldown <= 0.0f)
-        {
-            _areaEquipmentCooldown = _areaEquipment.CooldownSeconds;
-            CastAreaEquipment();
-        }
-
-        if (Input.IsActionPressed("activate_shield") && _shieldEquipmentCooldown <= 0.0f)
-        {
-            _shieldEquipmentCooldown = _shieldEquipment.CooldownSeconds;
-            CastShieldEquipment();
-        }
-
-        if (Input.IsActionPressed("activate_mobility") && _mobilityEquipmentCooldown <= 0.0f)
-        {
-            _mobilityEquipmentCooldown = _mobilityEquipment.CooldownSeconds;
-            CastMobilityEquipment();
-        }
-
-        if (Input.IsActionPressed("activate_guardian") && _summonEquipmentCooldown <= 0.0f)
-        {
-            _summonEquipmentCooldown = _summonEquipment.CooldownSeconds;
-            CastSummonEquipment();
         }
 
         if (Input.IsActionPressed("activate_claim") && _claimCooldown <= 0.0f)
@@ -449,30 +473,28 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
 
 private void CycleQuickEquipment()
     {
-        int next = ((int)_selectedQuickEquipment + 1) % 5;
-        _selectedQuickEquipment = (QuickEquipmentSlot)next;
-        StatusMessage = $"Quick equipment: {GetSelectedQuickEquipment()?.DisplayName ?? "unknown"}";
+        for (int step = 1; step <= 4; step++)
+        {
+            int next = (_selectedEquipmentSlot + step) % 4;
+            if (_equipmentSlots[next] == null) continue;
+            _selectedEquipmentSlot = next;
+            break;
+        }
+        StatusMessage = $"Slot {_selectedEquipmentSlot + 1}: {PrimaryEquipmentName}";
         _feedbackTimer = 1.0f;
     }
 
     private EquipmentDefinition? GetSelectedQuickEquipment()
     {
-        return _selectedQuickEquipment switch
-        {
-            QuickEquipmentSlot.PlasmaBolt => _primaryEquipment,
-            QuickEquipmentSlot.PulseBurst => _areaEquipment,
-            QuickEquipmentSlot.EnergyShield => _shieldEquipment,
-            QuickEquipmentSlot.Dash => _mobilityEquipment,
-QuickEquipmentSlot.Guardian => _summonEquipment,
-            _ => _primaryEquipment
-        };
+        return _equipmentSlots[_selectedEquipmentSlot] is { } id ? FindEquipment(id) : null;
     }
 
     private void CastSelectedQuickEquipment()
     {
-        switch (_selectedQuickEquipment)
+        if (GetSelectedQuickEquipment() is not { } equipment) return;
+        switch (equipment.Id)
         {
-            case QuickEquipmentSlot.PlasmaBolt:
+            case "plasma-bolt":
                 if (_fireCooldown > 0.0f)
                 {
                     return;
@@ -481,7 +503,7 @@ QuickEquipmentSlot.Guardian => _summonEquipment,
                 _fireCooldown = _primaryEquipment.CooldownSeconds;
                 CastPrimaryEquipment();
                 break;
-            case QuickEquipmentSlot.PulseBurst:
+            case "pulse-burst":
                 if (_areaEquipmentCooldown > 0.0f)
                 {
                     return;
@@ -490,7 +512,7 @@ QuickEquipmentSlot.Guardian => _summonEquipment,
                 _areaEquipmentCooldown = _areaEquipment.CooldownSeconds;
                 CastAreaEquipment();
                 break;
-            case QuickEquipmentSlot.EnergyShield:
+            case "energy-shield":
                 if (_shieldEquipmentCooldown > 0.0f)
                 {
                     return;
@@ -499,7 +521,7 @@ QuickEquipmentSlot.Guardian => _summonEquipment,
                 _shieldEquipmentCooldown = _shieldEquipment.CooldownSeconds;
                 CastShieldEquipment();
                 break;
-            case QuickEquipmentSlot.Dash:
+            case "dash":
                 if (_mobilityEquipmentCooldown > 0.0f)
                 {
                     return;
@@ -508,7 +530,7 @@ QuickEquipmentSlot.Guardian => _summonEquipment,
                 _mobilityEquipmentCooldown = _mobilityEquipment.CooldownSeconds;
                 CastMobilityEquipment();
                 break;
-case QuickEquipmentSlot.Guardian:
+            case "guardian-drone":
                 if (_summonEquipmentCooldown > 0.0f)
                 {
                     return;
@@ -522,6 +544,7 @@ case QuickEquipmentSlot.Guardian:
 
     private void CastPrimaryEquipment()
     {
+        if (!CanActivateEquipment(_primaryEquipment)) return;
         if (Energy < _primaryEquipment.EnergyCost)
         {
             StatusMessage = "Not enough energy.";
@@ -544,6 +567,7 @@ case QuickEquipmentSlot.Guardian:
 
     private void CastAreaEquipment()
     {
+        if (!CanActivateEquipment(_areaEquipment)) return;
         if (Energy < _areaEquipment.EnergyCost)
         {
             StatusMessage = $"Not enough energy for {_areaEquipment.DisplayName.ToLowerInvariant()}.";
@@ -569,6 +593,7 @@ case QuickEquipmentSlot.Guardian:
 
     private void CastShieldEquipment()
     {
+        if (!CanActivateEquipment(_shieldEquipment)) return;
         if (Energy < _shieldEquipment.EnergyCost)
         {
             StatusMessage = $"Not enough energy for {_shieldEquipment.DisplayName.ToLowerInvariant()}.";
@@ -587,6 +612,7 @@ case QuickEquipmentSlot.Guardian:
 
     private void CastMobilityEquipment()
     {
+        if (!CanActivateEquipment(_mobilityEquipment)) return;
         if (Energy < _mobilityEquipment.EnergyCost)
         {
             StatusMessage = $"Not enough energy for {_mobilityEquipment.DisplayName.ToLowerInvariant()}.";
@@ -607,6 +633,7 @@ case QuickEquipmentSlot.Guardian:
 
     private void CastSummonEquipment()
     {
+        if (!CanActivateEquipment(_summonEquipment)) return;
         if (Energy < _summonEquipment.EnergyCost)
         {
             StatusMessage = $"Not enough energy for {_summonEquipment.DisplayName.ToLowerInvariant()}.";
@@ -619,8 +646,8 @@ case QuickEquipmentSlot.Guardian:
         var guardian = new GuardianDrone
         {
             Name = "GuardianDrone",
-            Damage = GetEquipmentRank("guardian-drone") == 2 ? 16 : 12,
-            LifetimeSeconds = GetEquipmentRank("guardian-drone") == 2 ? 18 : 12
+            Damage = 12 + 4 * Mathf.Max(0, GetEquipmentRank("guardian-drone") - 1),
+            LifetimeSeconds = 12 + 6 * Mathf.Max(0, GetEquipmentRank("guardian-drone") - 1)
         };
         GetTree().CurrentScene.AddChild(guardian);
         guardian.GlobalPosition = GlobalPosition + direction * SummonDistance + LocalUp;
@@ -630,6 +657,9 @@ case QuickEquipmentSlot.Guardian:
         _feedbackTimer = 0.8f;
 GameAudio.Instance?.PlayEquipmentCast();
     }
+
+    private bool CanActivateEquipment(EquipmentDefinition equipment) => Health > 0 && !GameplayInputBlocked
+        && !GetTree().Paused && IsEquipmentInstalled(equipment.Id) && EnergyCapacity >= equipment.EnergyCost;
 
     private void CastClaimEquipment()
     {

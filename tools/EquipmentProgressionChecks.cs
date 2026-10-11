@@ -3,9 +3,9 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Godot;
-using MagicCarpetRemastered.Scripts.Enemies;
-using MagicCarpetRemastered.Scripts.Player;
 using MagicCarpetRemastered.Scripts.Equipment;
+using MagicCarpetRemastered.Scripts.Player;
+using MagicCarpetRemastered.Scripts.Ui;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Tools;
@@ -19,156 +19,184 @@ public partial class EquipmentProgressionChecks : Node3D
     {
         try
         {
-            var arena = new HeightmapArena();
-            AddChild(arena);
-            var player = new ShipFlightController { Position = new Vector3(0, 20, 0) };
-            AddChild(player);
-            player.SetPhysicsProcess(false);
-            var hub = new FactionBase { InitialStoredAntimatter = 30, Position = new Vector3(-20, 20, 0) };
-            AddChild(hub);
-            int antimatter = player.Energy;
-            int power = player.EnergyCapacity;
-            Check(player.PlasmaBoltDamage == 25 && player.EffectiveAreaDamage == 32 && player.EffectiveAreaRadius == 8,
-                "Base offensive equipment retain original strength");
-            Check(player.EffectiveShieldDuration == 4 && player.EffectiveDashSpeed == 46,
-                "Base utility equipment retain original strength");
-            Check(!player.DiscoverEquipmentUpgrade("claim") && !player.DiscoverEquipmentUpgrade("invalid"),
-                "Fixed economy binding and unknown equipment are not upgradable");
-            string[] ids = { "plasma-bolt", "pulse-burst", "energy-shield", "dash", "guardian-drone" };
-            for (int i = 0; i < ids.Length; i++)
+            AddChild(new HeightmapArena());
+            var home = new FactionBase { InitialStoredAntimatter = 120, Position = new Vector3(0, 20, 0) };
+            AddChild(home); home.SetPhysicsProcess(false);
+            var player = new ShipFlightController(); AddChild(player); player.SetPhysicsProcess(false);
+            player.GlobalPosition = home.GlobalPosition + Vector3.Up * 6;
+            var ui = new BaseManagement(); AddChild(ui);
+            Check(player.EquipmentSlots.Count(id => id != null) == 1 && player.GetOwnedEquipmentRank("plasma-bolt") == 1,
+                "Fresh match owns/installs only starter Plasma Bolt");
+            Check(ShipEquipmentCatalog.ItemIds.Skip(1).All(id => player.GetOwnedEquipmentRank(id) == 0), "Other items require research");
+            for (int slot = 0; slot < 4; slot++)
             {
-                var discovery = new EquipmentDiscovery { EquipmentId = ids[i], Position = new Vector3(10 + i * 6, 0, 10) };
-                AddChild(discovery);
-                player.GlobalPosition = discovery.GlobalPosition + new Vector3(6, 0, 0);
-                await Frames(3);
-                Check(!discovery.IsCollected && player.GetEquipmentRank(ids[i]) == 1, "Distant player cannot collect a discovery");
-                player.GlobalPosition = discovery.GlobalPosition + Vector3.Up * 7;
-                Check(!discovery.TryCollect(player), "Player outside the flight column cannot collect");
-                player.GlobalPosition = discovery.GlobalPosition + Vector3.Up * (i % 2 == 0 ? 5 : -4);
-                await Frames(3);
-                Check(player.GetEquipmentRank(ids[i]) == 2 && !IsInstanceValid(discovery),
-                    "Real physics frames collect a nearby beacon at low/high flight clearance and remove it");
-                Check(!player.DiscoverEquipmentUpgrade(ids[i]), "Repeated discoveries cannot stack rank or effects");
+                int energy = player.Energy;
+                await SelectKey(slot);
+                Check(player.SelectedEquipmentSlot == slot && player.Energy == energy && !GetChildren().OfType<WeaponProjectile>().Any(),
+                    "Viewport-routed 1–4 selects the corresponding slot without activating it");
             }
-            Check(player.Energy == antimatter && player.EnergyCapacity == power && hub.StoredAntimatter == 30,
-                "Equipment discoveries do not change equipment antimatter, power, or physical hub reserves");
-            Check(player.PrimaryEquipmentName == "Plasma Bolt II" && player.EquipmentProgressionText.Contains("Guardian Drone II"),
-                "Selected equipment and progression text expose rank II");
-            Check(player.DiscoveryFeedbackMessage.Contains("II"), "Discovery has dedicated persistent feedback");
-            Check(player.PlasmaBoltDamage == 35 && player.EffectiveAreaDamage == 40 && player.EffectiveAreaRadius == 10,
-                "Offensive discoveries improve damage and burst radius");
-            Check(player.EffectiveShieldDuration == 6 && Mathf.IsEqualApprox(player.EffectiveDashSpeed, 55.2f),
-                "Utility discoveries improve shield duration and dash speed");
+            Input.ActionPress("activate_primary"); player._PhysicsProcess(0.001); Input.ActionRelease("activate_primary");
+            Check(player.PrimaryEquipmentName == "Empty" && !GetChildren().OfType<WeaponProjectile>().Any(), "LMB on selected empty slot does nothing");
+            await SelectKey(0);
+            Check(!home.Construction.TryStart(ShipEquipmentCatalog.ProjectId("pulse-burst", 2), out _), "Ranks cannot skip ownership research");
+            Check(!player.DiscoverEquipmentUpgrade("plasma-bolt"), "Legacy beacons cannot purchase ranks");
+            int before = player.Energy;
+            Cast(player, "CastShieldEquipment");
+            Check(!player.IsShielded && player.Energy == before, "Uninstalled direct hotkeys reject without spending");
 
-            player.RespawnAt(new Vector3(0, 20, 0));
-            Invoke(player, "CastPrimaryEquipment");
-            var shot = GetChildren().OfType<WeaponProjectile>().Single();
-            Check(shot.Damage == 35 && player.Energy == player.EnergyCapacity - player.PrimaryEquipmentEnergyCost,
-                "Actual upgraded plasmaBolt receives damage and retains its antimatter cost");
-            shot.QueueFree();
-            Invoke(player, "CastSummonEquipment");
-            var guardian = GetChildren().OfType<GuardianDrone>().Single();
-            guardian.SetPhysicsProcess(false);
-            Check(guardian.Damage == 16 && guardian.LifetimeSeconds == 18,
-                "Actual upgraded summon receives stronger attacks and lifetime before Ready");
-            player.RespawnAt(player.GlobalPosition);
-            Invoke(player, "CastShieldEquipment");
-            Check(player.IsShielded && player.ShieldStatusText.Contains("6.0"), "Actual upgraded shield lasts six seconds");
-            // Clear respawn protection before exercising upgraded shield mitigation.
-            typeof(ShipFlightController).GetField("_damageInvulnerabilityTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(player, 0f);
-            player.ApplyDamage(20);
-            Check(player.Health == 93, "Shield still mitigates real incoming damage");
-            Invoke(player, "CastMobilityEquipment");
-            Check(new Vector2(player.Velocity.X, player.Velocity.Z).Length() > 50,
-                "Actual upgraded dash launches faster than base speed");
-            player.RespawnAt(player.GlobalPosition);
-            Invoke(player, "CastAreaEquipment");
-            var areaBurst = GetChildren().OfType<EquipmentImpactBurst>().Last(burst => burst.Name == "AreaEquipmentBurst");
-            var burstTarget = new EnemyEcosystemEnemy
+            ui.SetOpen(true);
+            await SelectKey(2);
+            Check(player.SelectedEquipmentSlot == 0, "Management consumes number keys without changing selection");
+            home.TryCompleteTierUpgrade(2); home.TryCompleteTierUpgrade(3); home.TryCompleteTierUpgrade(4);
+            foreach (string id in ShipEquipmentCatalog.ItemIds)
             {
-                Role = EnemyEcosystemEnemy.EnemyRole.GroundBeast,
-                Position = areaBurst.GlobalPosition + Vector3.Right * 9
-            };
-            AddChild(burstTarget);
-            burstTarget.SetPhysicsProcess(false);
-            // Ground beasts initialize on terrain in Ready. Explicitly position
-            // this 3D radius probe afterward so first-person/chase aim defaults
-            // do not silently move it out of the intended nine-unit test range.
-            burstTarget.GlobalPosition = areaBurst.GlobalPosition + Vector3.Right * 9;
-            player.RespawnAt(player.GlobalPosition);
-            Invoke(player, "CastAreaEquipment");
-            Check(burstTarget.Health == 2 && areaBurst.EndScale == 10,
-                $"Actual upgraded Burst deals 40 damage beyond the base eight-unit radius and enlarges feedback (health {burstTarget.Health}, radius {areaBurst.EndScale}, status {player.StatusMessage})");
-
+                int rank = id == "plasma-bolt" ? 2 : 1;
+                home.DepositAntimatter(400);
+                int storage = home.StoredAntimatter;
+                string project = ShipEquipmentCatalog.ProjectId(id, rank);
+                Check(ui.OrderProject(project), "Remote equipment order uses Ship construction slot");
+                var active = home.Construction.GetActive(ConstructionSlot.Ship)!;
+                Check(home.StoredAntimatter == storage - active.PaidAntimatter, "Research spends physical storage immediately");
+                Check(!ui.OrderProject(project), "Occupied research rejects duplicate payment");
+                player.GlobalPosition = home.GlobalPosition + Vector3.Right * 80;
+                home.Construction.Advance(100);
+                Check(player.GetOwnedEquipmentRank(id) == rank, "Completion makes item/rank permanently owned");
+                Check(player.GetEquipmentRank(id) == (id == "plasma-bolt" ? 1 : 0), "Remote completion never applies item/rank");
+                Check(!ui.InstallEquipment(id, 0), "Remote UI cannot install");
+                Check(!home.Construction.TryStart(project, out _), "Completed ranks cannot be repurchased");
+            }
+            player.GlobalPosition = home.GlobalPosition + Vector3.Up * 6;
+            // Exercise real GUI signals and explicit replacement target.
+            ui.Refresh();
+            Find<TabContainer>(ui, "ProjectTabs").CurrentTab = 4;
+            for (int i = 0; i < 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            var install = Find<Button>(ui, "Install_plasma-bolt");
+            // The inventory is below the four slots: scroll into view before clicking.
+            var shipScroll = (ScrollContainer)Find<TabContainer>(ui, "ProjectTabs").GetChild(4);
+            shipScroll.EnsureControlVisible(install);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Vector2 point = install.GetGlobalRect().GetCenter();
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Position = point, GlobalPosition = point, Pressed = true }, true);
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Position = point, GlobalPosition = point, Pressed = false }, true);
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            Check(player.GetEquipmentRank("plasma-bolt") == 2 && player.PlasmaBoltDamage == 35, "GUI applies pending rank at home");
+            Check(ui.InstallEquipment("pulse-burst", 1) && ui.InstallEquipment("energy-shield", 2) && ui.InstallEquipment("dash", 3), "Four mixed items install");
+            int paid = home.StoredAntimatter;
+            Check(ui.InstallEquipment("guardian-drone", 1) && player.EquipmentSlots.Count(id => id != null) == 4,
+                "Fifth item replaces selected slot rather than exceeding limit");
+            Check(player.GetOwnedEquipmentRank("pulse-burst") == 1 && !player.IsEquipmentInstalled("pulse-burst"), "Replacement retains ownership");
+            Check(ui.InstallEquipment("guardian-drone", 3) && player.EquipmentSlots.Count(id => id == "guardian-drone") == 1,
+                "Moving an item never duplicates it");
+            Check(!player.TryInstallEquipment("claim", 1, out _) && !player.TryInstallEquipment("dash", 4, out _), "Claim and invalid slot reject");
+            Check(ui.InstallEquipment("pulse-burst", 1) && home.StoredAntimatter == paid, "Re-equipping and applying ranks are free");
+            home.DepositAntimatter(400);
+            Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId("plasma-bolt", 3)), "Next sequential upgrade starts");
+            var cancelled = home.Construction.GetActive(ConstructionSlot.Ship)!;
+            Check(ui.CancelProject(ConstructionSlot.Ship, cancelled.InstanceId) && player.GetOwnedEquipmentRank("plasma-bolt") == 2,
+                "Cancelled upgrade never grants ownership");
+            Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId("plasma-bolt", 3)), "Cancelled rank can be ordered again");
+            home.Construction.Advance(100);
+            Check(player.GetOwnedEquipmentRank("plasma-bolt") == 3 && player.GetEquipmentRank("plasma-bolt") == 2, "Rank III waits for home application");
+            Check(ui.InstallEquipment("plasma-bolt", 0) && player.PlasmaBoltDamage == 45, "Sequential third rank applies exactly once");
+            foreach (string id in new[] { "pulse-burst", "energy-shield", "dash" })
+            {
+                for (int rank = 2; rank <= 3; rank++)
+                {
+                    home.DepositAntimatter(400);
+                    Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId(id, rank)), "Utility/offense ranks research sequentially");
+                    home.Construction.Advance(100);
+                }
+                Check(player.GetOwnedEquipmentRank(id) == 3 && player.GetEquipmentRank(id) < 3, "Purchased utility ranks await installation");
+            }
+            Check(ui.InstallEquipment("energy-shield", 2) && ui.InstallEquipment("pulse-burst", 1), "Apply third-rank defense and area research");
+            Check(player.EffectiveShieldDuration == 8 && player.EffectiveAreaDamage == 48 && player.EffectiveAreaRadius == 12,
+                "Sequential utility/offense stats scale without double application");
+            if (DisplayServer.GetName() != "headless")
+            {
+                Find<TabContainer>(ui, "ProjectTabs").CurrentTab = 4;
+                shipScroll.ScrollVertical = 0;
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+                await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+                using var image = GetViewport().GetTexture().GetImage();
+                Check(image.SavePng("user://equipment-management.png") == Error.Ok, "Save rendered owned/rank/loadout UI");
+            }
+            home.ApplyDamage(420); // Tier four to one.
+            Check(home.Tier == 1 && player.GetEquipmentRank("plasma-bolt") == 3 && player.GetOwnedEquipmentRank("guardian-drone") == 1,
+                "Tier loss preserves owned and installed items/ranks");
+            Check(!home.Construction.TryStart(ShipEquipmentCatalog.ProjectId("guardian-drone", 2), out _), "Tier loss still blocks new research prerequisites");
+            Check(ui.InstallEquipment("guardian-drone", 3), "Previously researched higher-tier equipment installs after tier loss");
+            home.WithdrawAntimatter(home.StoredAntimatter); home.DepositAntimatter(10);
+            ui.SetOpen(false); player.RespawnAt(player.GlobalPosition);
+            Cast(player, "CastSummonEquipment");
+            Check(!GetChildren().OfType<GuardianDrone>().Any() && player.Energy == 10, "Cost above energy limit rejects installed equipment");
+            home.DepositAntimatter(110); player.RespawnAt(player.GlobalPosition);
+            Cast(player, "CastSummonEquipment");
+            Check(GetChildren().OfType<GuardianDrone>().Single().Damage == 12 && player.Energy == 96, "Actual researched Guardian casts with expected cost/effect");
+            int beforeSelection = player.Energy;
+            await SelectKey(2);
+            Check(player.PrimaryEquipmentName == "Energy Shield III" && !player.IsShielded && player.Energy == beforeSelection,
+                "Number key selects installed utility without casting or spending");
+            player._PhysicsProcess(0.001); // Release suppression after closing management.
+            Input.ActionPress("activate_primary"); player._PhysicsProcess(0.001);
+            Check(player.IsShielded && player.ShieldStatusText.Contains("8.0") && player.Energy == beforeSelection - 14,
+                "LMB activates number-selected rank-III Shield");
+            int afterActivation = player.Energy;
+            player._PhysicsProcess(0.001); Input.ActionRelease("activate_primary");
+            Check(player.Energy == afterActivation, "LMB respects the selected item's existing cooldown");
+            Check(player.TryInstallEquipment("dash", 1, out _), "Install owned Dash III for activation");
+            Cast(player, "CastMobilityEquipment");
+            Check(new Vector2(player.Velocity.X, player.Velocity.Z).Length() > 60, "Actual rank-III Dash uses stronger speed");
+            Check(player.TryInstallEquipment("pulse-burst", 1, out _), "Restore owned Burst III without rebuilding");
+            Cast(player, "CastAreaEquipment");
+            Check(GetChildren().OfType<EquipmentImpactBurst>().Any(burst => burst.Name == "AreaEquipmentBurst" && burst.EndScale == 12),
+                "Actual rank-III Burst uses researched radius");
+            player.GameplayInputBlocked = true; before = player.Energy; Cast(player, "CastPrimaryEquipment");
+            Check(player.Energy == before, "Management ownership blocks direct activation");
+            player.GameplayInputBlocked = false;
             typeof(ShipFlightController).GetField("_damageInvulnerabilityTimer", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(player, 0f);
             player.ApplyDamage(1000);
-            var duplicate = new EquipmentDiscovery { EquipmentId = "plasma-bolt", Position = player.GlobalPosition };
-            AddChild(duplicate);
-            player.GlobalPosition = duplicate.GlobalPosition;
-            Check(!duplicate.TryCollect(player) && !duplicate.IsCollected, "Dead pilots cannot consume discoveries");
-            player.RespawnAt(duplicate.GlobalPosition);
-            Check(ids.All(id => player.GetEquipmentRank(id) == 2), "Pilot recovery preserves every discovered upgrade");
-            Check(!duplicate.TryCollect(player) && !duplicate.IsCollected, "Max-rank discovery remains unconsumed");
-            var fresh = new ShipFlightController { Position = new Vector3(-60, 20, -60) };
-            AddChild(fresh);
-            fresh.SetPhysicsProcess(false);
-            Check(ids.All(id => fresh.GetEquipmentRank(id) == 1), "New arena player has fresh progression, no static carryover");
-
-            foreach (Node child in GetChildren()) child.Free();
-            var game = GD.Load<PackedScene>("res://scenes/Game.tscn")
-                .Instantiate<MagicCarpetRemastered.Scripts.Game.Game>();
-            GetTree().Root.AddChild(game);
-            GetTree().CurrentScene = game;
-            var arenaPlayer = game.GetNode<ShipFlightController>("PlayerShip");
-            arenaPlayer.SetPhysicsProcess(false);
-            var beacons = game.GetChildren().OfType<EquipmentDiscovery>().ToArray();
-            Check(beacons.Length == 5 && beacons.Select(beacon => beacon.EquipmentId).Distinct().Count() == 5,
-                "Actual arena seeds one exploration upgrade for each combat/utility equipment");
-            var beacon = beacons[0];
-            var liveArena = game.GetNode<HeightmapArena>("HeightmapArena");
-            float previousHeight = beacon.GlobalPosition.Y;
-            liveArena.RaiseTerrain(beacon.GlobalPosition, 8, 5);
-            await Frames(3);
-            Check(beacon.GlobalPosition.Y > previousHeight + 1,
-                "Discovery collection column and landmark follow live terrain deformation");
-            arenaPlayer.GlobalPosition = beacon.GlobalPosition;
+            Check(!player.TryInstallEquipment("dash", 1, out _), "Dead pilot cannot install");
+            player.RespawnAt(home.GlobalPosition + Vector3.Up * 6);
+            Check(player.GetOwnedEquipmentRank("plasma-bolt") == 3 && player.GetEquipmentRank("plasma-bolt") == 3 && player.EquipmentSlots[3] == "guardian-drone",
+                "Death/respawn retains owned ranks and loadout");
+            Cast(player, "CastClaimEquipment");
+            Check(player.Energy == player.EnergyCapacity - 2 && GetChildren().OfType<ClaimProjectile>().Any(), "Built-in Claim still casts outside four slots");
+            Check(player.TryRemoveEquipment(0), "Home removal works");
+            Cast(player, "CycleQuickEquipment");
+            Check(player.PrimaryEquipmentName != "Plasma Bolt III", "Tab skips removed equipment");
             GetTree().Paused = true;
-            ProcessMode = ProcessModeEnum.Always;
-            await Frames(3);
-            Check(!beacon.IsCollected && arenaPlayer.GetEquipmentRank(beacon.EquipmentId) == 1,
-                "Paused arena cannot grant discovery progression");
-            GetTree().Paused = false;
-            await Frames(3);
-            Check(arenaPlayer.GetEquipmentRank("plasma-bolt") == 2 && game.GetChildren().OfType<EquipmentDiscovery>().Count() == 4,
-                "Resumed arena discovers and consumes a beacon");
-            Callable.From(() => game._UnhandledInput(new InputEventAction { Action = "restart_arena", Pressed = true })).CallDeferred();
+            Check(!player.TryInstallEquipment("plasma-bolt", 0, out _), "Paused installation rejects"); GetTree().Paused = false;
+
+            // Actual match restart resets inventory, research and installed slots.
+            foreach (Node child in GetChildren()) child.Free();
+            var game = GD.Load<PackedScene>("res://scenes/Game.tscn").Instantiate();
+            GetTree().Root.AddChild(game); GetTree().CurrentScene = game;
+            var fresh = game.GetNode<ShipFlightController>("PlayerShip");
+            Check(fresh.GetOwnedEquipmentRank("plasma-bolt") == 1 && fresh.EquipmentSlots.Count(id => id != null) == 1, "New match resets equipment state");
+            game.GetNode<BaseManagement>("BaseManagement").SetOpen(true);
+            game.GetNode<BaseManagement>("BaseManagement")._Input(new InputEventKey { Keycode = Key.R, Pressed = true });
             await ToSignal(GetTree(), SceneTree.SignalName.SceneChanged);
-            var restarted = (MagicCarpetRemastered.Scripts.Game.Game)GetTree().CurrentScene;
-            Check(restarted.GetChildren().OfType<EquipmentDiscovery>().Count() == 5
-                && ids.All(id => restarted.GetNode<ShipFlightController>("PlayerShip").GetEquipmentRank(id) == 1),
-                "Actual R restart restores all beacons and resets equipment progression");
-
-            GD.Print($"Equipment progression checks passed: {_checks}");
-            GetTree().Quit();
+            fresh = GetTree().CurrentScene.GetNode<ShipFlightController>("PlayerShip");
+            Check(fresh.GetOwnedEquipmentRank("guardian-drone") == 0 && fresh.GetEquipmentRank("plasma-bolt") == 1, "R creates a fresh starter loadout");
+            GD.Print($"Equipment progression checks passed: {_checks}"); GetTree().Quit();
         }
-        catch (Exception error)
-        {
-            GD.PushError(error.ToString());
-            GetTree().Quit(1);
-        }
+        catch (Exception error) { GD.PushError(error.ToString()); GetTree().Quit(1); }
     }
 
-    private async Task Frames(int count)
+    private static T Find<T>(Node root, string name) where T : Node
     {
-        for (int i = 0; i < count; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        if (root.Name == name && root is T match) return match;
+        foreach (Node child in root.GetChildren()) { var found = Find<T>(child, name); if (found != null) return found; }
+        return null!;
     }
-
-    private static void Invoke(ShipFlightController player, string method) =>
-        typeof(ShipFlightController).GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(player, null);
-
-    private void Check(bool condition, string message)
+    private async Task SelectKey(int slot)
     {
-        if (!condition) throw new InvalidOperationException(message);
-        _checks++;
+        var key = (Key)(49 + slot);
+        GetViewport().PushInput(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = true });
+        GetViewport().PushInput(new InputEventKey { Keycode = key, PhysicalKeycode = key, Pressed = false });
+        await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
     }
+    private static void Cast(ShipFlightController player, string method) => typeof(ShipFlightController)
+        .GetMethod(method, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(player, null);
+    private void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); _checks++; }
 }

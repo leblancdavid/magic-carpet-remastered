@@ -41,7 +41,7 @@ public partial class EquipmentDiscovery : Node3D
         AddChild(new Label3D
         {
             Name = "DiscoveryLabel",
-            Text = $"{EquipmentName.ToUpperInvariant()} II\nFly here to discover",
+            Text = $"{EquipmentName.ToUpperInvariant()} SIGNAL\nWreck / boon conversion pending",
             Position = Vector3.Up * 2,
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             FontSize = 32,

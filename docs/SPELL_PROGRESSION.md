@@ -2,7 +2,7 @@
 
 ## Status Update (2026-10-11)
 
-This document records the currently implemented legacy rank-II beacon pass. Its behavior survived the completed terminology migration: current items are Plasma Bolt, Pulse Burst, Energy Shield, Dash and Guardian Drone, with costs paid in rechargeable energy. Verify with `tools/EquipmentProgressionChecks.tscn`; the historical filename/vocabulary below remain for context. The approved future design replaces exploration equipment/rank rewards with permanent stacking boons; equipment unlocks and sequential ranks come from base research. See `SHIP_EQUIPMENT.md` and `EXPLORATION_BOONS.md`. Replace the inherited behavior in the boon/progression milestone.
+This document records the **superseded** legacy rank-II beacon pass. As of 2026-10-11, new matches start with Plasma Bolt only; owned equipment and ranks I–III come from base research and explicit home installation. Legacy beacons are non-reward signals awaiting wreck/boon conversion. `tools/EquipmentProgressionChecks.tscn` now verifies the research/inventory/loadout implementation. See `SHIP_EQUIPMENT.md` for current mechanics and `EXPLORATION_BOONS.md` for future exploration rewards. The historical filename/vocabulary and behavior below remain for context.
 
 ## Arena rules
 

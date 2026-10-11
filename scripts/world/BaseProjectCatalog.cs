@@ -4,6 +4,7 @@ public static class BaseProjectCatalog
 {
     public static void Register(BaseConstruction construction)
     {
+        Equipment.ShipEquipmentCatalog.Register(construction);
         construction.Register(new("repair-matrix", "Repair matrix", ConstructionSlot.Defense, 20, 8,
             Description: "Passive base repair +50%. Never restores lost tiers."));
         construction.Register(new("energy-grid", "Energy grid", ConstructionSlot.Defense, 40, 12, 2,

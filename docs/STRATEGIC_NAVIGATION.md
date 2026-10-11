@@ -11,7 +11,7 @@ The sections below describe the implemented legacy navigation/landmark milestone
 - Capturable economic sites provide direct base resource income, faster research or an associated collector drone. Capture is timed; opposing player presence halts progress; benefits remain with the previous owner until completion. See `STRATEGIC_POINTS.md`.
 - Logistics capture transfers the drone and its cargo immediately, including stolen resources, and reroutes it to the new owner's base.
 - Planned navigation markers distinguish wrecks, revealed rewards and economic-site roles/ownership; capture feedback shows progress and contest. Exact reveal rules remain undecided.
-- Equipment unlocks/ranks become base research. Current landmark rank-II beacons stay active until replaced in the boon milestone; do not encode them as the future progression model.
+- Equipment unlocks/ranks now use base research and home installation. Landmark beacons are non-reward signal markers pending wreck/boon conversion; they cannot grant purchased ranks. The original layout/history below retains the earlier exploration context.
 
 New reward/capture interfaces will run in real time. The M survey and B management now follow that policy: neither pauses simulation, they block ship controls and restore prior mouse mode on close, and they cannot open over setup/terminal pause. Only one live interface is expanded at a time.
 
