@@ -135,8 +135,11 @@ public partial class ManaPhysicsChecks : Node3D
         {
             if (node is not ManaPickup orb || !orb.IsAvailable) continue;
             Check(Mathf.Abs(orb.GlobalPosition.Y - orb.Radius) < 0.06f, "Castle spill settles on heightmap terrain");
-            Check(new Vector2(orb.GlobalPosition.X, orb.GlobalPosition.Z).Length() > 5.7f + orb.Radius,
-                "Castle spill remains outside keep collision after settling");
+            Vector3 offset = orb.GlobalPosition - castle.GlobalPosition;
+            float distanceToFootprint = new Vector2(Mathf.Max(0, Mathf.Abs(offset.X) - 4),
+                Mathf.Max(0, Mathf.Abs(offset.Z) - 4)).Length();
+            Check(distanceToFootprint >= orb.Radius - 0.06f,
+                "Castle spill remains outside the actual box collider after settling and attraction");
         }
     }
 

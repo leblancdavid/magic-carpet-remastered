@@ -27,6 +27,8 @@ public partial class PlaytestMechanicsChecks : Node3D
             await ClearActors();
             await CheckScatterPhysics();
             await ClearActors();
+            await CheckStaggeredDrops();
+            await ClearActors();
             await CheckAltitude();
             GD.Print($"Playtest mechanics checks passed: {_checks}");
             GetTree().Quit();
@@ -80,7 +82,7 @@ public partial class PlaytestMechanicsChecks : Node3D
         }
         foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
         {
-            if (node is not ManaPickup orb || !orb.IsAvailable) continue;
+            if (node is not ManaPickup orb || orb.IsQueuedForDeletion()) continue;
             Check(orb.ManaAmount >= 1 && orb.ManaAmount <= 9 && orb.LinearVelocity.IsZeroApprox(),
                 $"Neutral death fragments retain randomized amounts and drop without launch impulse (amount {orb.ManaAmount}, velocity {orb.LinearVelocity})");
         }
@@ -155,11 +157,11 @@ public partial class PlaytestMechanicsChecks : Node3D
             if (orb.GlobalPosition.Y > orb.Radius + 0.5f) airborne++;
             Vector3 departure = releasePositions[orb];
             fallingStraight &= new Vector2(orb.GlobalPosition.X - departure.X, orb.GlobalPosition.Z - departure.Z).Length() < 0.05f
-                && orb.GlobalPosition.Y < departure.Y - 0.2f && orb.LinearVelocity.Y < -1;
+                && orb.GlobalPosition.Y < departure.Y && orb.LinearVelocity.Y < 0;
         }
         tracker.Refresh();
-        Check(airborne > 10 && fallingStraight && maximumStartDistance < 3.5f,
-            "Compact mana cluster falls straight down under gravity without outward scatter");
+        Check(airborne > 1 && airborne < fragments.Count && fallingStraight && maximumStartDistance < 3.5f,
+            "Compact mana cluster releases gradually and falls straight down without outward scatter");
         Check(tracker.TotalMana == 61, "Scatter conserves mana during flight and contacts");
         await Frames(220);
         tracker.Refresh();
@@ -173,7 +175,7 @@ public partial class PlaytestMechanicsChecks : Node3D
         int total = 0;
         foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
         {
-            if (node is not ManaPickup orb || !orb.IsAvailable) continue;
+            if (node is not ManaPickup orb || orb.IsQueuedForDeletion()) continue;
             foreach (ManaPickup previous in fragments)
                 separated &= orb.GlobalPosition.DistanceTo(previous.GlobalPosition) >= orb.Radius + previous.Radius;
             fragments.Add(orb);
@@ -190,7 +192,7 @@ public partial class PlaytestMechanicsChecks : Node3D
             values.Clear();
             foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
             {
-                if (node is not ManaPickup orb || !orb.IsAvailable) continue;
+                if (node is not ManaPickup orb || orb.IsQueuedForDeletion()) continue;
                 sum += orb.ManaAmount;
                 count++;
                 values.Add(orb.ManaAmount);
@@ -201,6 +203,61 @@ public partial class PlaytestMechanicsChecks : Node3D
             Check(reserve < 3 || values.Count > 1, $"{reserve}-mana burst has distinct fragment sizes when possible");
             await ClearActors();
         }
+    }
+
+    private async Task CheckStaggeredDrops()
+    {
+        ManaScatter.Spawn(this, new Vector3(0, 8, 0), 12, ManaOwnership.Enemy);
+        var drops = new List<ManaPickup>();
+        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+            if (node is ManaPickup orb) drops.Add(orb);
+        var tracker = Add(new WorldManaTracker());
+        Check(drops.Count == 6 && drops.FindAll(orb => orb.IsAvailable).Count == 1,
+            "Only the first mana ball releases immediately");
+        Check(drops.FindAll(orb => orb.IsDropPending && !orb.Visible && orb.Freeze
+            && orb.CollisionLayer == 0 && orb.CollisionMask == 0).Count == 5,
+            "Pending balls are hidden, frozen, and noncolliding until release");
+        tracker.Refresh();
+        Check(tracker.TotalMana == 12 && tracker.EnemyControlledMana == 12,
+            "Pending fragments count immediately with the correct ownership");
+        var hauler = Add(new Node3D());
+        ManaPickup pending = drops[1];
+        pending.BeginCarry(hauler, Vector3.Zero);
+        Check(!pending.IsCarried && !pending.IsAvailable && pending.TakeMana(12) == 0,
+            "Pending mana cannot be collected or transferred before release");
+        // Exercise precise sub-interval timing independently of rendered-frame jitter.
+        pending.SetPhysicsProcess(false);
+        pending._PhysicsProcess(ManaScatter.DropIntervalSeconds * 0.4);
+        Check(pending.IsDropPending, "A sub-interval tick does not release the next ball early");
+        GetTree().Paused = true;
+        await Frames(12);
+        Check(drops.FindAll(orb => orb.IsDropPending).Count == 5,
+            "Pausing gameplay also pauses staggered mana release");
+        GetTree().Paused = false;
+        pending._PhysicsProcess(ManaScatter.DropIntervalSeconds * 0.6);
+        Check(!pending.IsDropPending && pending.Visible && !pending.Freeze
+            && pending.CollisionLayer == 1 && pending.LinearVelocity.IsZeroApprox(),
+            "The next ball becomes visible and physical at its interval without launch impulse");
+        pending.SetPhysicsProcess(true);
+        await Frames(5);
+        int released = drops.FindAll(orb => !orb.IsDropPending).Count;
+        tracker.Refresh();
+        Check(released > 1 && released < 6 && tracker.TotalMana == 12,
+            "Partial release preserves exact mana instead of creating it over time");
+        await Frames(20);
+        tracker.Refresh();
+        Check(drops.TrueForAll(orb => !orb.IsDropPending && orb.IsAvailable && orb.Visible)
+            && tracker.TotalMana == 12,
+            "All six balls finish their short stagger with exact conserved totals");
+        await ClearActors();
+        var earlier = Add(new ManaPickup { ManaAmount = 20, Freeze = true });
+        var later = Add(new ManaPickup { ManaAmount = 3 });
+        later.ScheduleDrop(Vector3.Zero, ManaScatter.DropIntervalSeconds);
+        later._PhysicsProcess(ManaScatter.DropIntervalSeconds);
+        Check(later.IsAvailable && later.GlobalPosition.DistanceTo(earlier.GlobalPosition) > earlier.Radius + later.Radius
+            && Mathf.Abs(later.GlobalPosition.X) < 0.001f && Mathf.Abs(later.GlobalPosition.Z) < 0.001f
+            && later.LinearVelocity.IsZeroApprox(),
+            "Late release lifts above a globe occupying its reserved spot without sideways scatter or collider overlap");
     }
 
     private async Task CheckLiveRespawns()

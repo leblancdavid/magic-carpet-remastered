@@ -6,6 +6,7 @@ namespace MagicCarpetRemastered.Scripts.World;
 // Shared death/spill drop: physical fragments, not extra resource creation.
 public static class ManaScatter
 {
+    public const float DropIntervalSeconds = 0.05f;
     public static void Spawn(Node parent, Vector3 origin, int amount,
         ManaOwnership ownership = ManaOwnership.Neutral, float minimumRadius = 0,
         string name = "ScatteredMana")
@@ -76,7 +77,7 @@ public static class ManaScatter
             placed.Add(orb);
             // No outward/upward impulse: gravity drops the loose cluster from
             // its release height (radially inward on a spherical world).
-            orb.LaunchScatter(position, Vector3.Zero);
+            orb.ScheduleDrop(position, i * DropIntervalSeconds);
         }
     }
 }

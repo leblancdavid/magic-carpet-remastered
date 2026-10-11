@@ -38,7 +38,8 @@ public partial class ManaPickup : RigidBody3D
 
     public Node3D? Hauler { get; private set; }
     public bool IsCarried => Hauler != null;
-    public bool IsAvailable => ManaAmount > 0 && !IsQueuedForDeletion() && !IsCarried;
+    public bool IsDropPending { get; private set; }
+    public bool IsAvailable => ManaAmount > 0 && !IsQueuedForDeletion() && !IsCarried && !IsDropPending;
 
     private HeightmapArena? _arena;
     private MeshInstance3D _mesh = null!;
@@ -52,6 +53,7 @@ public partial class ManaPickup : RigidBody3D
     private Vector3 _attractionAcceleration;
     private float _growthStartRadius;
     private float _growthElapsed;
+    private float _dropDelayRemaining;
 
     public override void _Ready()
     {
@@ -93,11 +95,17 @@ public partial class ManaPickup : RigidBody3D
 
     public override void _PhysicsProcess(double delta)
     {
-        _mergeGraceRemaining = Mathf.Max(0, _mergeGraceRemaining - (float)delta);
         if (IsQueuedForDeletion() || ManaAmount <= 0)
         {
             return;
         }
+        if (IsDropPending)
+        {
+            _dropDelayRemaining -= (float)delta;
+            if (_dropDelayRemaining > 0.00001f) return;
+            LaunchScatter(ClearDropPosition(), Vector3.Zero);
+        }
+        _mergeGraceRemaining = Mathf.Max(0, _mergeGraceRemaining - (float)delta);
         UpdateMergeGrowth((float)delta);
 
         if (IsCarried && Hauler != null)
@@ -283,7 +291,7 @@ public partial class ManaPickup : RigidBody3D
 
     public int TakeMana(int amount)
     {
-        if (amount <= 0 || IsQueuedForDeletion())
+        if (amount <= 0 || IsQueuedForDeletion() || IsDropPending)
         {
             return 0;
         }
@@ -323,6 +331,8 @@ public partial class ManaPickup : RigidBody3D
 
     public void SpillAt(Vector3 position)
     {
+        IsDropPending = false;
+        Visible = true;
         _contactSeconds.Clear();
         _attractionAcceleration = Vector3.Zero;
         EndCarry();
@@ -337,6 +347,46 @@ public partial class ManaPickup : RigidBody3D
         SpillAt(position);
         LinearVelocity = velocity;
         _mergeGraceRemaining = 0.8f;
+    }
+
+    public void ScheduleDrop(Vector3 position, float delaySeconds)
+    {
+        LaunchScatter(position, Vector3.Zero);
+        if (delaySeconds <= 0) return;
+        // The reserved fragment is already counted by WorldManaTracker, but
+        // cannot interact with gameplay until its own pause-aware release tick.
+        _dropDelayRemaining = delaySeconds;
+        IsDropPending = true;
+        Visible = false;
+        Freeze = true;
+        CollisionLayer = 0;
+        CollisionMask = 0;
+    }
+
+    private Vector3 ClearDropPosition()
+    {
+        Vector3 position = GlobalPosition;
+        Vector3 up = _arena?.UpAt(position) ?? Vector3.Up;
+        bool overlaps;
+        do
+        {
+            overlaps = false;
+            foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+            {
+                if (node is not ManaPickup other || other == this || !other.IsAvailable) continue;
+                Vector3 offset = position - other.GlobalPosition;
+                float clearance = Radius + other.Radius + 0.05f;
+                if (offset.LengthSquared() >= clearance * clearance) continue;
+                // Earlier fragments may roll/grow into a reserved release spot.
+                // Lift above them instead of causing another sideways explosion.
+                float vertical = offset.Dot(up);
+                float lateralSquared = offset.Slide(up).LengthSquared();
+                position += up * (Mathf.Sqrt(Mathf.Max(0, clearance * clearance - lateralSquared)) - vertical + 0.01f);
+                overlaps = true;
+                break;
+            }
+        } while (overlaps);
+        return position;
     }
 
     public void ReassignOwnership(ManaOwnership ownership)

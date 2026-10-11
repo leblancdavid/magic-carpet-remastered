@@ -189,8 +189,10 @@ public partial class PlanetGameplayChecks : Node3D
                 .Where(orb => !existingMana.Contains(orb)).ToArray();
             Check(deathDrops.Length == 6 && deathDrops.All(orb => orb.LinearVelocity.IsZeroApprox()),
                 "Underside death drop starts as six randomized fragments without launch impulses");
+            Check(deathDrops.Count(orb => orb.IsDropPending) == 5,
+                "Underside mana releases its first fragment immediately and stages the other five");
             var departures = deathDrops.ToDictionary(orb => orb, orb => orb.GlobalPosition);
-            await Frames(12);
+            await Frames(30);
             Check(deathDrops.All(orb => orb.LinearVelocity.Dot(_arena.UpAt(orb.GlobalPosition)) < -1
                 && orb.LinearVelocity.Slide(_arena.UpAt(orb.GlobalPosition)).Length() < 0.1f
                 && _arena.Clearance(orb.GlobalPosition) < _arena.Clearance(departures[orb]) - 0.1f),

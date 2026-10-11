@@ -49,6 +49,8 @@ public partial class WorldManaTracker : Node
 
         foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
         {
+            // Hidden, pending drop fragments reserve real mana too. Count
+            // them immediately so staggered release never alters world totals.
             if (node is not ManaPickup pickup || pickup.IsQueuedForDeletion())
             {
                 continue;

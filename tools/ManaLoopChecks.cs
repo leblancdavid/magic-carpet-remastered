@@ -235,9 +235,10 @@ public partial class ManaLoopChecks : Node3D
         Check(tracker.TotalMana == 56 && tracker.NeutralLooseMana == 56, "Remainders survive both castle destruction spills exactly");
         foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
         {
-            if (node is not ManaPickup orb || !orb.IsAvailable) continue;
-            Check(orb.ManaAmount > 0 && orb.Ownership == ManaOwnership.Neutral && !orb.IsCarried && !orb.Freeze,
-                "Castle spill is a positive, possessable physical neutral globe");
+            if (node is not ManaPickup orb || orb.IsQueuedForDeletion()) continue;
+            Check(orb.ManaAmount > 0 && orb.Ownership == ManaOwnership.Neutral && !orb.IsCarried
+                && orb.Freeze == orb.IsDropPending && orb.IsAvailable != orb.IsDropPending,
+                "Castle spill reserves positive neutral mana and becomes physical/possessable only on release");
             Check(new Vector2(orb.GlobalPosition.X, orb.GlobalPosition.Z).Length() > 6 + orb.Radius - 0.01f,
                 "Castle spill clears the solid keep footprint");
         }
