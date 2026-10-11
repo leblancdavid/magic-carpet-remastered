@@ -1,5 +1,9 @@
 # Spell Discovery And Upgrade Pass
 
+## Status Update (2026-10-11)
+
+This document records the currently implemented legacy rank-II beacon pass. The approved future design replaces exploration equipment/rank rewards with permanent stacking boons; equipment unlocks and sequential ranks come from base research. See `SHIP_EQUIPMENT.md` and `EXPLORATION_BOONS.md`. Preserve the behavior below during terminology conversion, then replace it in the boon/progression milestone.
+
 ## Arena rules
 
 - All five existing combat/utility spells start available at rank I. Exploration grants one rank-II upgrade per spell, avoiding removal of the existing prototype loadout.

@@ -1,8 +1,10 @@
 # Magic Carpet Remastered
 
-A Godot C# playable prototype for a modern spiritual remaster inspired by the classic DOS game Magic Carpet.
+A Godot C# planetary-combat prototype moving toward an original futuristic faction-conflict setting. The repository title remains a working name; Magic Carpet is a historical mechanics reference.
 
 ## Current Status
+
+The current spherical mechanics and smoothness are accepted as a playtest baseline. The next milestone converts fantasy terminology to ships, bases, equipment and antimatter, then adds RTS-style base tiers/research, a real-time management UI, four-slot owned equipment and an energy-costing Shift booster. These systems are planned, not yet implemented; current controls and legacy terms below describe the runnable prototype. See `docs/BASE_DEVELOPMENT.md` and `docs/SHIP_EQUIPMENT.md` for approved rules.
 
 The default prototype is a spherical planet with upright carpet flight, combat, deformable land/oceans, radial-gravity mana spheres, ownership/possession, balloon hauling, castles, rival enemies, spells/upgrades, and level victory/defeat flow. Planet sizes are **Small 500 / Medium 800 / Large 1,000 / XL 1,200** radius units; Medium is the default. Win by destroying the rival castle and defeating its wizard, in either order. Mana ownership is a resource system and does not trigger victory. Visuals and audio remain placeholders.
 

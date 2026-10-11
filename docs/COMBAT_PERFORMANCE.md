@@ -1,5 +1,22 @@
 # Combat Performance
 
+## Post-resource-lifetime mixed verification (2026-10-10 session)
+
+After deterministic terrain temporary-resource release, the existing rendered Medium/XL workload completed **4,620 samples / 14 successful possessions** with no runtime errors and **zero frames above 33.333 ms**. Same Godot 4.6.3/Forward+/RTX 4070 setup; local report `20261011-062553`:
+
+| Window maximum ms | Medium | XL |
+| --- | ---: | ---: |
+| Repeated impacts | 21.71 | 24.78 |
+| Dense mana creation | 31.42 | 23.83 |
+| Dense active simulation | 29.59 | 19.80 |
+| Castle spill | 21.44 | 19.89 |
+| Sustained impacts after stress | 30.47 | 19.81 |
+| Post-stress recovery | 23.80 | 19.16 |
+
+Sustained terrain batch maxima were **2.99 / 3.06 ms**. This stationary workload confirms no measured regression after the lifetime fix; run variance means it is not proof that all earlier mixed outliers are eliminated.
+
+Added `TraversalFrameProfile --stress --mixed` to exercise concurrent live mana, craters and terrain streaming. Its first meaningful run exposed edit-shape collision publication gaps; live edits now retain old shapes through a physics step as LOD swaps do. Corrected Medium/XL runs pass **13,468 samples / 226 terrain probes / 210 craters** with exact mana conservation, stable returned terrain counts and no >50-ms frames (three >33-ms frames). See `docs/TRAVERSAL_PERFORMANCE.md` for full workflow/results/limitations. Combat correctness checks now pass **171 headless/rendered assertions**, spherical gameplay **238**, mana physics **105**. Hands-on flight/impact/hauling acceptance remains pending.
+
 ## Report and first optimization pass (2026-10-10)
 
 User reports brief freezes on fireball impacts, enemy kills, and successful mana possession. The shared effect path, mana searches/resource creation, and synchronous terrain work are the first targets. The rendered baseline below now identifies atomic terrain rebuilds and dense mana simulation as follow-up targets.

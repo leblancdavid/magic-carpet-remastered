@@ -28,10 +28,13 @@ public partial class PlanetTerrain : Node3D
         public readonly List<Edit> PendingEdits = new();
     }
     private readonly List<Patch> _patches = new();
+    // Mesh/shape setters copy into native packed arrays synchronously. These
+    // build-only buffers can be reused without changing published resources.
+    private readonly Dictionary<int, (int[] Indices, Vector3[] Faces)> _buildBuffers = new();
     private const float EditCellSize = 32;
     private readonly Dictionary<Vector3I, List<Edit>> _editCells = new();
     private readonly HashSet<Patch> _dirty = new();
-    private readonly Dictionary<CollisionShape3D, (int Ticks, bool FreeBody)> _retiringCollisions = new();
+    private readonly Dictionary<CollisionShape3D, (int Ticks, bool FreeBody, bool FreeShape)> _retiringCollisions = new();
     private readonly List<CollisionShape3D> _retirementBuffer = new();
     private readonly FastNoiseLite _noise = new() { Seed = 27031, Frequency = 0.004f, FractalOctaves = 3 };
     private readonly StandardMaterial3D _material = new() { AlbedoColor = new Color(0.65f, 0.65f, 0.65f), VertexColorUseAsAlbedo = true, Roughness = 1 };
@@ -115,13 +118,19 @@ public partial class PlanetTerrain : Node3D
         _retirementBuffer.AddRange(_retiringCollisions.Keys);
         foreach (CollisionShape3D collision in _retirementBuffer)
         {
+            if (!IsInstanceValid(collision))
+            {
+                _retiringCollisions.Remove(collision);
+                continue;
+            }
             var retirement = _retiringCollisions[collision];
             if (retirement.Ticks > 1)
-                _retiringCollisions[collision] = (retirement.Ticks - 1, retirement.FreeBody);
+                _retiringCollisions[collision] = (retirement.Ticks - 1, retirement.FreeBody, retirement.FreeShape);
             else
             {
                 collision.Disabled = true;
                 if (retirement.FreeBody) collision.GetParent().QueueFree();
+                else if (retirement.FreeShape) collision.QueueFree();
                 _retiringCollisions.Remove(collision);
             }
         }
@@ -238,7 +247,7 @@ public partial class PlanetTerrain : Node3D
                         EnableCollision(tile.Collision);
                     }
                     parent.Mesh.Visible = false;
-                    _retiringCollisions[parent.Collision] = (2, false);
+                    _retiringCollisions[parent.Collision] = (2, false, false);
                     parent.TilesPublished = true;
                 }
             }
@@ -253,7 +262,7 @@ public partial class PlanetTerrain : Node3D
                     _dirty.Remove(tile);
                     if (tile.Resolution == 0) continue;
                     tile.Mesh.Visible = false;
-                    _retiringCollisions[tile.Collision] = (2, true);
+                    _retiringCollisions[tile.Collision] = (2, true, false);
                     tile.Mesh.QueueFree();
                 }
                 selected.Tiles.Clear();
@@ -305,6 +314,7 @@ public partial class PlanetTerrain : Node3D
 
     private void BuildPatch(Patch patch, int resolution)
     {
+        bool replaceLiveCollision = patch.Resolution > 0 && !patch.Collision.Disabled;
         if (patch.Resolution == 0)
         {
             patch.Mesh = new MeshInstance3D { Visible = patch.Parent == null };
@@ -318,10 +328,15 @@ public partial class PlanetTerrain : Node3D
         int side = resolution + 1;
         bool fullRebuild = patch.Resolution != resolution || patch.Vertices.Length == 0;
         patch.Resolution = resolution;
-        Vector3[] vertices = fullRebuild ? new Vector3[side * side] : patch.Vertices;
+        // Ground vertices stay first; the tail contains the same flat-shaded
+        // skirt triangles, sharing one material/surface and cached edit buffers.
+        Vector3[] vertices = fullRebuild ? new Vector3[side * side + resolution * 24] : patch.Vertices;
         Vector3[] normals = fullRebuild ? new Vector3[vertices.Length] : patch.Normals;
         Color[] colors = fullRebuild ? new Color[vertices.Length] : patch.Colors;
-        int[] indices = new int[resolution * resolution * 6];
+        if (!_buildBuffers.TryGetValue(resolution, out var buffers))
+            _buildBuffers[resolution] = buffers = (new int[resolution * resolution * 6 + resolution * 24],
+                new Vector3[resolution * resolution * 6]);
+        int[] indices = buffers.Indices;
         for (int y = 0; y <= resolution; y++)
         for (int x = 0; x <= resolution; x++)
         {
@@ -365,18 +380,9 @@ public partial class PlanetTerrain : Node3D
             if ((vertices[b] - vertices[a]).Cross(vertices[c] - vertices[a]).Dot(vertices[a] - Arena.PlanetCenter) > 0) (b, c) = (c, b);
             indices[cursor++] = a; indices[cursor++] = b; indices[cursor++] = c;
         }
-        Godot.Collections.Array arrays = new();
-        arrays.Resize((int)Mesh.ArrayType.Max);
-        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
-        arrays[(int)Mesh.ArrayType.Normal] = normals;
-        arrays[(int)Mesh.ArrayType.Color] = colors;
-        arrays[(int)Mesh.ArrayType.Index] = indices;
-        ArrayMesh mesh = new();
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        int skirtVertex = side * side;
         // Visual skirts close the geometric gap between different patch LODs.
         // Nearby colliders share the same fine sampling, including cube-face edges.
-        using SurfaceTool skirt = new();
-        skirt.Begin(Mesh.PrimitiveType.Triangles);
         for (int i = 0; i < resolution; i++)
         {
             Edge(i, i + 1); Edge(resolution * side + i + 1, resolution * side + i);
@@ -386,20 +392,45 @@ public partial class PlanetTerrain : Node3D
         {
             Vector3 bottomA = vertices[a] - (vertices[a] - Arena.PlanetCenter).Normalized() * 8;
             Vector3 bottomB = vertices[b] - (vertices[b] - Arena.PlanetCenter).Normalized() * 8;
-            skirt.SetColor(colors[a]); skirt.AddVertex(vertices[a]);
-            skirt.SetColor(colors[b]); skirt.AddVertex(vertices[b]);
-            skirt.SetColor(colors[a]); skirt.AddVertex(bottomA);
-            skirt.SetColor(colors[b]); skirt.AddVertex(vertices[b]);
-            skirt.AddVertex(bottomB);
-            skirt.SetColor(colors[a]); skirt.AddVertex(bottomA);
+            SkirtTriangle(vertices[a], vertices[b], bottomA, colors[a], colors[b], colors[a]);
+            SkirtTriangle(vertices[b], bottomB, bottomA, colors[b], colors[b], colors[a]);
         }
-        skirt.GenerateNormals();
-        skirt.Commit(mesh);
+        void SkirtTriangle(Vector3 a, Vector3 b, Vector3 c, Color ca, Color cb, Color cc)
+        {
+            // Godot uses clockwise front faces. Keep independent triangle
+            // vertices so skirt normals remain flat, as SurfaceTool produced.
+            Vector3 normal = (c - a).Cross(b - a).Normalized();
+            vertices[skirtVertex] = a; colors[skirtVertex] = ca; normals[skirtVertex] = normal;
+            indices[cursor++] = skirtVertex++;
+            vertices[skirtVertex] = b; colors[skirtVertex] = cb; normals[skirtVertex] = normal;
+            indices[cursor++] = skirtVertex++;
+            vertices[skirtVertex] = c; colors[skirtVertex] = cc; normals[skirtVertex] = normal;
+            indices[cursor++] = skirtVertex++;
+        }
+        using Godot.Collections.Array arrays = new();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
+        arrays[(int)Mesh.ArrayType.Normal] = normals;
+        arrays[(int)Mesh.ArrayType.Color] = colors;
+        arrays[(int)Mesh.ArrayType.Index] = indices;
+        // Native nodes retain their own references after assignment.
+        using ArrayMesh mesh = new();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
         patch.Mesh.Mesh = mesh;
         patch.Mesh.MaterialOverride = _material;
-        Vector3[] faces = new Vector3[indices.Length];
-        for (int i = 0; i < indices.Length; i++) faces[i] = vertices[indices[i]];
-        patch.Collision.Shape = new ConcavePolygonShape3D { Data = faces };
+        Vector3[] faces = buffers.Faces;
+        for (int i = 0; i < faces.Length; i++) faces[i] = vertices[indices[i]];
+        using var shape = new ConcavePolygonShape3D { Data = faces };
+        if (replaceLiveCollision)
+        {
+            // Editing an existing tile has the same broad-phase publication
+            // delay as a LOD swap. Preserve old support through a physics step.
+            CollisionShape3D previous = patch.Collision;
+            patch.Collision = new CollisionShape3D { Shape = shape };
+            previous.GetParent().AddChild(patch.Collision);
+            _retiringCollisions[previous] = (2, false, true);
+        }
+        else patch.Collision.Shape = shape;
     }
 
     private static Vector3 Direction(int face, float x, float y)

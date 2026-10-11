@@ -65,20 +65,47 @@ public partial class CombatPerformanceChecks : Node3D
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             Check(terrain.RetiringCollisionCount == 0, "Old LOD colliders retire after replacement enters physics");
+            foreach (MeshInstance3D instance in terrain.GetChildren().OfType<MeshInstance3D>().Where(m => m.Visible && m.Name != "Ocean"))
+            {
+                using var mesh = (ArrayMesh)instance.Mesh;
+                if (mesh.GetSurfaceCount() != 1) throw new InvalidOperationException("Ground and visual skirts must use one render surface.");
+                using var arrays = mesh.SurfaceGetArrays(0);
+                var vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+                var normals = arrays[(int)Mesh.ArrayType.Normal].AsVector3Array();
+                var indices = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+                int resolution = (int)Math.Round(Math.Sqrt(4 + indices.Length / 6.0) - 2);
+                int groundCount = (resolution + 1) * (resolution + 1);
+                if (vertices.Length != groundCount + resolution * 24 || normals.Length != vertices.Length)
+                    throw new InvalidOperationException("Combined surface lost ground or skirt vertices.");
+                for (int vertex = groundCount; vertex < vertices.Length; vertex += 3)
+                {
+                    Vector3 expected = (vertices[vertex + 2] - vertices[vertex]).Cross(vertices[vertex + 1] - vertices[vertex]).Normalized();
+                    if (normals[vertex].Dot(expected) < 0.999f || normals[vertex + 1].Dot(expected) < 0.999f || normals[vertex + 2].Dot(expected) < 0.999f)
+                        throw new InvalidOperationException("Combined skirt normals lost clockwise flat shading.");
+                }
+            }
+            Check(true, $"Radius {radius}: all visible ground/skirt surfaces preserve vertex counts and clockwise flat normals");
             Vector3 tangent = arena.Tangent(Vector3.Right, observer.GlobalPosition).Normalized();
             foreach (float offset in new[] { -0.5f, 0f, 0.5f })
                 Check(HasCollision((up + tangent * offset / radius).Normalized(), true),
                     $"Radius {radius}: real fine collision is continuous across tile/face seams");
             float before = arena.HeightAt(observer.GlobalPosition);
+            int shapesBefore = terrain.GetChildren().OfType<StaticBody3D>().Sum(body => body.GetChildren().OfType<CollisionShape3D>().Count());
             arena.ApplyCrater(observer.GlobalPosition, 5, 2);
             Check(Mathf.IsEqualApprox(arena.HeightAt(observer.GlobalPosition), before - 2),
                 "Tile scheduling retains immediate crater heights");
             // Repeated pending changes must commit the latest chronological state.
             arena.RaiseTerrain(observer.GlobalPosition, 5, 1);
             Drain();
+            Check(HasCollision(up, false), "Live edit replacement retains collision before the next physics publication");
+            Check(terrain.RetiringCollisionCount > 0, "Edited live shapes enter delayed retirement");
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             Check(HasCollision(up, true), "Coalesced crater/raise updates reach actual tile collision");
+            Check(terrain.RetiringCollisionCount == 0 &&
+                terrain.GetChildren().OfType<StaticBody3D>().Sum(body => body.GetChildren().OfType<CollisionShape3D>().Count()) == shapesBefore,
+                "Edited old shapes retire without accumulating collision children");
         }
         // Return from the underside after unloading the edited home tiles.
         observer.GlobalPosition = arena.OnSurface(arena.PlanetCenter + Vector3.Up * radius, 6);

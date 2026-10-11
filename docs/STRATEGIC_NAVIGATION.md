@@ -1,5 +1,18 @@
 # Strategic Planet Layout And Navigation
 
+## Approved Direction Update (2026-10-11)
+
+The sections below describe the implemented legacy navigation/landmark milestone, not the new reward/capture systems. Basic spherical gameplay is now accepted as a smooth playtest baseline; detailed route and balance tuning continues.
+
+- Exploration rewards will be wreck-hidden, permanent stacking boons rather than equipment/rank upgrades. Destroy a wreck to reveal a reward; first collector secures three choices or a skip-for-antimatter option. Choice is real time and deferrable. See `EXPLORATION_BOONS.md`.
+- Random initial wrecks and ongoing orbital arrivals exclude all faction bases using spherical surface distance. Reward placement must remain reachable and bounded across all planet sizes.
+- Capturable economic sites provide direct base resource income, faster research or an associated collector drone. Capture is timed; opposing player presence halts progress; benefits remain with the previous owner until completion. See `STRATEGIC_POINTS.md`.
+- Logistics capture transfers the drone and its cargo immediately, including stolen resources, and reroutes it to the new owner's base.
+- Planned navigation markers distinguish wrecks, revealed rewards and economic-site roles/ownership; capture feedback shows progress and contest. Exact reveal rules remain undecided.
+- Equipment unlocks/ranks become base research. Current landmark rank-II beacons stay active until replaced in the boon milestone; do not encode them as the future progression model.
+
+New reward and capture interfaces run in real time. The existing paused M-key survey below is current behavior, not an exception established for the new real-time design; map/modal behavior must be reconciled during its UI implementation. Preserve it through terminology-only conversion.
+
 ## First playable milestone (2026-10-10)
 
 User approved proceeding with planet layout and tactical navigation after the combat optimization pass. The spherical match now has five authored landmarks, distributed upgrades, regional encounter bias, a local radar and a world survey with waypoints. There is still one designated rival and the castle-plus-wizard elimination objective. Layout, exploration reward pacing and long-haul logistics await hands-on acceptance.

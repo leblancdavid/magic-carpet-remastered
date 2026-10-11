@@ -3,13 +3,13 @@
 ## Project Context
 
 - Engine target: Godot 4.x with C#
-- Current state: newly initialized project shell
+- Current state: accepted spherical gameplay prototype; next milestones are science-fiction terminology migration and RTS-style base/equipment development
 - Reference projects: `D:\Dev\Games\rustgrindgalaxy` and `D:\Dev\Games\kbtv`
 - Local original game reference: `D:\Games\MagicCarpet`
 
 ## Product Direction
 
-Build a modern, legally safe remaster inspired by the feel of Bullfrog's Magic Carpet: flying wizard combat, terrain deformation, mana collection, spell duels, monster ecosystems, and strategic castle/balloon control.
+Build an original futuristic planetary faction-conflict game using the accepted spherical prototype: ship combat, terrain deformation, antimatter logistics, RTS-style home-base development and researched equipment. Magic Carpet is a historical mechanics reference, not the new setting. Follow `docs/BASE_DEVELOPMENT.md` and `docs/SHIP_EQUIPMENT.md` for the approved direction; fantasy terms remain in code until the behavior-preserving migration.
 
 Do not copy proprietary game code, data, art, audio, level files, or binary-derived assets into this repository unless the user explicitly confirms they own and can use them. Treat the DOS install as a local reference for observation, behavior study, and personal reverse-engineering experiments only.
 

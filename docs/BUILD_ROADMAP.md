@@ -2,9 +2,42 @@
 
 ## Direction
 
-Build a modern Godot C# spiritual remaster inspired by Magic Carpet. The project should capture the fantasy of fast carpet flight, spell duels, mana control, terrain deformation, monsters, and castle conflict without copying original proprietary game data or assets.
+Build an original Godot C# futuristic planetary combat game: factions pilot ships, compete for antimatter and matter, develop home bases, research equipment and fight over deformable spherical terrain. Magic Carpet remains a historical mechanics reference, not the game's setting or identity. Do not copy original proprietary game data or assets.
 
-Use `docs/ORIGINAL_MECHANICS_REFERENCE.md` as the condensed system-design reference for original-style mechanics and priorities.
+Use `docs/BASE_DEVELOPMENT.md`, `docs/SHIP_EQUIPMENT.md`, `docs/EXPLORATION_BOONS.md` and `docs/STRATEGIC_POINTS.md` for the approved new gameplay direction. `docs/ORIGINAL_MECHANICS_REFERENCE.md` remains the historical reference for inherited mechanics. New design decisions supersede original-style priorities where they differ.
+
+## Active Milestone: Science-Fiction Identity And RTS-Style Base Development (2026-10-11)
+
+User acceptance: the basic spherical mechanics are in place and feel smooth enough to serve as the playtest baseline. Integrated hands-on baseline acceptance is complete; this is not final balance, AI, progression, content or performance signoff. Revisit measured performance issues when reproduced rather than requiring further profiling before gameplay development.
+
+Approved design:
+
+- Bases are remotely managed, real-time RTS-style home hubs. Explicit tiers 1–5 increase antimatter storage capacity and research access; stored resources no longer automatically purchase tiers.
+- Stored antimatter supports the player's energy limit. Construction consumes storage immediately, lowering that limit. Current combat energy regenerates within it; collecting more raises it. The earlier reservation/limit-recovery proposal is superseded.
+- Five independent construction slots: base tier/rebuild, defense, resources, offense and ship; one active project per slot, concurrent categories allowed.
+- Cancellation fully refunds paid antimatter; capacity overflow spills as owned resources. Losing a tier destroys every in-progress project: half its paid investment spills for rivals to claim, half is permanently lost, separately from ordinary storage spills.
+- Lost tiers reduce capacity/research access and must be rebuilt sequentially at half each tier's normal upgrade cost. Passive HP repair cannot restore lost tiers for free.
+- Ships equip up to four owned equipment items, including offensive, defensive and strategic abilities. Built items/ranks and loadouts survive death; installed equipment survives base-tier loss, although energy costs can prevent use. Replaced equipment remains owned and can be re-equipped at home for free.
+- Research is remote; installation/loadout changes require returning home. Items have two or three sequential upgrade steps, tunable per item.
+- RMB Claim is built in, outside the four slots, with optional research improvements. Shift booster is a separate built-in short speed burst costing current energy; slotted Dash remains stronger mobility.
+- Claim works at full storage, but collectors stop gathering. Matter collection/material costs follow after the initial antimatter foundation.
+- Random wrecks hide permanent, stacking match-level boons, not equipment/rank unlocks. First collector secures three choices or a skip-for-antimatter bonus; selection is real time and deferrable. Skip deposits directly, with owned overflow. Initial wrecks and ongoing orbital arrivals exclude every faction's base.
+- Economic sites use timed capture, halted by opposing player presence. The prior owner retains benefits until completion. Extractor income deposits directly into base storage and stops at capacity; research stations improve speed; logistics stations transfer their drone and all cargo to the captor, rerouting delivery and enabling resource theft.
+- Boons survive death/reset with the match; site benefits follow ownership. Damage categories, bonus formulas, rates, capture timing and layout are tunable. New management/reward/capture UI runs in real time; reconcile the legacy paused survey during UI work.
+
+Next work, in order:
+
+1. Behavior-preserving terminology conversion: castle → base, wizard/carpet player → ship/pilot, spells → equipment, mana → antimatter, balloons → collector drones, Possess → Claim. Update files/types/references and UI together; retain historical research and project identity until a title is chosen. See `docs/TERMINOLOGY_MIGRATION.md` for type/path mappings and verification gates.
+2. Explicit base tiers and stored-antimatter/player-energy accounting; replace legacy automatic growth and starting-power formulas only in this mechanics milestone.
+3. Five-slot construction lifecycle, cancellation/refunds, tier loss/project destruction and sequential rebuilding.
+4. Real-time base management UI with prerequisites, costs, progress, capacity and siege alerts.
+5. Owned equipment inventory, four-slot UI, home-base installation and sequential ranks.
+6. Energy-costing Shift booster, distinct Dash and initial upgrade choices/balance.
+7. Exploration boons: replace rank-II world rewards with destructible wrecks, three-choice/skip UI, persistent stacking modifiers and fair orbital arrivals.
+8. Economic capture points: timed/contested capture, direct antimatter income, research modifiers, drone/cargo ownership transfer and navigation feedback.
+9. Matter collection/storage, material-dependent construction and matter extractors, then deeper faction/AI/campaign/content iteration. Matter sites require that resource foundation before activation.
+
+These are approved planned systems, not implemented features. Exact costs, timings, damage thresholds and unresolved policies are listed in the design documents. Existing mechanics and controls remain the baseline during terminology conversion. The historical phases below describe implementation history and inherited backlogs; this active milestone takes priority.
 
 Current victory direction (user update, 2026-10-10): destroy the rival player's castle AND defeat its wizard, in either order. Mana possession/storage supports combat power and logistics; it is not a victory condition. This supersedes the earlier equilibrium-quota objective plan.
 
@@ -18,7 +51,7 @@ User-approved direction: spherical planets with radial gravity and surface-relat
 
 Playable conversion implemented: default `scenes/PlanetGame.tscn` includes patch-based procedural spherical terrain/oceans/deformation/collision, upright carpet flight/cameras, radial physical mana/merging/spills, curved possession and balloon routes, castles/storage/power/repair, all spells/discoveries, enemy roles/rival wizard, respawns, objectives, HUD/VFX/audio, and F2 size selection. `PlanetFlightTest.tscn` remains a diagnostic lab with the same presets. Geometry and integrated gameplay regressions pass; hands-on tuning of the converted full loop remains pending. See `docs/SPHERICAL_WORLD.md`.
 
-Active next priorities: integrated spherical playtest across the four sizes, including strategic layout/map and combat spike acceptance → route/habitat/long-haul tuning and attribution of remaining traversal/renderer/resource-lifetime spikes → remaining spell/campaign/presentation work and participant-count decisions. The original phase statuses below retain their historical prototype scope and tuning backlog; their shared systems now also run on the globe.
+Active next priorities: science-fiction terminology conversion → RTS-style base development/equipment milestones above. Route/habitat/long-haul tuning and targeted performance work continue from playtest feedback. The original phase statuses below retain their historical prototype scope and tuning backlog; their shared systems now also run on the globe. Basic hands-on smoothness is accepted as of 2026-10-11; detailed per-size/balance acceptance remains iterative.
 
 Strategic navigation milestone (2026-10-10): implemented five named resource/exploration landmarks, regional encounter bias, three resource fields, and relocated rank-II upgrades including distant/far-side rewards. Added All-Seeing Eye local radar, paused M-key whole-world survey, exploration/ownership visibility, static waypoints with surface-distance/bearing guidance, and globe-wide balloon reach for remote claimed drops. One rival and existing elimination/respawn rules remain. Implementation is regression-verified; hands-on pacing/readability acceptance is pending. See `docs/STRATEGIC_NAVIGATION.md`.
 
@@ -27,6 +60,14 @@ Combat hitch follow-up (2026-10-10): pooling/shared resources/spatial queries ar
 Startup: F5 launches full spherical gameplay. In-game F6 switches to the flight lab and back to a fresh spherical match. The flat island remains `Game.tscn` for regression/reference; it is not the default world.
 
 Long-distance profiling milestone (2026-10-10): added a repeatable two-lap traversal harness with all-size stress and dash-reference-speed routes, real collision probes, settled LOD working-set guards, draw/node/static-memory and frame-time reports. Corrected a reproduced render-to-physics LOD collision handoff gap by delaying old-collider retirement through a physics step. Four-size stress (23,434 samples) and fresh XL at 46 units/second (20,030 samples) pass collision/retirement checks. Return-home terrain/node counts stabilize, but XL still has 64–128-ms default-speed worst frames and up to 1,184 scene draw calls; attribution and hands-on acceptance remain next. See `docs/TRAVERSAL_PERFORMANCE.md`.
+
+Hitch attribution follow-up (2026-10-10): traversal reports now include managed GC/allocation and viewport CPU/GPU timing with adjacent outlier samples. Paced and corrected unpaced XL stress each pass 7,900 samples/132 collision probes and stable return counts. Long 348–377-ms intervals persist with VSync disabled, without matching measured GC pauses or terrain/viewport work. Next isolate main-thread/native cleanup and presentation/scheduling waits; these runs do not establish a cause or hitch fix. See `docs/TRAVERSAL_PERFORMANCE.md`.
+
+Terrain resource-lifetime follow-up (2026-10-10): phase/OS CPU probes located reproduced 121/52-ms spikes before ProcessFrame, with main-thread CPU work immediately after full GC. Terrain build arrays, meshes and collision-shape temporary owners now release deterministically after native-node assignment. Corrected XL stress maxima are 28.60/29.79 ms; fresh 46-unit/second laps max 22.00/27.74 ms across 20,030 samples, with stable working sets and no >33-ms frames. Checks pass. Next validate hands-on traversal/combat and mixed workloads; remaining allocation volume, draw counts and other machines/longer sessions still need acceptance. Earlier 350-ms outliers are not symbol-trace-attributed.
+
+Mixed-load follow-up (2026-10-10): post-release stationary combat passes 4,620 samples/14 possessions with no >33-ms frames. New mixed traversal passes 13,468 samples/226 terrain probes/210 craters, conserving 798 mana per world and stable returned terrain counts. Fixed a reproduced live-edit collider publication gap by delaying old-shape retirement through physics, with no accumulating collision children. Mixed maxima are 37.88/40.26 ms Medium/XL; no >50-ms frames. Combat checks now pass 171 assertions headless/rendered. Next hands-on flight/combat/logistics acceptance and remaining renderer/draw/allocation tuning; see performance docs.
+
+Renderer follow-up (2026-10-11): combined terrain ground/skirts into one surface and reused copied native-input scratch buffers. Fresh XL stress peak draws fall 1,024→595 (~42%) and lap allocations ~302/291→182/176 MiB (~40%), with stable terrain sets/collision. Final mixed run passes 13,468 samples/226 probes/210 craters and exact resource conservation; rendered geometry/gameplay checks pass. Sporadic presentation and first-use dense-body setup outliers remain (one 75-ms creation event, fresh repeat 22 ms). Next hands-on integrated acceptance and targeted setup/presentation tracing, then route/logistics or remaining spell work from feedback. See `docs/TRAVERSAL_PERFORMANCE.md`.
 
 Keep work separated into three tracks:
 
@@ -246,6 +287,8 @@ Research tasks:
 Do not commit original binaries, `.dat`, `.inf`, `.tab`, `.pal`, audio, images, movies, or direct extracted assets unless license/ownership is explicitly cleared.
 
 ## Near-Term Milestones
+
+The active 2026-10-11 base/equipment sequence above supersedes the order below, which is retained as the historical prototype progression.
 
 1. Flight prototype: tuned movement, camera modes, spell firing, one enemy, mana pickups.
 2. Terrain prototype: generated heightmap arena and collision.
