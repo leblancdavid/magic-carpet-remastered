@@ -5,7 +5,7 @@ using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Game;
 using MagicCarpetRemastered.Scripts.Player;
-using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.Equipment;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Tools;
@@ -20,9 +20,9 @@ public partial class LevelObjectiveChecks : Node3D
     {
         try
         {
-            CheckVictory(castleFirst: true);
+            CheckVictory(hubFirst: true);
             ClearActors();
-            CheckVictory(castleFirst: false);
+            CheckVictory(hubFirst: false);
             ClearActors();
             CheckDefeat();
             ClearActors();
@@ -43,31 +43,31 @@ public partial class LevelObjectiveChecks : Node3D
         }
     }
 
-    private (LevelObjective Objective, CarpetFlightController Player, CastleKeep Home,
-        CastleKeep RivalCastle, EnemyEcosystemEnemy Rival) CreateActors()
+    private (LevelObjective Objective, ShipFlightController Player, FactionBase Home,
+        FactionBase RivalBase, EnemyEcosystemEnemy Rival) CreateActors()
     {
-        var player = AddActor(new CarpetFlightController());
-        var home = AddActor(new CastleKeep { InitialStoredMana = 120 });
-        var castle = AddActor(new CastleKeep { IsPlayerCastle = false, InitialStoredMana = 0 });
-        var rival = AddActor(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard });
+        var player = AddActor(new ShipFlightController());
+        var home = AddActor(new FactionBase { InitialStoredAntimatter = 120 });
+        var hub = AddActor(new FactionBase { IsPlayerBase = false, InitialStoredAntimatter = 0 });
+        var rival = AddActor(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.RivalShip });
         var objective = AddActor(new LevelObjective());
-        objective.Initialize(player, home, castle, rival);
-        return (objective, player, home, castle, rival);
+        objective.Initialize(player, home, hub, rival);
+        return (objective, player, home, hub, rival);
     }
 
-    private void CheckVictory(bool castleFirst)
+    private void CheckVictory(bool hubFirst)
     {
         var actors = CreateActors();
-        var tracker = AddActor(new WorldManaTracker());
+        var tracker = AddActor(new WorldAntimatterTracker());
         tracker.Refresh();
-        Check(tracker.EquilibriumMet, "Fixture exceeds mana quota");
+        Check(tracker.EquilibriumMet, "Fixture exceeds antimatter quota");
         actors.Objective.Evaluate();
-        Check(actors.Objective.State == LevelObjective.LevelState.Playing, "Mana quota cannot win level");
+        Check(actors.Objective.State == LevelObjective.LevelState.Playing, "Antimatter quota cannot win level");
         int finishes = 0;
         actors.Objective.Finished += () => finishes++;
-        if (castleFirst)
+        if (hubFirst)
         {
-            HitCastleWithFirebolts(actors.RivalCastle);
+            HitBaseWithPlasmaBolts(actors.RivalBase);
         }
         else
         {
@@ -75,15 +75,15 @@ public partial class LevelObjectiveChecks : Node3D
         }
         actors.Objective.Evaluate();
         Check(actors.Objective.State == LevelObjective.LevelState.Playing, "One defeated target cannot win");
-        if (castleFirst)
+        if (hubFirst)
         {
             actors.Rival.ApplyDamage(1000);
         }
         else
         {
-            // Freeing the dead wizard must preserve the recorded kill.
+            // Freeing the dead pilot must preserve the recorded kill.
             actors.Rival.Free();
-            HitCastleWithFirebolts(actors.RivalCastle);
+            HitBaseWithPlasmaBolts(actors.RivalBase);
         }
         actors.Objective.Evaluate();
         Check(actors.Objective.State == LevelObjective.LevelState.Victory, "Both defeated targets win in either order");
@@ -96,11 +96,11 @@ public partial class LevelObjectiveChecks : Node3D
     {
         var actors = CreateActors();
         actors.Rival.ApplyDamage(1000);
-        actors.RivalCastle.ApplyDamage(1000);
+        actors.RivalBase.ApplyDamage(1000);
         actors.Home.ApplyDamage(1000);
         actors.Player.ApplyDamage(1000);
         actors.Objective.Evaluate();
-        Check(actors.Objective.State == LevelObjective.LevelState.Defeat, "Home castle loss takes precedence over simultaneous victory");
+        Check(actors.Objective.State == LevelObjective.LevelState.Defeat, "Home hub loss takes precedence over simultaneous victory");
         Check(!string.IsNullOrEmpty(actors.Objective.ResultMessage), "Defeat explains its cause");
     }
 
@@ -108,57 +108,57 @@ public partial class LevelObjectiveChecks : Node3D
     {
         var actors = CreateActors();
         actors.Home.GlobalPosition = new Vector3(-20, 0, 0);
-        actors.RivalCastle.GlobalPosition = new Vector3(20, 0, 0);
-        actors.Rival.AbsorbMana(17);
-        var tracker = AddActor(new WorldManaTracker());
-        int total = tracker.TotalMana;
+        actors.RivalBase.GlobalPosition = new Vector3(20, 0, 0);
+        actors.Rival.AbsorbAntimatter(17);
+        var tracker = AddActor(new WorldAntimatterTracker());
+        int total = tracker.TotalAntimatter;
         actors.Player.ApplyDamage(1000);
         actors.Rival.ApplyDamage(1000);
         actors.Objective.Evaluate();
         Check(actors.Objective.State == LevelObjective.LevelState.Playing && actors.Objective.PlayerRespawnRemaining == 10,
-            "Wizard death starts respawn rather than ending a level with a living castle");
+            "Pilot death starts respawn rather than ending a level with a living hub");
         Vector3 position = actors.Player.GlobalPosition;
         actors.Player._PhysicsProcess(1);
         Check(actors.Player.Health == 0 && actors.Player.GlobalPosition == position && actors.Player.CollisionLayer == 0,
             "Dead player cannot move or collide during countdown");
         actors.Objective._PhysicsProcess(9.9);
-        Check(actors.Player.Health == 0 && actors.Objective.RivalWizardDefeated, "Both wizards stay dead before ten seconds");
+        Check(actors.Player.Health == 0 && actors.Objective.RivalPilotDefeated, "Both pilots stay dead before ten seconds");
         actors.Rival.Free();
         actors.Objective._PhysicsProcess(0.2);
-        var rival = GetNode<EnemyEcosystemEnemy>("RivalWizard");
+        var rival = GetNode<EnemyEcosystemEnemy>("RivalPilot");
         rival.SetPhysicsProcess(false);
-        Check(actors.Player.Health == 100 && actors.Player.Mana == actors.Player.ManaCapacity && actors.Player.IsInvulnerable,
-            "Player respawns with restored health/mana and brief protection");
+        Check(actors.Player.Health == 100 && actors.Player.Energy == actors.Player.EnergyCapacity && actors.Player.IsInvulnerable,
+            "Player respawns with restored health/antimatter and brief protection");
         Check(actors.Player.GlobalPosition.DistanceTo(actors.Home.GlobalPosition) < 12 && actors.Player.CollisionLayer != 0,
-            "Player returns beside its home castle with collision restored");
-        Check(rival.Health > 0 && rival.GlobalPosition.DistanceTo(actors.RivalCastle.GlobalPosition) < 12
-            && !actors.Objective.RivalWizardDefeated, "Rival respawns at its own castle and clears the old defeat");
+            "Player returns beside its home hub with collision restored");
+        Check(rival.Health > 0 && rival.GlobalPosition.DistanceTo(actors.RivalBase.GlobalPosition) < 12
+            && !actors.Objective.RivalPilotDefeated, "Rival respawns at its own hub and clears the old defeat");
         tracker.Refresh();
-        Check(tracker.TotalMana == total && rival.ManaReserve == 0, "Respawns do not mint physical wizard mana");
+        Check(tracker.TotalAntimatter == total && rival.AntimatterReserve == 0, "Respawns do not mint physical pilot antimatter");
         rival.ApplyDamage(1000);
         actors.Objective._PhysicsProcess(10);
-        var second = GetNode<EnemyEcosystemEnemy>("RivalWizard");
+        var second = GetNode<EnemyEcosystemEnemy>("RivalPilot");
         second.SetPhysicsProcess(false);
         Check(second != rival && second.Health > 0, "Repeated rival deaths rebind the respawn lifecycle");
-        actors.RivalCastle.ApplyDamage(1000);
+        actors.RivalBase.ApplyDamage(1000);
         actors.Objective._PhysicsProcess(20);
-        Check(!actors.Objective.RivalWizardDefeated && second.Health > 0, "Castle destruction alone leaves the current wizard alive");
+        Check(!actors.Objective.RivalPilotDefeated && second.Health > 0, "Base destruction alone leaves the current pilot alive");
         second.ApplyDamage(1000);
         actors.Objective._PhysicsProcess(20);
-        Check(actors.Objective.State == LevelObjective.LevelState.Victory, "Destroyed castle prevents respawn and final wizard death wins");
+        Check(actors.Objective.State == LevelObjective.LevelState.Victory, "Destroyed hub prevents respawn and final pilot death wins");
     }
 
-    private void HitCastleWithFirebolts(CastleKeep castle)
+    private void HitBaseWithPlasmaBolts(FactionBase hub)
     {
-        int before = castle.Health;
-        var bolt = AddActor(new SpellProjectile());
-        typeof(SpellProjectile).GetMethod("OnBodyEntered", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(bolt, new object[] { castle });
-        Check(castle.Health == before - bolt.Damage, "Firebolt damages rival castle");
-        typeof(SpellProjectile).GetMethod("OnBodyEntered", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(bolt, new object[] { castle });
-        Check(castle.Health == before - bolt.Damage, "Consumed firebolt cannot deal duplicate damage");
-        castle.ApplyDamage(1000);
+        int before = hub.Health;
+        var bolt = AddActor(new WeaponProjectile());
+        typeof(WeaponProjectile).GetMethod("OnBodyEntered", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(bolt, new object[] { hub });
+        Check(hub.Health == before - bolt.Damage, "PlasmaBolt damages rival hub");
+        typeof(WeaponProjectile).GetMethod("OnBodyEntered", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(bolt, new object[] { hub });
+        Check(hub.Health == before - bolt.Damage, "Consumed plasmaBolt cannot deal duplicate damage");
+        hub.ApplyDamage(1000);
     }
 
     private void CheckArenaIntegration()
@@ -166,10 +166,10 @@ public partial class LevelObjectiveChecks : Node3D
         var game = AddActor(new MagicCarpetRemastered.Scripts.Game.Game());
         var objective = game.GetNode<LevelObjective>("LevelObjective");
         var director = game.GetNode<EnemyEcosystemDirector>("EnemyEcosystemDirector");
-        Check(!director.SpawnEnemyWizards, "Director cannot replace the designated rival");
-        var rival = game.GetNode<EnemyEcosystemEnemy>("RivalWizard");
-        Check(rival.Health > 0 && !objective.RivalWizardDefeated, "Arena begins with living rival");
-        game.GetNode<CastleKeep>("EnemyCastle").ApplyDamage(1000);
+        Check(!director.SpawnRivalShips, "Director cannot replace the designated rival");
+        var rival = game.GetNode<EnemyEcosystemEnemy>("RivalPilot");
+        Check(rival.Health > 0 && !objective.RivalPilotDefeated, "Arena begins with living rival");
+        game.GetNode<FactionBase>("EnemyBase").ApplyDamage(1000);
         rival.ApplyDamage(1000);
         objective.Evaluate();
         Check(GetTree().Paused && Input.MouseMode == Input.MouseModeEnum.Visible, "Result freezes simulation and releases mouse");
@@ -195,8 +195,8 @@ public partial class LevelObjectiveChecks : Node3D
             .Instantiate<MagicCarpetRemastered.Scripts.Game.Game>();
         GetTree().Root.AddChild(game);
         GetTree().CurrentScene = game;
-        game.GetNode<CastleKeep>("EnemyCastle").ApplyDamage(1000);
-        game.GetNode<EnemyEcosystemEnemy>("RivalWizard").ApplyDamage(1000);
+        game.GetNode<FactionBase>("EnemyBase").ApplyDamage(1000);
+        game.GetNode<EnemyEcosystemEnemy>("RivalPilot").ApplyDamage(1000);
         game.GetNode<LevelObjective>("LevelObjective").Evaluate();
         var spawned = new EnemyEcosystemEnemy();
         game.AddChild(spawned);
@@ -208,9 +208,9 @@ public partial class LevelObjectiveChecks : Node3D
         Check(restarted != null && restarted != game && !GetTree().Paused, "R reloads the actual arena and unpauses");
         Check(restarted!.GetNode<LevelObjective>("LevelObjective").State == LevelObjective.LevelState.Playing,
             "Restart resets terminal objective state");
-        Check(restarted.GetNode<EnemyEcosystemEnemy>("RivalWizard").Health > 0
-            && !restarted.GetNode<CastleKeep>("EnemyCastle").IsDestroyed,
-            "Restart restores rival wizard and castle");
+        Check(restarted.GetNode<EnemyEcosystemEnemy>("RivalPilot").Health > 0
+            && !restarted.GetNode<FactionBase>("EnemyBase").IsDestroyed,
+            "Restart restores rival pilot and hub");
         if (DisplayServer.GetName() != "headless")
         {
             Check(Input.MouseMode == Input.MouseModeEnum.Captured, "Restart recaptures flight mouse input");

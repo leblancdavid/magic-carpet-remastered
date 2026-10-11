@@ -1,5 +1,9 @@
 # Spherical Traversal Performance
 
+## Current Terminology (2026-10-11)
+
+Gameplay/diagnostic types now use antimatter and equipment. `TraversalFrameProfile.tscn`, route settings, CLI flags and output locations remain unchanged. New reports use `antimatter_bodies`, `antimatter_logic_ms`, `antimatter_integration_ms` and `mixed-antimatter-create`; historical report names/measurements below remain intact. See `TERMINOLOGY_MIGRATION.md`. The terminology pass ran gameplay/combat correctness checks and rendered smoke verification, not a new traversal benchmark.
+
 ## Single-surface terrain and scratch buffers (2026-10-11)
 
 Terrain ground and seam skirts now share one ArrayMesh surface/material instead of two draw surfaces. Ground vertices remain at the start of the cached vertex/normal/color arrays; their tail holds the same skirt triangles with independent clockwise flat normals and the same eight-unit radial depth. Ground normals/colors and vertex sampling are retained. Only ground triangle indices feed collision shapes; visual skirts remain noncolliding. Resolution-keyed per-terrain scratch buffers supply render indices and ground collision faces; native setters copy these arrays synchronously before the next build reuses them. Published meshes/shapes retain their own data. Deterministic wrapper release and delayed collision retirement remain active.

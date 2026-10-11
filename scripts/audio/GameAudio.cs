@@ -50,7 +50,7 @@ public partial class GameAudio : Node
         _flightIntensity = Mathf.Clamp(intensity, 0.0f, 1.0f);
     }
 
-    public void PlaySpellCast()
+    public void PlayEquipmentCast()
     {
         AddChild(new ToneEmitter(280.0f, 740.0f, 0.12f, 0.16f, Waveform.Saw));
     }

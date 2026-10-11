@@ -34,7 +34,7 @@ public partial class PlanetSettings : CanvasLayer
         for (int i = 0; i < PlanetSizes.Radii.Length; i++) _size.AddItem($"{PlanetSizes.Names[i]} — {PlanetSizes.Radii[i]} m radius");
         _size.Select(PlanetSizes.SelectedIndex);
         column.AddChild(_size);
-        column.AddChild(new Label { Text = "Starting a planet resets the match, mana,\ncastles, terrain edits, and spell discoveries.", HorizontalAlignment = HorizontalAlignment.Center });
+        column.AddChild(new Label { Text = "Starting a planet resets the match, antimatter,\nbases, terrain edits, and equipment discoveries.", HorizontalAlignment = HorizontalAlignment.Center });
         Button restart = new() { Text = "Start new planet" };
         column.AddChild(restart);
         restart.Pressed += () =>

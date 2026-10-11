@@ -154,9 +154,9 @@ public partial class PlanetTerrain : Node3D
     public void RefreshDetail()
     {
         List<Vector3> observers = new();
-        foreach (string group in new[] { "player", "loose_mana", "ecosystem_enemy", "simple_monster", "balloon", "guardian" })
+        foreach (string group in new[] { "player", "loose_antimatter", "ecosystem_enemy", "simple_monster", "drone", "guardian-drone" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
-                if (node is Node3D actor && !actor.IsQueuedForDeletion() && node is not ManaPickup { IsAvailable: false })
+                if (node is Node3D actor && !actor.IsQueuedForDeletion() && node is not AntimatterPickup { IsAvailable: false })
                     observers.Add(Arena.UpAt(actor.GlobalPosition));
         foreach (Patch patch in _patches)
         {

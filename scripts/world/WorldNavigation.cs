@@ -5,7 +5,7 @@ using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
-public enum MapMarkerKind { Player, Home, RivalCastle, Landmark, Upgrade, Mana, Balloon, Enemy }
+public enum MapMarkerKind { Player, Home, RivalBase, Landmark, Upgrade, Antimatter, Drone, Enemy }
 public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Color Color, bool Charted = true)
 {
     public Node3D? Actor { get; init; }
@@ -16,10 +16,10 @@ public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Col
         up = Up;
         if (Actor == null) return true;
         if (!GodotObject.IsInstanceValid(Actor) || Actor.IsQueuedForDeletion() || !Actor.IsInsideTree()) return false;
-        if (Actor is ManaPickup orb && !orb.IsAvailable) return false;
+        if (Actor is AntimatterPickup orb && !orb.IsAvailable) return false;
         if (Actor is EnemyEcosystemEnemy enemy && enemy.Health <= 0) return false;
-        if (Actor is ManaBalloon balloon && balloon.Health <= 0) return false;
-        if (Actor is SpellDiscovery discovery && discovery.IsCollected) return false;
+        if (Actor is CollectorDrone drone && drone.Health <= 0) return false;
+        if (Actor is EquipmentDiscovery discovery && discovery.IsCollected) return false;
         up = arena.UpAt(Actor.GlobalPosition);
         return true;
     }
@@ -30,13 +30,13 @@ public partial class WorldNavigation : Node
     public const float LocalRevealRange = 120;
     public const float RadarRange = 220;
     public HeightmapArena Arena { get; private set; } = null!;
-    public CarpetFlightController Player { get; private set; } = null!;
+    public ShipFlightController Player { get; private set; } = null!;
     public ImageTexture SurveyTexture { get; private set; } = null!;
     public IReadOnlyList<MapMarker> Markers => _markers;
     public Vector3? WaypointUp { get; private set; }
     public string WaypointName { get; private set; } = "";
     public Vector3 TargetUp => WaypointUp ?? _homeUp;
-    public string TargetName => WaypointUp.HasValue ? WaypointName : "Home castle";
+    public string TargetName => WaypointUp.HasValue ? WaypointName : "Home base";
     public float TargetDistance => MapProjection.LocalOffset(TargetUp, Player.GlobalBasis, Arena.PlanetRadius).Length();
     private readonly List<MapMarker> _markers = new();
     private readonly List<WorldLandmark> _landmarks = new();
@@ -46,7 +46,7 @@ public partial class WorldNavigation : Node
     public override void _Ready()
     {
         Arena = (HeightmapArena)GetTree().GetFirstNodeInGroup("heightmap_arena");
-        Player = (CarpetFlightController)GetTree().GetFirstNodeInGroup("player");
+        Player = (ShipFlightController)GetTree().GetFirstNodeInGroup("player");
         AddToGroup("world_navigation");
         BuildSurvey();
         Refresh();
@@ -89,15 +89,15 @@ public partial class WorldNavigation : Node
         _markers.Clear();
         _landmarks.Clear();
         _markers.Add(new MapMarker(Arena.UpAt(Player.GlobalPosition), "You", MapMarkerKind.Player, Colors.White) { Actor = Player });
-        foreach (string group in new[] { "player_castle", "enemy_castle" })
+        foreach (string group in new[] { "player_base", "enemy_base" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
             {
-                if (node is not CastleKeep castle || castle.IsQueuedForDeletion()) continue;
-                if (castle.IsPlayerCastle) _homeUp = Arena.UpAt(castle.GlobalPosition);
-                Add(castle, castle.IsPlayerCastle ? "Home" : "Rival castle",
-                    castle.IsPlayerCastle ? MapMarkerKind.Home : MapMarkerKind.RivalCastle,
-                    castle.IsPlayerCastle ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.25f, 0.3f),
-                    castle.IsDestroyed ? "Ruins" : $"{castle.Health} HP · {castle.StoredMana} mana");
+                if (node is not FactionBase hub || hub.IsQueuedForDeletion()) continue;
+                if (hub.IsPlayerBase) _homeUp = Arena.UpAt(hub.GlobalPosition);
+                Add(hub, hub.IsPlayerBase ? "Home" : "Rival base",
+                    hub.IsPlayerBase ? MapMarkerKind.Home : MapMarkerKind.RivalBase,
+                    hub.IsPlayerBase ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.25f, 0.3f),
+                    hub.IsDestroyed ? "Ruins" : $"{hub.Health} HP · {hub.StoredAntimatter} antimatter");
             }
         foreach (Node node in GetTree().GetNodesInGroup("world_landmark"))
         {
@@ -107,30 +107,30 @@ public partial class WorldNavigation : Node
                 ? $"{landmark.Title} — {landmark.Description}" : "Uncharted landmark — fly within 65 m to identify",
                 MapMarkerKind.Landmark, landmark.IsDiscovered ? landmark.LandmarkColor : new Color(0.6f, 0.65f, 0.72f), landmark.IsDiscovered));
         }
-        foreach (Node node in GetTree().GetNodesInGroup("spell_discovery"))
+        foreach (Node node in GetTree().GetNodesInGroup("equipment_discovery"))
         {
-            if (node is not SpellDiscovery discovery || discovery.IsQueuedForDeletion() || discovery.IsCollected) continue;
+            if (node is not EquipmentDiscovery discovery || discovery.IsQueuedForDeletion() || discovery.IsCollected) continue;
             bool revealed = Nearby(discovery);
             foreach (var landmark in _landmarks)
                 if (landmark.IsDiscovered && Arena.SurfaceDistance(landmark.GlobalPosition, discovery.GlobalPosition) < 30) revealed = true;
-            if (revealed) Add(discovery, $"{discovery.SpellName} II", MapMarkerKind.Upgrade, new Color(1, 0.8f, 0.2f));
+            if (revealed) Add(discovery, $"{discovery.EquipmentName} II", MapMarkerKind.Upgrade, new Color(1, 0.8f, 0.2f));
         }
-        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+        foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {
-            if (node is not ManaPickup orb || !orb.IsAvailable || (orb.Ownership != ManaOwnership.Player && !Nearby(orb))) continue;
+            if (node is not AntimatterPickup orb || !orb.IsAvailable || (orb.Ownership != AntimatterOwnership.Player && !Nearby(orb))) continue;
             Color color = orb.Ownership switch
             {
-                ManaOwnership.Player => new Color(0.15f, 0.85f, 1),
-                ManaOwnership.Enemy => new Color(1, 0.3f, 0.4f),
+                AntimatterOwnership.Player => new Color(0.15f, 0.85f, 1),
+                AntimatterOwnership.Enemy => new Color(1, 0.3f, 0.4f),
                 _ => new Color(0.85f, 0.88f, 0.95f)
             };
-            Add(orb, $"{orb.Ownership} mana · {orb.ManaAmount}", MapMarkerKind.Mana, color);
+            Add(orb, $"{orb.Ownership} antimatter · {orb.AntimatterAmount}", MapMarkerKind.Antimatter, color);
         }
-        foreach (Node node in GetTree().GetNodesInGroup("balloon"))
+        foreach (Node node in GetTree().GetNodesInGroup("drone"))
         {
-            if (node is not ManaBalloon balloon || balloon.IsQueuedForDeletion() || balloon.Health <= 0 || (!balloon.UsePlayerMana && !Nearby(balloon))) continue;
-            Add(balloon, balloon.UsePlayerMana ? "Your balloon" : "Rival balloon", MapMarkerKind.Balloon,
-                balloon.UsePlayerMana ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.3f, 0.4f), $"{balloon.CarriedCount} cargo globes");
+            if (node is not CollectorDrone drone || drone.IsQueuedForDeletion() || drone.Health <= 0 || (!drone.UsePlayerAntimatter && !Nearby(drone))) continue;
+            Add(drone, drone.UsePlayerAntimatter ? "Your drone" : "Rival drone", MapMarkerKind.Drone,
+                drone.UsePlayerAntimatter ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.3f, 0.4f), $"{drone.CarriedCount} cargo globes");
         }
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
             if (node is EnemyEcosystemEnemy enemy && !enemy.IsQueuedForDeletion() && enemy.Health > 0 && Nearby(enemy))

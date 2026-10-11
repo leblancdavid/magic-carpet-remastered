@@ -1,6 +1,6 @@
-namespace MagicCarpetRemastered.Scripts.Spells;
+namespace MagicCarpetRemastered.Scripts.Equipment;
 
-public enum SpellKind
+public enum EquipmentKind
 {
     Projectile,
     Terrain,
@@ -10,22 +10,22 @@ public enum SpellKind
     Economy
 }
 
-public sealed class SpellDefinition
+public sealed class EquipmentDefinition
 {
-    public SpellDefinition(string id, string displayName, SpellKind kind, int manaCost, float cooldownSeconds, string description)
+    public EquipmentDefinition(string id, string displayName, EquipmentKind kind, int energyCost, float cooldownSeconds, string description)
     {
         Id = id;
         DisplayName = displayName;
         Kind = kind;
-        ManaCost = manaCost;
+        EnergyCost = energyCost;
         CooldownSeconds = cooldownSeconds;
         Description = description;
     }
 
     public string Id { get; }
     public string DisplayName { get; }
-    public SpellKind Kind { get; }
-    public int ManaCost { get; }
+    public EquipmentKind Kind { get; }
+    public int EnergyCost { get; }
     public float CooldownSeconds { get; }
     public string Description { get; }
     public int Rank { get; private set; } = 1;

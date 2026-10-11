@@ -1,8 +1,8 @@
 using Godot;
 
-namespace MagicCarpetRemastered.Scripts.Spells;
+namespace MagicCarpetRemastered.Scripts.Equipment;
 
-public partial class SpellImpactBurst : Node3D
+public partial class EquipmentImpactBurst : Node3D
 {
     [Export] public Color BurstColor { get; set; } = new(1.0f, 0.58f, 0.12f, 0.85f);
     [Export] public Color EmissionColor { get; set; } = new(1.0f, 0.32f, 0.05f);
@@ -13,7 +13,7 @@ public partial class SpellImpactBurst : Node3D
     private MeshInstance3D _mesh = null!;
     private StandardMaterial3D _material = null!;
     private float _age;
-    internal SpellImpactPool? Pool { get; set; }
+    internal EquipmentImpactPool? Pool { get; set; }
     private static readonly SphereMesh SharedMesh = new() { Radius = 0.6f, Height = 1.2f, RadialSegments = 16, Rings = 8 };
 
     public override void _Ready()

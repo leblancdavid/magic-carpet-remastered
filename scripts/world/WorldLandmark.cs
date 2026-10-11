@@ -14,14 +14,14 @@ public partial class WorldLandmark : Node3D
     public bool IsDiscovered { get; private set; }
     public const float DiscoveryRange = 65;
     private HeightmapArena? _arena;
-    private CarpetFlightController? _player;
+    private ShipFlightController? _player;
     private float _timer;
 
     public override void _Ready()
     {
         AddToGroup("world_landmark");
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
-        _player = GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
+        _player = GetTree().GetFirstNodeInGroup("player") as ShipFlightController;
         var stone = new StandardMaterial3D { AlbedoColor = LandmarkColor.Darkened(0.45f), Roughness = 1 };
         var glow = new StandardMaterial3D { AlbedoColor = LandmarkColor, EmissionEnabled = true, Emission = LandmarkColor, EmissionEnergyMultiplier = 1.2f };
         for (int i = 0; i < 3; i++)
@@ -50,7 +50,7 @@ public partial class WorldLandmark : Node3D
         if (_timer > 0) return;
         _timer = 0.25f;
         FollowSurface();
-        _player ??= GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
+        _player ??= GetTree().GetFirstNodeInGroup("player") as ShipFlightController;
         if (_player is { Health: > 0 } && _arena != null
             && _arena.SurfaceDistance(GlobalPosition, _player.GlobalPosition) <= DiscoveryRange) IsDiscovered = true;
     }

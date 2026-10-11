@@ -5,7 +5,7 @@ using MagicCarpetRemastered.Scripts.World;
 namespace MagicCarpetRemastered.Tools;
 
 // Only instantiated by the profiler; normal gameplay pays no timing overhead.
-public partial class ProfiledManaPickup : ManaPickup
+public partial class ProfiledAntimatterPickup : AntimatterPickup
 {
     public static double LogicMilliseconds { get; private set; }
     public static double IntegrationMilliseconds { get; private set; }

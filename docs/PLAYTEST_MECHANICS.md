@@ -1,5 +1,7 @@
 # Playtest Mechanics
 
+Terminology update (2026-10-11): the mechanics below are preserved under ships/pilots, bases, antimatter, collector drones, equipment and Claim. Player equipment expenditure is rechargeable **energy**, separate from physical antimatter. Use the renamed antimatter/resource and rival/equipment verification scenes listed in `README.md`; see `TERMINOLOGY_MIGRATION.md` for mappings. Numeric defaults below remain the inherited baseline until the new economy milestone.
+
 Current defaults for the playable arena (2026-10-10).
 
 ## Loot And Burst Spillage

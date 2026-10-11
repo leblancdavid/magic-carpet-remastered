@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using Godot;
 using MagicCarpetRemastered.Scripts.World;
 
-namespace MagicCarpetRemastered.Scripts.Spells;
+namespace MagicCarpetRemastered.Scripts.Equipment;
 
-public partial class PossessProjectile : Node3D
+public partial class ClaimProjectile : Node3D
 {
     [Export] public float Speed { get; set; } = 48.0f;
     [Export] public float LifetimeSeconds { get; set; } = 4.0f;
@@ -14,14 +14,14 @@ public partial class PossessProjectile : Node3D
     [Export] public float HitRadius { get; set; } = 1.3f;
 
     public bool IsFollowingTerrain { get; private set; }
-    public event Action<int>? ManaPossessed;
+    public event Action<int>? AntimatterClaimed;
 
     private HeightmapArena? _arena;
     private Vector3 _direction = Vector3.Forward;
     private Vector3 _heading = Vector3.Forward;
     private float _age;
     private float _travelled;
-    private readonly List<ManaPickup> _candidates = new();
+    private readonly List<AntimatterPickup> _candidates = new();
     private static readonly SphereMesh SharedMesh = new() { Radius = 0.18f, Height = 0.36f, RadialSegments = 12, Rings = 6 };
 
     public override void _Ready()
@@ -88,16 +88,16 @@ public partial class PossessProjectile : Node3D
                 }
             }
 
-            ManaPickup? hit = FindFirstHit(previous, next);
+            AntimatterPickup? hit = FindFirstHit(previous, next);
             GlobalPosition = next;
             if (hit != null)
             {
-                int amount = hit.ManaAmount;
-                hit.ReassignOwnership(ManaOwnership.Player);
-                SpellImpactPool.Prepare(GetTree().CurrentScene).Emit(hit.GlobalPosition,
+                int amount = hit.AntimatterAmount;
+                hit.ReassignOwnership(AntimatterOwnership.Player);
+                EquipmentImpactPool.Prepare(GetTree().CurrentScene).Emit(hit.GlobalPosition,
                     new Color(0.2f, 0.9f, 1, 0.85f), new Color(0.05f, 0.7f, 1), 0.28f, 0.4f, 2.2f);
                 QueueFree();
-                ManaPossessed?.Invoke(amount);
+                AntimatterClaimed?.Invoke(amount);
                 return;
             }
 
@@ -117,16 +117,16 @@ public partial class PossessProjectile : Node3D
         }
     }
 
-    private ManaPickup? FindFirstHit(Vector3 from, Vector3 to)
+    private AntimatterPickup? FindFirstHit(Vector3 from, Vector3 to)
     {
-        ManaPickup? first = null;
+        AntimatterPickup? first = null;
         float firstEntry = float.PositiveInfinity;
         Vector3 segment = to - from;
         float lengthSquared = segment.LengthSquared();
-        ManaNeighborhood.Query(GetTree(), (from + to) * 0.5f, HitRadius + segment.Length() * 0.5f, _candidates);
-        foreach (ManaPickup pickup in _candidates)
+        AntimatterNeighborhood.Query(GetTree(), (from + to) * 0.5f, HitRadius + segment.Length() * 0.5f, _candidates);
+        foreach (AntimatterPickup pickup in _candidates)
         {
-            if (!pickup.IsAvailable || pickup.Ownership == ManaOwnership.Player)
+            if (!pickup.IsAvailable || pickup.Ownership == AntimatterOwnership.Player)
             {
                 continue;
             }

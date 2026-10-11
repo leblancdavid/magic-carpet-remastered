@@ -79,7 +79,7 @@ public partial class PlanetFlightChecks : Node
             player.TargetClearance = 2;
             for (int i = 0; i < 180; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             Check(Mathf.Abs(player.Clearance - 2) < 0.1f, "Radial descent must reach minimum clearance");
-            Check(player.GlobalBasis.Y.Dot(player.LocalUp) > 0.9999f, "Carpet must remain upright");
+            Check(player.GlobalBasis.Y.Dot(player.LocalUp) > 0.9999f, "Ship must remain upright");
             player.Radius = 1200;
             player.ResetFlight();
             Check(Mathf.Abs(player.GlobalPosition.Length() - 1202) < 0.01f, "Radius change/reset must preserve requested clearance");

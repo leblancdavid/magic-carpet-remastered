@@ -2,14 +2,14 @@ using System.Linq;
 using Godot;
 using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Enemies;
-using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.Equipment;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Player;
 
-public partial class CarpetFlightController : CharacterBody3D
+public partial class ShipFlightController : CharacterBody3D
 {
-    private enum TerrainSpellMode
+    private enum TerrainEquipmentMode
     {
         Crater,
         Raise,
@@ -17,12 +17,12 @@ public partial class CarpetFlightController : CharacterBody3D
         Flatten
     }
 
-    private enum QuickSpellSlot
+    private enum QuickEquipmentSlot
     {
-        Firebolt,
-        ArcaneBurst,
-        ManaShield,
-        WindDash,
+        PlasmaBolt,
+        PulseBurst,
+        EnergyShield,
+        Dash,
         Guardian
     }
 
@@ -38,141 +38,141 @@ public partial class CarpetFlightController : CharacterBody3D
     [Export] public float GroundProbeHeight { get; set; } = 24.0f;
     [Export] public float GroundProbeDepth { get; set; } = 96.0f;
     [Export] public float FireCooldownSeconds { get; set; } = 0.25f;
-    [Export] public float TerrainSpellCooldownSeconds { get; set; } = 0.75f;
-    [Export] public float TerrainSpellRange { get; set; } = 90.0f;
-    [Export] public float TerrainSpellRadius { get; set; } = 10.0f;
-    [Export] public float TerrainSpellDepth { get; set; } = 5.0f;
-    [Export] public float TerrainSpellHeight { get; set; } = 4.0f;
+    [Export] public float TerrainEquipmentCooldownSeconds { get; set; } = 0.75f;
+    [Export] public float TerrainEquipmentRange { get; set; } = 90.0f;
+    [Export] public float TerrainEquipmentRadius { get; set; } = 10.0f;
+    [Export] public float TerrainEquipmentDepth { get; set; } = 5.0f;
+    [Export] public float TerrainEquipmentHeight { get; set; } = 4.0f;
     [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
     [Export] public float TerrainFollowStrength { get; set; } = 4.5f;
     [Export] public float TerrainFollowMaxLiftSpeed { get; set; } = 10.0f;
-    [Export] public int ManaCapacity { get; set; } = 80;
-    [Export] public int InitialClaimedMana { get; set; } = 80;
-    [Export] public int MaxClaimedMana { get; set; } = 400;
-    [Export] public float ManaRegenPerClaimedManaPerSecond { get; set; } = 0.04f;
-    [Export] public int ManaDepositReserve { get; set; } = 20;
-    [Export] public float ManaDepositRadius { get; set; } = 6.0f;
-    [Export] public int PrimarySpellManaCost { get; set; } = 5;
-    [Export] public int TerrainSpellManaCost { get; set; } = 0;
-    [Export] public int AreaSpellManaCost { get; set; } = 18;
-    [Export] public float AreaSpellCooldownSeconds { get; set; } = 2.5f;
-    [Export] public float AreaSpellRange { get; set; } = 70.0f;
-    [Export] public float AreaSpellRadius { get; set; } = 8.0f;
-    [Export] public int AreaSpellDamage { get; set; } = 32;
-    [Export] public int ShieldSpellManaCost { get; set; } = 14;
-    [Export] public float ShieldSpellCooldownSeconds { get; set; } = 6.0f;
+    [Export] public int EnergyCapacity { get; set; } = 80;
+    [Export] public int InitialClaimedAntimatter { get; set; } = 80;
+    [Export] public int MaxClaimedAntimatter { get; set; } = 400;
+    [Export] public float EnergyRegenPerClaimedAntimatterPerSecond { get; set; } = 0.04f;
+    [Export] public int EnergyDepositReserve { get; set; } = 20;
+    [Export] public float EnergyDepositRadius { get; set; } = 6.0f;
+    [Export] public int PrimaryEquipmentEnergyCost { get; set; } = 5;
+    [Export] public int TerrainEquipmentEnergyCost { get; set; } = 0;
+    [Export] public int AreaEquipmentEnergyCost { get; set; } = 18;
+    [Export] public float AreaEquipmentCooldownSeconds { get; set; } = 2.5f;
+    [Export] public float AreaEquipmentRange { get; set; } = 70.0f;
+    [Export] public float AreaEquipmentRadius { get; set; } = 8.0f;
+    [Export] public int AreaEquipmentDamage { get; set; } = 32;
+    [Export] public int ShieldEquipmentEnergyCost { get; set; } = 14;
+    [Export] public float ShieldEquipmentCooldownSeconds { get; set; } = 6.0f;
     [Export] public float ShieldDurationSeconds { get; set; } = 4.0f;
     [Export] public float ShieldDamageReduction { get; set; } = 0.65f;
-    [Export] public int MobilitySpellManaCost { get; set; } = 10;
-    [Export] public float MobilitySpellCooldownSeconds { get; set; } = 3.0f;
+    [Export] public int MobilityEquipmentEnergyCost { get; set; } = 10;
+    [Export] public float MobilityEquipmentCooldownSeconds { get; set; } = 3.0f;
     [Export] public float MobilityDashSpeed { get; set; } = 46.0f;
     [Export] public float MobilityDashLift { get; set; } = 5.0f;
-[Export] public int SummonSpellManaCost { get; set; } = 24;
-    [Export] public float SummonSpellCooldownSeconds { get; set; } = 8.0f;
+[Export] public int SummonEquipmentEnergyCost { get; set; } = 24;
+    [Export] public float SummonEquipmentCooldownSeconds { get; set; } = 8.0f;
     [Export] public float SummonDistance { get; set; } = 5.0f;
-    [Export] public int PossessSpellManaCost { get; set; } = 2;
-    [Export] public float PossessSpellCooldownSeconds { get; set; } = 0.4f;
+    [Export] public int ClaimEquipmentEnergyCost { get; set; } = 2;
+    [Export] public float ClaimEquipmentCooldownSeconds { get; set; } = 0.4f;
 
-    public int Mana { get; private set; } = 40;
-    public int ClaimedMana { get; private set; }
-    // Derived spell power only; physical world mana stays in castle storage.
-    public int CastleManaBonus => ClaimedMana - _baseManaPower;
+    public int Energy { get; private set; } = 40;
+    public int ClaimedAntimatter { get; private set; }
+    // Derived equipment power only; physical world antimatter stays in hub storage.
+    public int BaseAntimatterBonus => ClaimedAntimatter - _baseAntimatterPower;
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : _arena.Elevation(GlobalPosition) - _arena.HeightAt(GlobalPosition);
     public bool IsInvulnerable => _damageInvulnerabilityTimer > 0.0f;
     public string CameraMode => _firstPersonCamera ? "First Person" : "Chase";
-    public string PrimarySpellName => GetSelectedQuickSpell()?.RankedName ?? "Firebolt";
-    public string TerrainSpellName => _terrainSpell?.DisplayName ?? "Terrain Shape";
-    public string AreaSpellName => _areaSpell?.RankedName ?? "Arcane Burst";
-    public string ShieldSpellName => _shieldSpell?.RankedName ?? "Mana Shield";
-    public string MobilitySpellName => _mobilitySpell?.RankedName ?? "Wind Dash";
-public string SummonSpellName => _summonSpell?.RankedName ?? "Guardian";
-    public string PossessSpellName => _possessSpell?.DisplayName ?? "Possess";
+    public string PrimaryEquipmentName => GetSelectedQuickEquipment()?.RankedName ?? "Plasma Bolt";
+    public string TerrainEquipmentName => _terrainEquipment?.DisplayName ?? "Terrain Shape";
+    public string AreaEquipmentName => _areaEquipment?.RankedName ?? "Pulse Burst";
+    public string ShieldEquipmentName => _shieldEquipment?.RankedName ?? "Energy Shield";
+    public string MobilityEquipmentName => _mobilityEquipment?.RankedName ?? "Dash";
+public string SummonEquipmentName => _summonEquipment?.RankedName ?? "Guardian Drone";
+    public string ClaimEquipmentName => _claimEquipment?.DisplayName ?? "Claim";
     public bool IsShielded => _shieldTimer > 0.0f;
     public string ShieldStatusText => IsShielded ? $"Shield {_shieldTimer:0.0}s" : "Shield ready";
-    public string SpellLoadoutText => _primarySpell == null || _terrainSpell == null || _areaSpell == null || _shieldSpell == null || _mobilitySpell == null || _summonSpell == null || _possessSpell == null
-        ? "Spells: loading"
-        : $"Quick: LMB {GetSelectedQuickSpell()!.DisplayName} ({GetSelectedQuickSpell()!.ManaCost})   Tab: Firebolt/Burst/Shield/Dash/Guardian   Q {_areaSpell.DisplayName}   E {_shieldSpell.DisplayName}   F {_mobilitySpell.DisplayName}   G {_summonSpell.DisplayName}   RMB {_possessSpell.DisplayName} ({_possessSpell.ManaCost})";
-    public string StatusMessage { get; private set; } = "Collect mana, bank excess at the well, and contest the red monsters.";
+    public string EquipmentLoadoutText => _primaryEquipment == null || _terrainEquipment == null || _areaEquipment == null || _shieldEquipment == null || _mobilityEquipment == null || _summonEquipment == null || _claimEquipment == null
+        ? "Equipment: loading"
+        : $"Quick: LMB {GetSelectedQuickEquipment()!.DisplayName} ({GetSelectedQuickEquipment()!.EnergyCost})   Tab: Plasma Bolt/Burst/Shield/Dash/Guardian Drone   Q {_areaEquipment.DisplayName}   E {_shieldEquipment.DisplayName}   F {_mobilityEquipment.DisplayName}   G {_summonEquipment.DisplayName}   RMB {_claimEquipment.DisplayName} ({_claimEquipment.EnergyCost})";
+    public string StatusMessage { get; private set; } = "Claim antimatter for your collector drone and defend your base.";
     public string ActiveFeedbackMessage => _feedbackTimer > 0.0f ? StatusMessage : string.Empty;
     public string DiscoveryFeedbackMessage => _discoveryFeedbackTimer > 0 ? _discoveryFeedback : string.Empty;
-    public string SpellProgressionText => string.Join("\n", new[] { _primarySpell, _areaSpell, _shieldSpell, _mobilitySpell, _summonSpell }
-        .Select(spell => $"{spell.RankedName} — rank {spell.Rank}/2"));
-    public int FireboltDamage => GetSpellRank("firebolt") == 2 ? 35 : 25;
-    public int EffectiveAreaDamage => Mathf.RoundToInt(AreaSpellDamage * (GetSpellRank("arcane-burst") == 2 ? 1.25f : 1));
-    public float EffectiveAreaRadius => AreaSpellRadius * (GetSpellRank("arcane-burst") == 2 ? 1.25f : 1);
-    public float EffectiveShieldDuration => ShieldDurationSeconds + (GetSpellRank("mana-shield") == 2 ? 2 : 0);
-    public float EffectiveDashSpeed => MobilityDashSpeed * (GetSpellRank("wind-dash") == 2 ? 1.2f : 1);
+    public string EquipmentProgressionText => string.Join("\n", new[] { _primaryEquipment, _areaEquipment, _shieldEquipment, _mobilityEquipment, _summonEquipment }
+        .Select(equipment => $"{equipment.RankedName} — rank {equipment.Rank}/2"));
+    public int PlasmaBoltDamage => GetEquipmentRank("plasma-bolt") == 2 ? 35 : 25;
+    public int EffectiveAreaDamage => Mathf.RoundToInt(AreaEquipmentDamage * (GetEquipmentRank("pulse-burst") == 2 ? 1.25f : 1));
+    public float EffectiveAreaRadius => AreaEquipmentRadius * (GetEquipmentRank("pulse-burst") == 2 ? 1.25f : 1);
+    public float EffectiveShieldDuration => ShieldDurationSeconds + (GetEquipmentRank("energy-shield") == 2 ? 2 : 0);
+    public float EffectiveDashSpeed => MobilityDashSpeed * (GetEquipmentRank("dash") == 2 ? 1.2f : 1);
     public string TerrainDebugText => _arena == null
         ? "Terrain: unavailable"
         : $"Terrain edit: {_arena.LastEditedVertexCount} verts   Chunks: {_arena.LastRebuiltChunkCount}   Rebuild: {_arena.LastRebuildMilliseconds:0.00} ms";
-    public string TerrainSpellModeText => _terrainSpellMode switch
+    public string TerrainEquipmentModeText => _terrainEquipmentMode switch
     {
-        TerrainSpellMode.Crater => "Crater",
-        TerrainSpellMode.Raise => "Raise",
-        TerrainSpellMode.Lower => "Lower",
-        TerrainSpellMode.Flatten => "Flatten",
+        TerrainEquipmentMode.Crater => "Crater",
+        TerrainEquipmentMode.Raise => "Raise",
+        TerrainEquipmentMode.Lower => "Lower",
+        TerrainEquipmentMode.Flatten => "Flatten",
         _ => "Crater"
     };
-    public int TerrainSpellManaCostForCurrentMode => _terrainSpell.ManaCost;
-    public string TerrainSpellHelpText => "1 crater  2 raise  3 lower  4 flatten";
+    public int TerrainEquipmentEnergyCostForCurrentMode => _terrainEquipment.EnergyCost;
+    public string TerrainEquipmentHelpText => "1 crater  2 raise  3 lower  4 flatten";
 
     private Node3D _cameraPivot = null!;
     private Camera3D _camera = null!;
-    private MeshInstance3D _carpetVisual = null!;
-    private StandardMaterial3D _carpetMaterial = null!;
+    private MeshInstance3D _shipVisual = null!;
+    private StandardMaterial3D _shipMaterial = null!;
     private HeightmapArena? _arena;
-    private ManaWell? _manaWell;
+    private AntimatterSource? _antimatterSource;
     private float _yaw;
     private float _appliedYaw;
     private Vector3 LocalUp => _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
     private float _pitch = -0.2f;
     private float _fireCooldown;
-    private float _areaSpellCooldown;
-    private float _shieldSpellCooldown;
-    private float _mobilitySpellCooldown;
-    private float _summonSpellCooldown;
+    private float _areaEquipmentCooldown;
+    private float _shieldEquipmentCooldown;
+    private float _mobilityEquipmentCooldown;
+    private float _summonEquipmentCooldown;
     private float _shieldTimer;
-    private float _terrainSpellCooldown;
+    private float _terrainEquipmentCooldown;
 private float _feedbackTimer;
     private float _damageInvulnerabilityTimer;
-    private float _manaRegenAccumulator;
-    private float _possessCooldown;
+    private float _energyRegenAccumulator;
+    private float _claimCooldown;
     private bool _firstPersonCamera = true;
-    private TerrainSpellMode _terrainSpellMode = TerrainSpellMode.Crater;
-    private QuickSpellSlot _selectedQuickSpell = QuickSpellSlot.Firebolt;
-    private SpellDefinition _primarySpell = null!;
-    private SpellDefinition _areaSpell = null!;
-    private SpellDefinition _shieldSpell = null!;
-    private SpellDefinition _mobilitySpell = null!;
-private SpellDefinition _summonSpell = null!;
-    private SpellDefinition _terrainSpell = null!;
-    private SpellDefinition _possessSpell = null!;
-    private int _baseManaPower;
+    private TerrainEquipmentMode _terrainEquipmentMode = TerrainEquipmentMode.Crater;
+    private QuickEquipmentSlot _selectedQuickEquipment = QuickEquipmentSlot.PlasmaBolt;
+    private EquipmentDefinition _primaryEquipment = null!;
+    private EquipmentDefinition _areaEquipment = null!;
+    private EquipmentDefinition _shieldEquipment = null!;
+    private EquipmentDefinition _mobilityEquipment = null!;
+private EquipmentDefinition _summonEquipment = null!;
+    private EquipmentDefinition _terrainEquipment = null!;
+    private EquipmentDefinition _claimEquipment = null!;
+    private int _baseAntimatterPower;
     private uint _aliveCollisionLayer;
     private uint _aliveCollisionMask;
     private string _discoveryFeedback = string.Empty;
     private float _discoveryFeedbackTimer;
 
-    public SpellDefinition? FindSpell(string id) => id switch
+    public EquipmentDefinition? FindEquipment(string id) => id switch
     {
-        "firebolt" => _primarySpell,
-        "arcane-burst" => _areaSpell,
-        "mana-shield" => _shieldSpell,
-        "wind-dash" => _mobilitySpell,
-        "guardian" => _summonSpell,
+        "plasma-bolt" => _primaryEquipment,
+        "pulse-burst" => _areaEquipment,
+        "energy-shield" => _shieldEquipment,
+        "dash" => _mobilityEquipment,
+        "guardian-drone" => _summonEquipment,
         _ => null
     };
 
-    public int GetSpellRank(string id) => FindSpell(id)?.Rank ?? 0;
+    public int GetEquipmentRank(string id) => FindEquipment(id)?.Rank ?? 0;
 
-    public bool DiscoverSpellUpgrade(string id)
+    public bool DiscoverEquipmentUpgrade(string id)
     {
         if (Health <= 0 || IsQueuedForDeletion()) return false;
-        SpellDefinition? spell = FindSpell(id);
-        if (spell == null || !spell.TryUpgrade()) return false;
-        _discoveryFeedback = $"Discovered {spell.RankedName}!";
+        EquipmentDefinition? equipment = FindEquipment(id);
+        if (equipment == null || !equipment.TryUpgrade()) return false;
+        _discoveryFeedback = $"Discovered {equipment.RankedName}!";
         _discoveryFeedbackTimer = 4;
         GameAudio.Instance?.PlayPickup();
         return true;
@@ -184,16 +184,16 @@ private SpellDefinition _summonSpell = null!;
         Input.MouseMode = Input.MouseModeEnum.Captured;
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         _arena?.Orient(this);
-        _manaWell = GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
-        _baseManaPower = Mathf.Clamp(Mathf.Max(InitialClaimedMana, ManaCapacity), 1, Mathf.Max(1, MaxClaimedMana));
-        RefreshCastleManaPower();
-        _primarySpell = new SpellDefinition("firebolt", "Firebolt", SpellKind.Projectile, PrimarySpellManaCost, FireCooldownSeconds, "Fast projectile damage spell.");
-        _areaSpell = new SpellDefinition("arcane-burst", "Arcane Burst", SpellKind.Projectile, AreaSpellManaCost, AreaSpellCooldownSeconds, "Area damage blast at the aimed point.");
-        _shieldSpell = new SpellDefinition("mana-shield", "Mana Shield", SpellKind.Defense, ShieldSpellManaCost, ShieldSpellCooldownSeconds, "Briefly reduces incoming damage.");
-        _mobilitySpell = new SpellDefinition("wind-dash", "Wind Dash", SpellKind.Mobility, MobilitySpellManaCost, MobilitySpellCooldownSeconds, "Dash quickly in the aimed direction.");
-_summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, SummonSpellManaCost, SummonSpellCooldownSeconds, "Summon a temporary ally that attacks nearby enemies.");
-        _terrainSpell = new SpellDefinition("terrain-shape", "Terrain Shape", SpellKind.Terrain, TerrainSpellManaCost, TerrainSpellCooldownSeconds, "Shape terrain using the selected terrain mode.");
-        _possessSpell = new SpellDefinition("possess", "Possess", SpellKind.Economy, PossessSpellManaCost, PossessSpellCooldownSeconds, "Fire a terrain-following bolt to claim neutral or rival loose mana.");
+        _antimatterSource = GetTree().GetFirstNodeInGroup("antimatter_source") as AntimatterSource;
+        _baseAntimatterPower = Mathf.Clamp(Mathf.Max(InitialClaimedAntimatter, EnergyCapacity), 1, Mathf.Max(1, MaxClaimedAntimatter));
+        RefreshBaseAntimatterPower();
+        _primaryEquipment = new EquipmentDefinition("plasma-bolt", "Plasma Bolt", EquipmentKind.Projectile, PrimaryEquipmentEnergyCost, FireCooldownSeconds, "Fast projectile damage equipment.");
+        _areaEquipment = new EquipmentDefinition("pulse-burst", "Pulse Burst", EquipmentKind.Projectile, AreaEquipmentEnergyCost, AreaEquipmentCooldownSeconds, "Area damage blast at the aimed point.");
+        _shieldEquipment = new EquipmentDefinition("energy-shield", "Energy Shield", EquipmentKind.Defense, ShieldEquipmentEnergyCost, ShieldEquipmentCooldownSeconds, "Briefly reduces incoming damage.");
+        _mobilityEquipment = new EquipmentDefinition("dash", "Dash", EquipmentKind.Mobility, MobilityEquipmentEnergyCost, MobilityEquipmentCooldownSeconds, "Dash quickly in the aimed direction.");
+_summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", EquipmentKind.Summoning, SummonEquipmentEnergyCost, SummonEquipmentCooldownSeconds, "Summon a temporary ally that attacks nearby enemies.");
+        _terrainEquipment = new EquipmentDefinition("terrain-shape", "Terrain Shape", EquipmentKind.Terrain, TerrainEquipmentEnergyCost, TerrainEquipmentCooldownSeconds, "Shape terrain using the selected terrain mode.");
+        _claimEquipment = new EquipmentDefinition("claim", "Claim", EquipmentKind.Economy, ClaimEquipmentEnergyCost, ClaimEquipmentCooldownSeconds, "Fire a terrain-following bolt to claim neutral or rival loose antimatter.");
 
         _cameraPivot = new Node3D { Name = "CameraPivot" };
         AddChild(_cameraPivot);
@@ -210,7 +210,7 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
         _cameraPivot.AddChild(_camera);
         _camera.LookAt(_cameraPivot.GlobalPosition, LocalUp);
 
-        AddCarpetVisual();
+        AddShipVisual();
         _aliveCollisionLayer = CollisionLayer;
         _aliveCollisionMask = CollisionMask;
         _arena?.ClampFlightBody(this, MinimumAltitude);
@@ -229,14 +229,14 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
         if (@event.IsActionPressed("toggle_camera"))
         {
             _firstPersonCamera = !_firstPersonCamera;
-            _carpetVisual.Visible = !_firstPersonCamera;
+            _shipVisual.Visible = !_firstPersonCamera;
             StatusMessage = $"Camera: {CameraMode}";
             _feedbackTimer = 1.2f;
         }
 
-        if (@event.IsActionPressed("cycle_quick_spell"))
+        if (@event.IsActionPressed("cycle_quick_equipment"))
         {
-            CycleQuickSpell();
+            CycleQuickEquipment();
         }
 
         if (@event is InputEventMouseMotion motion && Input.MouseMode == Input.MouseModeEnum.Captured)
@@ -252,16 +252,16 @@ _summonSpell = new SpellDefinition("guardian", "Guardian", SpellKind.Summoning, 
         float deltaF = (float)delta;
         _discoveryFeedbackTimer = Mathf.Max(0, _discoveryFeedbackTimer - deltaF);
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
-        _areaSpellCooldown = Mathf.Max(0.0f, _areaSpellCooldown - deltaF);
-        _shieldSpellCooldown = Mathf.Max(0.0f, _shieldSpellCooldown - deltaF);
-        _mobilitySpellCooldown = Mathf.Max(0.0f, _mobilitySpellCooldown - deltaF);
-        _summonSpellCooldown = Mathf.Max(0.0f, _summonSpellCooldown - deltaF);
+        _areaEquipmentCooldown = Mathf.Max(0.0f, _areaEquipmentCooldown - deltaF);
+        _shieldEquipmentCooldown = Mathf.Max(0.0f, _shieldEquipmentCooldown - deltaF);
+        _mobilityEquipmentCooldown = Mathf.Max(0.0f, _mobilityEquipmentCooldown - deltaF);
+        _summonEquipmentCooldown = Mathf.Max(0.0f, _summonEquipmentCooldown - deltaF);
         _shieldTimer = Mathf.Max(0.0f, _shieldTimer - deltaF);
-_terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
-        _possessCooldown = Mathf.Max(0.0f, _possessCooldown - deltaF);
+_terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
+        _claimCooldown = Mathf.Max(0.0f, _claimCooldown - deltaF);
         _feedbackTimer = Mathf.Max(0.0f, _feedbackTimer - deltaF);
         _damageInvulnerabilityTimer = Mathf.Max(0.0f, _damageInvulnerabilityTimer - deltaF);
-        RegenerateMana(deltaF);
+        RegenerateEnergy(deltaF);
 
         if (_arena?.IsSpherical == true)
         {
@@ -289,7 +289,7 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
         bool isAccelerating = horizontalInput.LengthSquared() > 0.001f || Mathf.Abs(localInput.Y) > 0.001f;
         Velocity = Velocity.MoveToward(desiredVelocity, (isAccelerating ? Acceleration : Drag) * deltaF);
         GameAudio.Instance?.SetFlightIntensity(Mathf.Clamp(Velocity.Length() / MoveSpeed, 0.0f, 1.0f));
-        UpdateCarpetBank(deltaF);
+        UpdateShipBank(deltaF);
         if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
 
         ClampAboveGround();
@@ -298,95 +298,95 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
             Vector3 safeCamera = _arena.OnSurface(_camera.GlobalPosition, 0.5f);
             if (_arena.Clearance(_camera.GlobalPosition) < 0.5f) _camera.GlobalPosition = safeCamera;
         }
-        if (Input.IsActionPressed("cast_primary"))
+        if (Input.IsActionPressed("activate_primary"))
         {
-            CastSelectedQuickSpell();
+            CastSelectedQuickEquipment();
         }
 
-        if (Input.IsActionPressed("cast_area") && _areaSpellCooldown <= 0.0f)
+        if (Input.IsActionPressed("activate_area") && _areaEquipmentCooldown <= 0.0f)
         {
-            _areaSpellCooldown = _areaSpell.CooldownSeconds;
-            CastAreaSpell();
+            _areaEquipmentCooldown = _areaEquipment.CooldownSeconds;
+            CastAreaEquipment();
         }
 
-        if (Input.IsActionPressed("cast_shield") && _shieldSpellCooldown <= 0.0f)
+        if (Input.IsActionPressed("activate_shield") && _shieldEquipmentCooldown <= 0.0f)
         {
-            _shieldSpellCooldown = _shieldSpell.CooldownSeconds;
-            CastShieldSpell();
+            _shieldEquipmentCooldown = _shieldEquipment.CooldownSeconds;
+            CastShieldEquipment();
         }
 
-        if (Input.IsActionPressed("cast_mobility") && _mobilitySpellCooldown <= 0.0f)
+        if (Input.IsActionPressed("activate_mobility") && _mobilityEquipmentCooldown <= 0.0f)
         {
-            _mobilitySpellCooldown = _mobilitySpell.CooldownSeconds;
-            CastMobilitySpell();
+            _mobilityEquipmentCooldown = _mobilityEquipment.CooldownSeconds;
+            CastMobilityEquipment();
         }
 
-        if (Input.IsActionPressed("cast_summon") && _summonSpellCooldown <= 0.0f)
+        if (Input.IsActionPressed("activate_guardian") && _summonEquipmentCooldown <= 0.0f)
         {
-            _summonSpellCooldown = _summonSpell.CooldownSeconds;
-            CastSummonSpell();
+            _summonEquipmentCooldown = _summonEquipment.CooldownSeconds;
+            CastSummonEquipment();
         }
 
-        if (Input.IsActionPressed("cast_possess") && _possessCooldown <= 0.0f)
+        if (Input.IsActionPressed("activate_claim") && _claimCooldown <= 0.0f)
         {
-            _possessCooldown = _possessSpell.CooldownSeconds;
-            CastPossessSpell();
+            _claimCooldown = _claimEquipment.CooldownSeconds;
+            CastClaimEquipment();
         }
     }
 
-    public void RefreshCastleManaPower()
+    public void RefreshBaseAntimatterPower()
     {
         long stored = 0;
-        foreach (Node node in GetTree().GetNodesInGroup("player_castle"))
+        foreach (Node node in GetTree().GetNodesInGroup("player_base"))
         {
-            if (node is CastleKeep castle && !castle.IsDestroyed && !castle.IsQueuedForDeletion())
+            if (node is FactionBase hub && !hub.IsDestroyed && !hub.IsQueuedForDeletion())
             {
-                stored += castle.StoredMana;
+                stored += hub.StoredAntimatter;
             }
         }
-        int previous = ClaimedMana;
-        ClaimedMana = (int)System.Math.Min((long)_baseManaPower + stored, Mathf.Max(_baseManaPower, MaxClaimedMana));
-        ManaCapacity = ClaimedMana;
-        Mana = Mathf.Clamp(Mana, 0, ManaCapacity);
-        if (ClaimedMana < previous) _manaRegenAccumulator = 0;
-        if (previous > 0 && previous != ClaimedMana)
+        int previous = ClaimedAntimatter;
+        ClaimedAntimatter = (int)System.Math.Min((long)_baseAntimatterPower + stored, Mathf.Max(_baseAntimatterPower, MaxClaimedAntimatter));
+        EnergyCapacity = ClaimedAntimatter;
+        Energy = Mathf.Clamp(Energy, 0, EnergyCapacity);
+        if (ClaimedAntimatter < previous) _energyRegenAccumulator = 0;
+        if (previous > 0 && previous != ClaimedAntimatter)
         {
-            StatusMessage = ClaimedMana > previous
-                ? $"Castle power +{ClaimedMana - previous}"
-                : $"Castle power lost: {previous - ClaimedMana}";
+            StatusMessage = ClaimedAntimatter > previous
+                ? $"Base power +{ClaimedAntimatter - previous}"
+                : $"Base power lost: {previous - ClaimedAntimatter}";
             _feedbackTimer = 1.5f;
-            if (ClaimedMana > previous) GameAudio.Instance?.PlayPickup();
+            if (ClaimedAntimatter > previous) GameAudio.Instance?.PlayPickup();
         }
     }
 
-    public int SpendMana(int amount)
+    public int SpendEnergy(int amount)
     {
         if (amount <= 0)
         {
             return 0;
         }
 
-        int spent = Mathf.Min(Mana, amount);
-        Mana -= spent;
+        int spent = Mathf.Min(Energy, amount);
+        Energy -= spent;
         return spent;
     }
 
-    private void RegenerateMana(float delta)
+    private void RegenerateEnergy(float delta)
     {
-        if (Mana >= ManaCapacity || ClaimedMana <= 0 || ManaRegenPerClaimedManaPerSecond <= 0.0f)
+        if (Energy >= EnergyCapacity || ClaimedAntimatter <= 0 || EnergyRegenPerClaimedAntimatterPerSecond <= 0.0f)
         {
             return;
         }
 
-        _manaRegenAccumulator += ClaimedMana * ManaRegenPerClaimedManaPerSecond * delta;
-        int regenerated = Mathf.FloorToInt(_manaRegenAccumulator);
+        _energyRegenAccumulator += ClaimedAntimatter * EnergyRegenPerClaimedAntimatterPerSecond * delta;
+        int regenerated = Mathf.FloorToInt(_energyRegenAccumulator);
         if (regenerated <= 0)
         {
             return;
         }
 
-        _manaRegenAccumulator -= regenerated;
-        Mana = Mathf.Min(ManaCapacity, Mana + regenerated);
+        _energyRegenAccumulator -= regenerated;
+        Energy = Mathf.Min(EnergyCapacity, Energy + regenerated);
     }
 
     public void ApplyDamage(int amount)
@@ -401,7 +401,7 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
         StatusMessage = IsShielded ? $"Shield absorbed {amount - finalAmount}" : $"Hit for {finalAmount}";
         _feedbackTimer = 0.35f;
         _damageInvulnerabilityTimer = DamageInvulnerabilitySeconds;
-        _carpetMaterial.AlbedoColor = IsShielded ? new Color(0.2f, 0.85f, 1.0f) : new Color(1.0f, 0.25f, 0.2f);
+        _shipMaterial.AlbedoColor = IsShielded ? new Color(0.2f, 0.85f, 1.0f) : new Color(1.0f, 0.25f, 0.2f);
         GameAudio.Instance?.PlayHit();
 
         if (Health == 0)
@@ -410,7 +410,7 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
             _shieldTimer = 0;
             CollisionLayer = 0;
             CollisionMask = 0;
-            _carpetVisual.Visible = false;
+            _shipVisual.Visible = false;
         }
     }
 
@@ -418,109 +418,109 @@ _terrainSpellCooldown = Mathf.Max(0.0f, _terrainSpellCooldown - deltaF);
     {
         GlobalPosition = position;
         Health = 100;
-        RefreshCastleManaPower();
-        Mana = ManaCapacity;
+        RefreshBaseAntimatterPower();
+        Energy = EnergyCapacity;
         Velocity = Vector3.Zero;
         _shieldTimer = 0;
-        _manaRegenAccumulator = 0;
-        _fireCooldown = _areaSpellCooldown = _shieldSpellCooldown = _mobilitySpellCooldown = _summonSpellCooldown = _possessCooldown = 0;
+        _energyRegenAccumulator = 0;
+        _fireCooldown = _areaEquipmentCooldown = _shieldEquipmentCooldown = _mobilityEquipmentCooldown = _summonEquipmentCooldown = _claimCooldown = 0;
         _damageInvulnerabilityTimer = 2.0f;
         CollisionLayer = _aliveCollisionLayer;
         CollisionMask = _aliveCollisionMask;
-        _carpetVisual.Visible = true;
+        _shipVisual.Visible = true;
         _arena?.ClampFlightBody(this, MinimumAltitude);
-        StatusMessage = "Respawned at your castle";
+        StatusMessage = "Respawned at your base";
         _feedbackTimer = 2.0f;
     }
 
-private void CycleQuickSpell()
+private void CycleQuickEquipment()
     {
-        int next = ((int)_selectedQuickSpell + 1) % 5;
-        _selectedQuickSpell = (QuickSpellSlot)next;
-        StatusMessage = $"Quick spell: {GetSelectedQuickSpell()?.DisplayName ?? "unknown"}";
+        int next = ((int)_selectedQuickEquipment + 1) % 5;
+        _selectedQuickEquipment = (QuickEquipmentSlot)next;
+        StatusMessage = $"Quick equipment: {GetSelectedQuickEquipment()?.DisplayName ?? "unknown"}";
         _feedbackTimer = 1.0f;
     }
 
-    private SpellDefinition? GetSelectedQuickSpell()
+    private EquipmentDefinition? GetSelectedQuickEquipment()
     {
-        return _selectedQuickSpell switch
+        return _selectedQuickEquipment switch
         {
-            QuickSpellSlot.Firebolt => _primarySpell,
-            QuickSpellSlot.ArcaneBurst => _areaSpell,
-            QuickSpellSlot.ManaShield => _shieldSpell,
-            QuickSpellSlot.WindDash => _mobilitySpell,
-QuickSpellSlot.Guardian => _summonSpell,
-            _ => _primarySpell
+            QuickEquipmentSlot.PlasmaBolt => _primaryEquipment,
+            QuickEquipmentSlot.PulseBurst => _areaEquipment,
+            QuickEquipmentSlot.EnergyShield => _shieldEquipment,
+            QuickEquipmentSlot.Dash => _mobilityEquipment,
+QuickEquipmentSlot.Guardian => _summonEquipment,
+            _ => _primaryEquipment
         };
     }
 
-    private void CastSelectedQuickSpell()
+    private void CastSelectedQuickEquipment()
     {
-        switch (_selectedQuickSpell)
+        switch (_selectedQuickEquipment)
         {
-            case QuickSpellSlot.Firebolt:
+            case QuickEquipmentSlot.PlasmaBolt:
                 if (_fireCooldown > 0.0f)
                 {
                     return;
                 }
 
-                _fireCooldown = _primarySpell.CooldownSeconds;
-                CastPrimarySpell();
+                _fireCooldown = _primaryEquipment.CooldownSeconds;
+                CastPrimaryEquipment();
                 break;
-            case QuickSpellSlot.ArcaneBurst:
-                if (_areaSpellCooldown > 0.0f)
+            case QuickEquipmentSlot.PulseBurst:
+                if (_areaEquipmentCooldown > 0.0f)
                 {
                     return;
                 }
 
-                _areaSpellCooldown = _areaSpell.CooldownSeconds;
-                CastAreaSpell();
+                _areaEquipmentCooldown = _areaEquipment.CooldownSeconds;
+                CastAreaEquipment();
                 break;
-            case QuickSpellSlot.ManaShield:
-                if (_shieldSpellCooldown > 0.0f)
+            case QuickEquipmentSlot.EnergyShield:
+                if (_shieldEquipmentCooldown > 0.0f)
                 {
                     return;
                 }
 
-                _shieldSpellCooldown = _shieldSpell.CooldownSeconds;
-                CastShieldSpell();
+                _shieldEquipmentCooldown = _shieldEquipment.CooldownSeconds;
+                CastShieldEquipment();
                 break;
-            case QuickSpellSlot.WindDash:
-                if (_mobilitySpellCooldown > 0.0f)
+            case QuickEquipmentSlot.Dash:
+                if (_mobilityEquipmentCooldown > 0.0f)
                 {
                     return;
                 }
 
-                _mobilitySpellCooldown = _mobilitySpell.CooldownSeconds;
-                CastMobilitySpell();
+                _mobilityEquipmentCooldown = _mobilityEquipment.CooldownSeconds;
+                CastMobilityEquipment();
                 break;
-case QuickSpellSlot.Guardian:
-                if (_summonSpellCooldown > 0.0f)
+case QuickEquipmentSlot.Guardian:
+                if (_summonEquipmentCooldown > 0.0f)
                 {
                     return;
                 }
 
-                _summonSpellCooldown = _summonSpell.CooldownSeconds;
-                CastSummonSpell();
+                _summonEquipmentCooldown = _summonEquipment.CooldownSeconds;
+                CastSummonEquipment();
                 break;
         }
     }
 
-    private void CastPrimarySpell()
+    private void CastPrimaryEquipment()
     {
-        if (Mana < _primarySpell.ManaCost)
+        if (Energy < _primaryEquipment.EnergyCost)
         {
-            StatusMessage = "Not enough mana.";
+            StatusMessage = "Not enough energy.";
             _feedbackTimer = 0.8f;
             return;
         }
 
-        SpendMana(_primarySpell.ManaCost);
-        StatusMessage = _primarySpell.DisplayName;
+        SpendEnergy(_primaryEquipment.EnergyCost);
+        StatusMessage = _primaryEquipment.DisplayName;
         _feedbackTimer = 0.35f;
-        GameAudio.Instance?.PlaySpellCast();
+        GameAudio.Instance?.PlayEquipmentCast();
 
-        var projectile = new SpellProjectile { Damage = FireboltDamage };
+        var projectile = new WeaponProjectile { Damage = PlasmaBoltDamage };
         GetTree().CurrentScene.AddChild(projectile);
 
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
@@ -528,131 +528,131 @@ case QuickSpellSlot.Guardian:
         projectile.Launch(direction, this);
     }
 
-    private void CastAreaSpell()
+    private void CastAreaEquipment()
     {
-        if (Mana < _areaSpell.ManaCost)
+        if (Energy < _areaEquipment.EnergyCost)
         {
-            StatusMessage = $"Not enough mana for {_areaSpell.DisplayName.ToLowerInvariant()}.";
+            StatusMessage = $"Not enough energy for {_areaEquipment.DisplayName.ToLowerInvariant()}.";
             _feedbackTimer = 0.8f;
             return;
         }
 
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
         Vector3 origin = _camera.GlobalPosition;
-        Vector3 target = origin + direction * AreaSpellRange;
+        Vector3 target = origin + direction * AreaEquipmentRange;
         if (!TryFindTerrainHit(origin, target, out Vector3 hitPosition))
         {
             hitPosition = target;
         }
 
-        SpendMana(_areaSpell.ManaCost);
+        SpendEnergy(_areaEquipment.EnergyCost);
         int hits = DamageEnemiesInRadius(hitPosition, EffectiveAreaRadius, EffectiveAreaDamage);
-        SpawnAreaSpellBurst(hitPosition);
-        StatusMessage = $"{_areaSpell.DisplayName}: {hits} hit";
+        SpawnAreaEquipmentBurst(hitPosition);
+        StatusMessage = $"{_areaEquipment.DisplayName}: {hits} hit";
         _feedbackTimer = 0.7f;
-        GameAudio.Instance?.PlaySpellCast();
+        GameAudio.Instance?.PlayEquipmentCast();
     }
 
-    private void CastShieldSpell()
+    private void CastShieldEquipment()
     {
-        if (Mana < _shieldSpell.ManaCost)
+        if (Energy < _shieldEquipment.EnergyCost)
         {
-            StatusMessage = $"Not enough mana for {_shieldSpell.DisplayName.ToLowerInvariant()}.";
+            StatusMessage = $"Not enough energy for {_shieldEquipment.DisplayName.ToLowerInvariant()}.";
             _feedbackTimer = 0.8f;
             return;
         }
 
-        SpendMana(_shieldSpell.ManaCost);
+        SpendEnergy(_shieldEquipment.EnergyCost);
         _shieldTimer = EffectiveShieldDuration;
-        StatusMessage = $"{_shieldSpell.DisplayName} active";
+        StatusMessage = $"{_shieldEquipment.DisplayName} active";
         _feedbackTimer = 0.9f;
-        _carpetMaterial.AlbedoColor = new Color(0.2f, 0.85f, 1.0f);
+        _shipMaterial.AlbedoColor = new Color(0.2f, 0.85f, 1.0f);
         SpawnShieldBurst();
-        GameAudio.Instance?.PlaySpellCast();
+        GameAudio.Instance?.PlayEquipmentCast();
     }
 
-    private void CastMobilitySpell()
+    private void CastMobilityEquipment()
     {
-        if (Mana < _mobilitySpell.ManaCost)
+        if (Energy < _mobilityEquipment.EnergyCost)
         {
-            StatusMessage = $"Not enough mana for {_mobilitySpell.DisplayName.ToLowerInvariant()}.";
+            StatusMessage = $"Not enough energy for {_mobilityEquipment.DisplayName.ToLowerInvariant()}.";
             _feedbackTimer = 0.8f;
             return;
         }
 
-        SpendMana(_mobilitySpell.ManaCost);
+        SpendEnergy(_mobilityEquipment.EnergyCost);
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
         Vector3 up = LocalUp;
         Velocity = (direction - up * direction.Dot(up)) * EffectiveDashSpeed
             + up * Mathf.Max(Velocity.Dot(up), direction.Dot(up) * EffectiveDashSpeed + MobilityDashLift);
-        StatusMessage = _mobilitySpell.DisplayName;
+        StatusMessage = _mobilityEquipment.DisplayName;
         _feedbackTimer = 0.6f;
         SpawnMobilityBurst();
-        GameAudio.Instance?.PlaySpellCast();
+        GameAudio.Instance?.PlayEquipmentCast();
     }
 
-    private void CastSummonSpell()
+    private void CastSummonEquipment()
     {
-        if (Mana < _summonSpell.ManaCost)
+        if (Energy < _summonEquipment.EnergyCost)
         {
-            StatusMessage = $"Not enough mana for {_summonSpell.DisplayName.ToLowerInvariant()}.";
+            StatusMessage = $"Not enough energy for {_summonEquipment.DisplayName.ToLowerInvariant()}.";
             _feedbackTimer = 0.8f;
             return;
         }
 
-        SpendMana(_summonSpell.ManaCost);
+        SpendEnergy(_summonEquipment.EnergyCost);
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
-        var guardian = new SummonedGuardian
+        var guardian = new GuardianDrone
         {
-            Name = "SummonedGuardian",
-            Damage = GetSpellRank("guardian") == 2 ? 16 : 12,
-            LifetimeSeconds = GetSpellRank("guardian") == 2 ? 18 : 12
+            Name = "GuardianDrone",
+            Damage = GetEquipmentRank("guardian-drone") == 2 ? 16 : 12,
+            LifetimeSeconds = GetEquipmentRank("guardian-drone") == 2 ? 18 : 12
         };
         GetTree().CurrentScene.AddChild(guardian);
         guardian.GlobalPosition = GlobalPosition + direction * SummonDistance + LocalUp;
         _arena?.ClampFlightBody(guardian);
         SpawnSummonBurst(guardian.GlobalPosition);
-        StatusMessage = $"Summoned {_summonSpell.DisplayName}";
+        StatusMessage = $"Summoned {_summonEquipment.DisplayName}";
         _feedbackTimer = 0.8f;
-GameAudio.Instance?.PlaySpellCast();
+GameAudio.Instance?.PlayEquipmentCast();
     }
 
-    private void CastPossessSpell()
+    private void CastClaimEquipment()
     {
-        if (Mana < _possessSpell.ManaCost)
+        if (Energy < _claimEquipment.EnergyCost)
         {
-            StatusMessage = $"Not enough mana for {_possessSpell.DisplayName.ToLowerInvariant()}.";
+            StatusMessage = $"Not enough energy for {_claimEquipment.DisplayName.ToLowerInvariant()}.";
             _feedbackTimer = 0.8f;
             return;
         }
 
-        SpendMana(_possessSpell.ManaCost);
+        SpendEnergy(_claimEquipment.EnergyCost);
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
-        var projectile = new PossessProjectile { Name = "PossessProjectile" };
-        projectile.ManaPossessed += OnManaPossessed;
+        var projectile = new ClaimProjectile { Name = "ClaimProjectile" };
+        projectile.AntimatterClaimed += OnAntimatterClaimed;
         GetTree().CurrentScene.AddChild(projectile);
         projectile.GlobalPosition = _camera.GlobalPosition + direction * 1.5f;
         projectile.Launch(direction);
-        StatusMessage = "Possess";
+        StatusMessage = "Claim";
         _feedbackTimer = 0.6f;
-        GameAudio.Instance?.PlaySpellCast();
+        GameAudio.Instance?.PlayEquipmentCast();
     }
 
-    private void OnManaPossessed(int amount)
+    private void OnAntimatterClaimed(int amount)
     {
         if (!IsInstanceValid(this) || IsQueuedForDeletion())
         {
             return;
         }
-        StatusMessage = $"Possessed {amount} mana";
+        StatusMessage = $"Claimed {amount} antimatter";
         _feedbackTimer = 0.8f;
     }
 
-    private void CastTerrainSpell(TerrainSpellMode mode)
+    private void CastTerrainEquipment(TerrainEquipmentMode mode)
     {
-        if (Mana < _terrainSpell.ManaCost)
+        if (Energy < _terrainEquipment.EnergyCost)
         {
-            StatusMessage = $"Not enough mana for {TerrainSpellModeText.ToLowerInvariant()}.";
+            StatusMessage = $"Not enough energy for {TerrainEquipmentModeText.ToLowerInvariant()}.";
             _feedbackTimer = 0.8f;
             return;
         }
@@ -665,7 +665,7 @@ GameAudio.Instance?.PlaySpellCast();
 
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
         Vector3 origin = _camera.GlobalPosition;
-        Vector3 target = origin + direction * TerrainSpellRange;
+        Vector3 target = origin + direction * TerrainEquipmentRange;
         if (!TryFindTerrainHit(origin, target, out Vector3 hitPosition))
         {
             StatusMessage = "Aim at terrain to shape it.";
@@ -673,27 +673,27 @@ GameAudio.Instance?.PlaySpellCast();
             return;
         }
 
-        SpendMana(_terrainSpell.ManaCost);
+        SpendEnergy(_terrainEquipment.EnergyCost);
         switch (mode)
         {
-            case TerrainSpellMode.Crater:
-                _arena.ApplyCrater(hitPosition, TerrainSpellRadius, TerrainSpellDepth);
+            case TerrainEquipmentMode.Crater:
+                _arena.ApplyCrater(hitPosition, TerrainEquipmentRadius, TerrainEquipmentDepth);
                 break;
-            case TerrainSpellMode.Raise:
-                _arena.RaiseTerrain(hitPosition, TerrainSpellRadius, TerrainSpellHeight);
+            case TerrainEquipmentMode.Raise:
+                _arena.RaiseTerrain(hitPosition, TerrainEquipmentRadius, TerrainEquipmentHeight);
                 break;
-            case TerrainSpellMode.Lower:
-                _arena.LowerTerrain(hitPosition, TerrainSpellRadius, TerrainSpellHeight);
+            case TerrainEquipmentMode.Lower:
+                _arena.LowerTerrain(hitPosition, TerrainEquipmentRadius, TerrainEquipmentHeight);
                 break;
-            case TerrainSpellMode.Flatten:
-                _arena.FlattenTerrain(hitPosition, TerrainSpellRadius, _arena.Elevation(hitPosition));
+            case TerrainEquipmentMode.Flatten:
+                _arena.FlattenTerrain(hitPosition, TerrainEquipmentRadius, _arena.Elevation(hitPosition));
                 break;
         }
 
-        SpawnTerrainSpellBurst(hitPosition);
-        StatusMessage = $"Terrain {TerrainSpellModeText.ToLowerInvariant()} ({_arena.LastEditedVertexCount} verts)";
+        SpawnTerrainEquipmentBurst(hitPosition);
+        StatusMessage = $"Terrain {TerrainEquipmentModeText.ToLowerInvariant()} ({_arena.LastEditedVertexCount} verts)";
         _feedbackTimer = 0.5f;
-        GameAudio.Instance?.PlaySpellCast();
+        GameAudio.Instance?.PlayEquipmentCast();
     }
 
     private bool TryFindTerrainHit(Vector3 origin, Vector3 target, out Vector3 hitPosition)
@@ -752,18 +752,18 @@ GameAudio.Instance?.PlaySpellCast();
         return false;
     }
 
-    private void SetTerrainSpellMode(TerrainSpellMode mode)
+    private void SetTerrainEquipmentMode(TerrainEquipmentMode mode)
     {
-        _terrainSpellMode = mode;
-        StatusMessage = $"Terrain mode: {TerrainSpellModeText}";
+        _terrainEquipmentMode = mode;
+        StatusMessage = $"Terrain mode: {TerrainEquipmentModeText}";
         _feedbackTimer = 1.0f;
     }
 
-    private void SpawnTerrainSpellBurst(Vector3 position)
+    private void SpawnTerrainEquipmentBurst(Vector3 position)
     {
-        var burst = new SpellImpactBurst
+        var burst = new EquipmentImpactBurst
         {
-            Name = "TerrainSpellBurst",
+            Name = "TerrainEquipmentBurst",
             BurstColor = new Color(0.55f, 0.9f, 1.0f),
             EmissionColor = new Color(0.25f, 0.75f, 1.0f),
             EndScale = 4.0f
@@ -772,11 +772,11 @@ GameAudio.Instance?.PlaySpellCast();
         burst.GlobalPosition = position;
     }
 
-    private void SpawnAreaSpellBurst(Vector3 position)
+    private void SpawnAreaEquipmentBurst(Vector3 position)
     {
-        var burst = new SpellImpactBurst
+        var burst = new EquipmentImpactBurst
         {
-            Name = "AreaSpellBurst",
+            Name = "AreaEquipmentBurst",
             BurstColor = new Color(0.85f, 0.35f, 1.0f, 0.9f),
             EmissionColor = new Color(0.65f, 0.12f, 1.0f),
             DurationSeconds = 0.5f,
@@ -789,7 +789,7 @@ GameAudio.Instance?.PlaySpellCast();
 
     private void SpawnShieldBurst()
     {
-        var burst = new SpellImpactBurst
+        var burst = new EquipmentImpactBurst
         {
             Name = "ShieldBurst",
             BurstColor = new Color(0.2f, 0.85f, 1.0f, 0.7f),
@@ -804,7 +804,7 @@ GameAudio.Instance?.PlaySpellCast();
 
     private void SpawnMobilityBurst()
     {
-        var burst = new SpellImpactBurst
+        var burst = new EquipmentImpactBurst
         {
             Name = "MobilityBurst",
             BurstColor = new Color(0.7f, 1.0f, 0.95f, 0.75f),
@@ -819,7 +819,7 @@ GameAudio.Instance?.PlaySpellCast();
 
     private void SpawnSummonBurst(Vector3 position)
     {
-        var burst = new SpellImpactBurst
+        var burst = new EquipmentImpactBurst
         {
             Name = "SummonBurst",
             BurstColor = new Color(0.25f, 1.0f, 0.55f, 0.85f),
@@ -862,14 +862,14 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
             hits++;
         }
 
-        foreach (Node node in GetTree().GetNodesInGroup("balloon"))
+        foreach (Node node in GetTree().GetNodesInGroup("drone"))
         {
-            if (node is not ManaBalloon balloon || balloon.UsePlayerMana || balloon.GlobalPosition.DistanceTo(center) > radius)
+            if (node is not CollectorDrone drone || drone.UsePlayerAntimatter || drone.GlobalPosition.DistanceTo(center) > radius)
             {
                 continue;
             }
 
-            balloon.ApplyDamage(damage);
+            drone.ApplyDamage(damage);
             hits++;
         }
 
@@ -934,34 +934,34 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
         desiredVelocity += up * (Mathf.Max(vertical, terrainLift) - vertical);
     }
 
-    private void RouteManaToWell()
+    private void RouteAntimatterToWell()
     {
-        _manaWell ??= GetTree().GetFirstNodeInGroup("mana_well") as ManaWell;
-        if (_manaWell == null || Mana <= ManaDepositReserve)
+        _antimatterSource ??= GetTree().GetFirstNodeInGroup("antimatter_source") as AntimatterSource;
+        if (_antimatterSource == null || Energy <= EnergyDepositReserve)
         {
             return;
         }
 
-        if (GlobalPosition.DistanceTo(_manaWell.GlobalPosition) > ManaDepositRadius)
+        if (GlobalPosition.DistanceTo(_antimatterSource.GlobalPosition) > EnergyDepositRadius)
         {
             return;
         }
 
-        int depositAmount = Mana - ManaDepositReserve;
-        int deposited = _manaWell.DepositMana(depositAmount);
+        int depositAmount = Energy - EnergyDepositReserve;
+        int deposited = _antimatterSource.DepositAntimatter(depositAmount);
         if (deposited <= 0)
         {
             return;
         }
 
-        Mana -= deposited;
-        StatusMessage = $"Banked {deposited} mana";
+        Energy -= deposited;
+        StatusMessage = $"Banked {deposited} antimatter";
         _feedbackTimer = 0.6f;
     }
 
     private void UpdateCamera(float delta)
     {
-        _carpetVisual.Visible = !_firstPersonCamera;
+        _shipVisual.Visible = !_firstPersonCamera;
         Vector3 targetPosition = _firstPersonCamera
             ? new Vector3(0.0f, 0.25f, -0.45f)
             : new Vector3(0.0f, 2.1f, Mathf.Lerp(7.2f, 9.4f, Mathf.Clamp(Speed / MoveSpeed, 0.0f, 1.0f)));
@@ -981,44 +981,44 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
         if (IsInvulnerable)
         {
             float pulse = 0.5f + Mathf.Sin(Time.GetTicksMsec() * 0.02f) * 0.5f;
-            _carpetMaterial.AlbedoColor = new Color(1.0f, Mathf.Lerp(0.25f, 0.8f, pulse), Mathf.Lerp(0.2f, 0.95f, pulse));
+            _shipMaterial.AlbedoColor = new Color(1.0f, Mathf.Lerp(0.25f, 0.8f, pulse), Mathf.Lerp(0.2f, 0.95f, pulse));
         }
         else if (IsShielded)
         {
             float pulse = 0.5f + Mathf.Sin(Time.GetTicksMsec() * 0.018f) * 0.5f;
-            _carpetMaterial.AlbedoColor = new Color(Mathf.Lerp(0.08f, 0.25f, pulse), Mathf.Lerp(0.55f, 0.95f, pulse), 1.0f);
+            _shipMaterial.AlbedoColor = new Color(Mathf.Lerp(0.08f, 0.25f, pulse), Mathf.Lerp(0.55f, 0.95f, pulse), 1.0f);
         }
         else if (_feedbackTimer <= 0.0f)
         {
-            _carpetMaterial.AlbedoColor = _carpetMaterial.AlbedoColor.Lerp(new Color(0.38f, 0.16f, 0.82f), Mathf.Clamp(10.0f * delta, 0.0f, 1.0f));
+            _shipMaterial.AlbedoColor = _shipMaterial.AlbedoColor.Lerp(new Color(0.38f, 0.16f, 0.82f), Mathf.Clamp(10.0f * delta, 0.0f, 1.0f));
         }
     }
 
-    private void UpdateCarpetBank(float delta)
+    private void UpdateShipBank(float delta)
     {
         Vector3 localVelocity = GlobalBasis.Inverse() * Velocity;
         float targetRoll = Mathf.DegToRad(-Mathf.Clamp(localVelocity.X / MoveSpeed, -1.0f, 1.0f) * BankDegrees);
         float targetPitch = Mathf.DegToRad(Mathf.Clamp(localVelocity.Z / MoveSpeed, -1.0f, 1.0f) * 9.0f);
         float smoothingWeight = Mathf.Clamp(BankSmoothing * delta, 0.0f, 1.0f);
-        _carpetVisual.Rotation = new Vector3(
-            Mathf.LerpAngle(_carpetVisual.Rotation.X, targetPitch, smoothingWeight),
+        _shipVisual.Rotation = new Vector3(
+            Mathf.LerpAngle(_shipVisual.Rotation.X, targetPitch, smoothingWeight),
             0.0f,
-            Mathf.LerpAngle(_carpetVisual.Rotation.Z, targetRoll, smoothingWeight));
+            Mathf.LerpAngle(_shipVisual.Rotation.Z, targetRoll, smoothingWeight));
     }
 
-    private void AddCarpetVisual()
+    private void AddShipVisual()
     {
-        _carpetVisual = new MeshInstance3D { Name = "CarpetVisual" };
-        _carpetVisual.Mesh = new BoxMesh { Size = new Vector3(2.0f, 0.12f, 3.0f) };
-        _carpetVisual.Position = new Vector3(0.0f, -0.35f, 0.0f);
+        _shipVisual = new MeshInstance3D { Name = "ShipVisual" };
+        _shipVisual.Mesh = new BoxMesh { Size = new Vector3(2.0f, 0.12f, 3.0f) };
+        _shipVisual.Position = new Vector3(0.0f, -0.35f, 0.0f);
 
-        _carpetMaterial = new StandardMaterial3D
+        _shipMaterial = new StandardMaterial3D
         {
             AlbedoColor = new Color(0.38f, 0.16f, 0.82f),
             Roughness = 0.65f
         };
-        _carpetVisual.MaterialOverride = _carpetMaterial;
-        AddChild(_carpetVisual);
+        _shipVisual.MaterialOverride = _shipMaterial;
+        AddChild(_shipVisual);
 
         var collision = new CollisionShape3D
         {

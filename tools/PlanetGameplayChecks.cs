@@ -6,7 +6,7 @@ using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Game;
 using MagicCarpetRemastered.Scripts.Player;
-using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.Equipment;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Tools;
@@ -16,7 +16,7 @@ public partial class PlanetGameplayChecks : Node3D
     private int _assertions;
     private Node3D _room = null!;
     private HeightmapArena _arena = null!;
-    private CarpetFlightController _player = null!;
+    private ShipFlightController _player = null!;
     private void Check(bool condition, string message)
     {
         _assertions++;
@@ -37,16 +37,16 @@ public partial class PlanetGameplayChecks : Node3D
     private int LooseTotal()
     {
         int amount = 0;
-        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
-            if (node is ManaPickup orb && !orb.IsQueuedForDeletion()) amount += orb.ManaAmount;
+        foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
+            if (node is AntimatterPickup orb && !orb.IsQueuedForDeletion()) amount += orb.AntimatterAmount;
         return amount;
     }
-    private static void Cast(CarpetFlightController player, string method)
-        => typeof(CarpetFlightController).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, null);
+    private static void Cast(ShipFlightController player, string method)
+        => typeof(ShipFlightController).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, null);
 
     private async Task CheckProjectileOwnerLifetime(Vector3 up)
     {
-        EnemyEcosystemEnemy shooter = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard }, up, 6);
+        EnemyEcosystemEnemy shooter = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.RivalShip }, up, 6);
         shooter.SetPhysicsProcess(false);
         EnemyProjectile flight = Add(new EnemyProjectile(), up, 30);
         flight.SetPhysicsProcess(false);
@@ -69,20 +69,20 @@ public partial class PlanetGameplayChecks : Node3D
         flight._PhysicsProcess(4);
         Check(flight.IsQueuedForDeletion(), "Ownerless enemy projectile retains lifetime expiry");
 
-        CarpetFlightController spellOwner = Add(new CarpetFlightController(), Vector3.Right, 6);
-        spellOwner.SetPhysicsProcess(false);
-        SpellProjectile firebolt = Add(new SpellProjectile(), Vector3.Right, 30);
-        firebolt.SetPhysicsProcess(false);
-        firebolt.Launch(_arena.UpAt(firebolt.GlobalPosition), spellOwner);
-        spellOwner.QueueFree();
+        ShipFlightController equipmentOwner = Add(new ShipFlightController(), Vector3.Right, 6);
+        equipmentOwner.SetPhysicsProcess(false);
+        WeaponProjectile plasmaBolt = Add(new WeaponProjectile(), Vector3.Right, 30);
+        plasmaBolt.SetPhysicsProcess(false);
+        plasmaBolt.Launch(_arena.UpAt(plasmaBolt.GlobalPosition), equipmentOwner);
+        equipmentOwner.QueueFree();
         await Frames(2);
-        Check(!IsInstanceValid(spellOwner), "Regression firebolt owner must actually be freed");
-        previous = firebolt.GlobalPosition;
-        firebolt._PhysicsProcess(0.1);
-        Check(!firebolt.IsQueuedForDeletion() && Mathf.Abs(firebolt.GlobalPosition.DistanceTo(previous) - 4.2f) < 0.001f,
-            "Player firebolt also survives a disposed caster");
-        firebolt._PhysicsProcess(2);
-        Check(firebolt.IsQueuedForDeletion(), "Ownerless firebolt retains lifetime expiry");
+        Check(!IsInstanceValid(equipmentOwner), "Regression plasmaBolt owner must actually be freed");
+        previous = plasmaBolt.GlobalPosition;
+        plasmaBolt._PhysicsProcess(0.1);
+        Check(!plasmaBolt.IsQueuedForDeletion() && Mathf.Abs(plasmaBolt.GlobalPosition.DistanceTo(previous) - 4.2f) < 0.001f,
+            "Player plasmaBolt also survives a disposed caster");
+        plasmaBolt._PhysicsProcess(2);
+        Check(plasmaBolt.IsQueuedForDeletion(), "Ownerless plasmaBolt retains lifetime expiry");
         await Frames(2);
     }
 
@@ -131,108 +131,108 @@ public partial class PlanetGameplayChecks : Node3D
             // Use the underside for all economic/combat tests: world-Y assumptions fail here.
             Vector3 underside = Vector3.Down;
             _arena.FlattenTerrain(_arena.PlanetCenter + underside * 800, 80, 7);
-            CastleKeep home = Add(new CastleKeep { InitialStoredMana = 30 }, underside, 2);
+            FactionBase home = Add(new FactionBase { InitialStoredAntimatter = 30 }, underside, 2);
             Vector3 rivalUp = Offset(underside, 45, 800, Vector3.Right);
-            CastleKeep rival = Add(new CastleKeep { IsPlayerCastle = false, InitialStoredMana = 48 }, rivalUp, 2);
-            _player = Add(new CarpetFlightController(), Offset(underside, 12, 800, Vector3.Forward), 6);
+            FactionBase rival = Add(new FactionBase { IsPlayerBase = false, InitialStoredAntimatter = 48 }, rivalUp, 2);
+            _player = Add(new ShipFlightController(), Offset(underside, 12, 800, Vector3.Forward), 6);
             _player.SetPhysicsProcess(false);
-            Check(home.GlobalBasis.Y.Dot(underside) > 0.9999f && rival.GlobalBasis.Y.Dot(rivalUp) > 0.9999f, "Castles upright on underside");
-            Check(_player.ManaCapacity == 110, "Castle-derived spell power retained");
+            Check(home.GlobalBasis.Y.Dot(underside) > 0.9999f && rival.GlobalBasis.Y.Dot(rivalUp) > 0.9999f, "Bases upright on underside");
+            Check(_player.EnergyCapacity == 110, "Base-derived equipment power retained");
             await CheckProjectileOwnerLifetime(underside);
 
-            ManaPickup falling = Add(new ManaPickup { ManaAmount = 10 }, Offset(underside, 20, 800, Vector3.Right), 6);
+            AntimatterPickup falling = Add(new AntimatterPickup { AntimatterAmount = 10 }, Offset(underside, 20, 800, Vector3.Right), 6);
             falling.SpillAt(falling.GlobalPosition);
             _arena.RefreshPlanetDetail();
             await Frames(20);
-            Check(falling.LinearVelocity.Dot(_arena.UpAt(falling.GlobalPosition)) < -1, "Mana accelerates inward on underside");
+            Check(falling.LinearVelocity.Dot(_arena.UpAt(falling.GlobalPosition)) < -1, "Antimatter accelerates inward on underside");
             await Frames(160);
-            Check(Mathf.Abs(_arena.Clearance(falling.GlobalPosition) - falling.Radius) < 0.25f, "Mana settles on underside collision surface");
-            Check(falling.GravityScale == 0 && falling.ManaAmount == 10, "Disable global gravity without losing mana");
-            int power = _player.ClaimedMana;
+            Check(Mathf.Abs(_arena.Clearance(falling.GlobalPosition) - falling.Radius) < 0.25f, "Antimatter settles on underside collision surface");
+            Check(falling.GravityScale == 0 && falling.AntimatterAmount == 10, "Disable global gravity without losing antimatter");
+            int power = _player.ClaimedAntimatter;
             _player.GlobalPosition = falling.GlobalPosition;
             await Frames(15);
-            Check(falling.ManaAmount == 10 && _player.ClaimedMana == power, "Player contact never collects physical mana");
+            Check(falling.AntimatterAmount == 10 && _player.ClaimedAntimatter == power, "Player contact never collects physical antimatter");
             _player.GlobalPosition = _arena.OnSurface(home.GlobalPosition + home.GlobalBasis.X * 12, 6);
 
-            ManaPickup mergeA = Add(new ManaPickup { ManaAmount = 5, Ownership = ManaOwnership.Player }, Offset(underside, 30, 800, Vector3.Forward), 1);
-            ManaPickup mergeB = Add(new ManaPickup { ManaAmount = 7, Ownership = ManaOwnership.Player }, Offset(underside, 36, 800, Vector3.Forward), 1);
+            AntimatterPickup mergeA = Add(new AntimatterPickup { AntimatterAmount = 5, Ownership = AntimatterOwnership.Player }, Offset(underside, 30, 800, Vector3.Forward), 1);
+            AntimatterPickup mergeB = Add(new AntimatterPickup { AntimatterAmount = 7, Ownership = AntimatterOwnership.Player }, Offset(underside, 36, 800, Vector3.Forward), 1);
             float clusterDistance = mergeA.GlobalPosition.DistanceTo(mergeB.GlobalPosition);
             await Frames(60);
             Check(mergeA.GlobalPosition.DistanceTo(mergeB.GlobalPosition) < clusterDistance - 0.5f,
                 "Radial surface magnetism visibly closes a gap on the underside");
             await Frames(30);
             Check(IsInstanceValid(mergeA) && IsInstanceValid(mergeB) && mergeA.IsAvailable && mergeB.IsAvailable,
-                "Underside mana waits for sustained settled contact");
+                "Underside antimatter waits for sustained settled contact");
             await Frames(600);
-            Check(LooseTotal() == 22, "Real radial-physics merging conserves mana");
+            Check(LooseTotal() == 22, "Real radial-physics merging conserves antimatter");
             Check(!IsInstanceValid(mergeA) || !IsInstanceValid(mergeB) || mergeA.IsQueuedForDeletion() || mergeB.IsQueuedForDeletion(), "Same-owner orbs merge on underside");
 
             Vector3 seamUp = new Vector3(1, -1, 0).Normalized();
             Vector3 seamForward = new Vector3(1, 1, 0).Normalized();
             _arena.FlattenTerrain(_arena.PlanetCenter + seamUp * 800, 50, 7);
             Vector3 boltStartUp = Offset(seamUp, -12, 800, seamForward);
-            ManaPickup target = Add(new ManaPickup { ManaAmount = 9 }, Offset(seamUp, 10, 800, seamForward), 0.5f);
+            AntimatterPickup target = Add(new AntimatterPickup { AntimatterAmount = 9 }, Offset(seamUp, 10, 800, seamForward), 0.5f);
             target.SetPhysicsProcess(false); target.Freeze = true;
-            PossessProjectile bolt = Add(new PossessProjectile(), boltStartUp, 0.9f);
+            ClaimProjectile bolt = Add(new ClaimProjectile(), boltStartUp, 0.9f);
             bolt.SetPhysicsProcess(false);
             bolt.Launch(_arena.Tangent(seamForward, bolt.GlobalPosition).Normalized());
             bolt._PhysicsProcess(0.6);
-            Check(target.Ownership == ManaOwnership.Player && target.ManaAmount == 9, "Possession traverses cube seam and preserves amount");
+            Check(target.Ownership == AntimatterOwnership.Player && target.AntimatterAmount == 9, "Claim traverses cube seam and preserves amount");
             target.QueueFree();
 
             int beforeDrop = LooseTotal();
-            var existingMana = GetTree().GetNodesInGroup("loose_mana").OfType<ManaPickup>().ToHashSet();
+            var existingAntimatter = GetTree().GetNodesInGroup("loose_antimatter").OfType<AntimatterPickup>().ToHashSet();
             Vector3 dropOrigin = _arena.OnSurface(_arena.PlanetCenter
                 + Offset(underside, -35, 800, Vector3.Forward) * 800, 6);
-            ManaScatter.Spawn(_room, dropOrigin, 12, name: "UndersideDropCheck");
-            var deathDrops = GetTree().GetNodesInGroup("loose_mana").OfType<ManaPickup>()
-                .Where(orb => !existingMana.Contains(orb)).ToArray();
+            AntimatterScatter.Spawn(_room, dropOrigin, 12, name: "UndersideDropCheck");
+            var deathDrops = GetTree().GetNodesInGroup("loose_antimatter").OfType<AntimatterPickup>()
+                .Where(orb => !existingAntimatter.Contains(orb)).ToArray();
             Check(deathDrops.Length == 6 && deathDrops.All(orb => orb.LinearVelocity.IsZeroApprox()),
                 "Underside death drop starts as six randomized fragments without launch impulses");
             Check(deathDrops.Count(orb => orb.IsDropPending) == 5,
-                "Underside mana releases its first fragment immediately and stages the other five");
+                "Underside antimatter releases its first fragment immediately and stages the other five");
             var departures = deathDrops.ToDictionary(orb => orb, orb => orb.GlobalPosition);
             await Frames(30);
             Check(deathDrops.All(orb => orb.LinearVelocity.Dot(_arena.UpAt(orb.GlobalPosition)) < -1
                 && orb.LinearVelocity.Slide(_arena.UpAt(orb.GlobalPosition)).Length() < 0.1f
                 && _arena.Clearance(orb.GlobalPosition) < _arena.Clearance(departures[orb]) - 0.1f),
-                "Death mana falls radially inward without tangential scatter on the globe underside");
-            Check(LooseTotal() == beforeDrop + 12, "Radial straight-down death drop preserves the exact mana total");
+                "Death antimatter falls radially inward without tangential scatter on the globe underside");
+            Check(LooseTotal() == beforeDrop + 12, "Radial straight-down death drop preserves the exact antimatter total");
 
-            foreach (Node node in GetTree().GetNodesInGroup("loose_mana")) if (node is ManaPickup orb) orb.QueueFree();
+            foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter")) if (node is AntimatterPickup orb) orb.QueueFree();
             await Frames(2);
-            ManaPickup cargo = Add(new ManaPickup { ManaAmount = 10, Ownership = ManaOwnership.Player }, Offset(underside, 15, 800, Vector3.Right), 0.5f);
-            ManaBalloon balloon = Add(new ManaBalloon { CarryCapacity = 1, MoveSpeed = 20, MaxSeekRadius = 80 }, Offset(underside, 12, 800, Vector3.Right), 5);
+            AntimatterPickup cargo = Add(new AntimatterPickup { AntimatterAmount = 10, Ownership = AntimatterOwnership.Player }, Offset(underside, 15, 800, Vector3.Right), 0.5f);
+            CollectorDrone drone = Add(new CollectorDrone { CarryCapacity = 1, MoveSpeed = 20, MaxSeekRadius = 80 }, Offset(underside, 12, 800, Vector3.Right), 5);
             _arena.RefreshPlanetDetail();
-            int storedBefore = home.StoredMana;
+            int storedBefore = home.StoredAntimatter;
             await Frames(180);
-            Check(home.StoredMana == storedBefore + 10, $"Balloon scoop/carry/delivery on underside: stored {home.StoredMana}");
-            Check(_player.ManaCapacity == 120, "Delivery increases current castle-backed spell capacity");
-            Check(balloon.GlobalBasis.Y.Dot(_arena.UpAt(balloon.GlobalPosition)) > 0.999f, "Balloon stays upright while hauling");
+            Check(home.StoredAntimatter == storedBefore + 10, $"Drone scoop/carry/delivery on underside: stored {home.StoredAntimatter}");
+            Check(_player.EnergyCapacity == 120, "Delivery increases current hub-backed equipment capacity");
+            Check(drone.GlobalBasis.Y.Dot(_arena.UpAt(drone.GlobalPosition)) > 0.999f, "Drone stays upright while hauling");
 
-            SpellDiscovery discovery = Add(new SpellDiscovery { SpellId = "firebolt", SpellName = "Firebolt" }, Offset(underside, 22, 800, Vector3.Back), 6);
+            EquipmentDiscovery discovery = Add(new EquipmentDiscovery { EquipmentId = "plasma-bolt", EquipmentName = "Plasma Bolt" }, Offset(underside, 22, 800, Vector3.Back), 6);
             _player.GlobalPosition = _arena.OnSurface(discovery.GlobalPosition, 11);
-            Check(discovery.TryCollect(_player) && _player.FireboltDamage == 35, "Spell discovery works in radial flight column");
+            Check(discovery.TryCollect(_player) && _player.PlasmaBoltDamage == 35, "Equipment discovery works in radial flight column");
             await Frames(2);
             Vector3 shotUp = Offset(underside, 35, 800, Vector3.Back);
             _arena.RefreshPlanetDetail();
-            SpellProjectile shot = Add(new SpellProjectile { Damage = 35 }, shotUp, 7);
+            WeaponProjectile shot = Add(new WeaponProjectile { Damage = 35 }, shotUp, 7);
             shot.Launch(-_arena.UpAt(shot.GlobalPosition), _player);
             float oldHeight = _arena.HeightAt(shot.GlobalPosition);
             await Frames(30);
-            Check(_arena.HeightAt(_arena.PlanetCenter + shotUp * 800) < oldHeight - 0.5f, "Firebolt impact deforms spherical terrain");
+            Check(_arena.HeightAt(_arena.PlanetCenter + shotUp * 800) < oldHeight - 0.5f, "PlasmaBolt impact deforms spherical terrain");
 
             _player.RespawnAt(_arena.OnSurface(home.GlobalPosition + home.GlobalBasis.X * 12, 6));
-            Cast(_player, "CastShieldSpell");
-            Check(_player.IsShielded && _player.Mana == _player.ManaCapacity - 14, "Actual shield cast retains cost and duration");
-            typeof(CarpetFlightController).GetField("_damageInvulnerabilityTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(_player, 0f);
+            Cast(_player, "CastShieldEquipment");
+            Check(_player.IsShielded && _player.Energy == _player.EnergyCapacity - 14, "Actual shield cast retains cost and duration");
+            typeof(ShipFlightController).GetField("_damageInvulnerabilityTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(_player, 0f);
             _player.ApplyDamage(20);
             Check(_player.Health == 93, "Shield mitigation retained on underside");
-            Cast(_player, "CastMobilitySpell");
+            Cast(_player, "CastMobilityEquipment");
             Check(_arena.Tangent(_player.Velocity, _player.GlobalPosition).Length() > 30
                 && _player.Velocity.Dot(_arena.UpAt(_player.GlobalPosition)) > 0, "Dash uses tangent speed plus radial lift");
-            Cast(_player, "CastSummonSpell");
-            SummonedGuardian summoned = GetChildren().OfType<SummonedGuardian>().Last();
+            Cast(_player, "CastSummonEquipment");
+            GuardianDrone summoned = GetChildren().OfType<GuardianDrone>().Last();
             summoned.SetPhysicsProcess(false);
             Check(_arena.Clearance(summoned.GlobalPosition) >= 1 && summoned.GlobalBasis.Y.Dot(_arena.UpAt(summoned.GlobalPosition)) > 0.999f, "Actual guardian spawn is upright and above radial surface");
             Vector3 guardianUp = _arena.UpAt(summoned.GlobalPosition);
@@ -250,8 +250,8 @@ public partial class PlanetGameplayChecks : Node3D
             EnemyEcosystemEnemy burstTarget = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.GroundBeast }, burstUp, 1);
             burstTarget.SetPhysicsProcess(false);
             int burstHealth = burstTarget.Health;
-            Cast(_player, "CastAreaSpell");
-            Check(burstTarget.Health == burstHealth - 32, "Actual Arcane Burst targets spherical ground and damages enemies");
+            Cast(_player, "CastAreaEquipment");
+            Check(burstTarget.Health == burstHealth - 32, "Actual Pulse Burst targets spherical ground and damages enemies");
             burstTarget.QueueFree(); await Frames(2);
             _player.Velocity = Vector3.Zero;
 
@@ -265,7 +265,7 @@ public partial class PlanetGameplayChecks : Node3D
                 await Frames(60);
                 Input.ActionRelease("move_forward");
                 _player.SetPhysicsProcess(false);
-                Check(_arena.SurfaceDistance(departure, _player.GlobalPosition) > 8, "Actual gameplay carpet advances around each hemisphere");
+                Check(_arena.SurfaceDistance(departure, _player.GlobalPosition) > 8, "Actual gameplay ship advances around each hemisphere");
                 Check(_player.GlobalBasis.Y.Dot(_arena.UpAt(_player.GlobalPosition)) > 0.9999f
                     && _arena.Clearance(_player.GlobalPosition) >= 1.99f && _arena.Clearance(_player.GlobalPosition) <= 12.01f,
                     "Real flight maintains upright frame and clearance across faces");
@@ -273,46 +273,46 @@ public partial class PlanetGameplayChecks : Node3D
             }
             _player.Velocity = Vector3.Zero;
 
-            EnemyEcosystemEnemy flyingWizard = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard }, Vector3.Right, 6);
+            EnemyEcosystemEnemy flyingPilot = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.RivalShip }, Vector3.Right, 6);
             _arena.RefreshPlanetDetail();
-            Vector3 wizardDeparture = flyingWizard.GlobalPosition;
+            Vector3 pilotDeparture = flyingPilot.GlobalPosition;
             await Frames(120);
-            Check(_arena.SurfaceDistance(wizardDeparture, flyingWizard.GlobalPosition) > 10
-                && flyingWizard.GlobalBasis.Y.Dot(_arena.UpAt(flyingWizard.GlobalPosition)) > 0.9999f,
-                "Real wizard flight follows tangent route with radial upright orientation");
-            Check(_arena.Clearance(flyingWizard.GlobalPosition) > 1 && _arena.Clearance(flyingWizard.GlobalPosition) <= 12.01f,
-                "Real wizard altitude stays surface relative on distant hemisphere");
-            flyingWizard.QueueFree(); await Frames(2);
+            Check(_arena.SurfaceDistance(pilotDeparture, flyingPilot.GlobalPosition) > 10
+                && flyingPilot.GlobalBasis.Y.Dot(_arena.UpAt(flyingPilot.GlobalPosition)) > 0.9999f,
+                "Real pilot flight follows tangent route with radial upright orientation");
+            Check(_arena.Clearance(flyingPilot.GlobalPosition) > 1 && _arena.Clearance(flyingPilot.GlobalPosition) <= 12.01f,
+                "Real pilot altitude stays surface relative on distant hemisphere");
+            flyingPilot.QueueFree(); await Frames(2);
 
-            home.DepositMana(50);
-            int economicTotal = home.StoredMana + LooseTotal();
+            home.DepositAntimatter(50);
+            int economicTotal = home.StoredAntimatter + LooseTotal();
             home.ApplyDamage(70);
-            Check(home.StoredMana == 60 && home.EffectiveStorageCapacity == 60, "Castle damage reduces retained storage and spills excess");
-            Check(home.StoredMana + LooseTotal() == economicTotal && _player.ClaimedMana == 140, "Radial castle spill conserves resources and reduces current power");
-            foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
-                if (node is ManaPickup orb && !orb.IsQueuedForDeletion())
+            Check(home.StoredAntimatter == 60 && home.EffectiveStorageCapacity == 60, "Base damage reduces retained storage and spills excess");
+            Check(home.StoredAntimatter + LooseTotal() == economicTotal && _player.ClaimedAntimatter == 140, "Radial hub spill conserves resources and reduces current power");
+            foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
+                if (node is AntimatterPickup orb && !orb.IsQueuedForDeletion())
                     Check(orb.LinearVelocity.IsZeroApprox()
                         && _arena.Clearance(orb.GlobalPosition) >= orb.Radius,
-                        "Castle fragments drop without launch impulse and retain underside surface clearance");
+                        "Base fragments drop without launch impulse and retain underside surface clearance");
             home._PhysicsProcess(6);
-            Check(home.Health == 73 && home.StoredMana == 60, "Quiet castle repairs health without recreating spilled mana");
+            Check(home.Health == 73 && home.StoredAntimatter == 60, "Quiet hub repairs health without recreating spilled antimatter");
 
-            EnemyEcosystemEnemy wizard = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard }, rivalUp, 6);
-            wizard.SetPhysicsProcess(false);
-            LevelObjective objective = new() { WizardRespawnDelaySeconds = 0.05f };
-            objective.Initialize(_player, home, rival, wizard);
+            EnemyEcosystemEnemy pilot = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.RivalShip }, rivalUp, 6);
+            pilot.SetPhysicsProcess(false);
+            LevelObjective objective = new() { PilotRespawnDelaySeconds = 0.05f };
+            objective.Initialize(_player, home, rival, pilot);
             _room.AddChild(objective);
             objective.SetPhysicsProcess(false);
             _player.DamageInvulnerabilitySeconds = 0;
-            typeof(CarpetFlightController).GetField("_damageInvulnerabilityTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(_player, 0f);
+            typeof(ShipFlightController).GetField("_damageInvulnerabilityTimer", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(_player, 0f);
             _player.ApplyDamage(1000);
             objective._PhysicsProcess(0.1);
-            Check(_player.Health == 100 && _arena.Clearance(_player.GlobalPosition) >= 2, "Castle-backed player respawn on underside");
+            Check(_player.Health == 100 && _arena.Clearance(_player.GlobalPosition) >= 2, "Base-backed player respawn on underside");
             Check(_player.GlobalBasis.Y.Dot(_arena.UpAt(_player.GlobalPosition)) > 0.9999f, "Respawn restores radial upright frame");
-            Check(_player.GetSpellRank("firebolt") == 2, "Upgrade survives spherical respawn");
-            wizard.ApplyDamage(1000);
+            Check(_player.GetEquipmentRank("plasma-bolt") == 2, "Upgrade survives spherical respawn");
+            pilot.ApplyDamage(1000);
             objective._PhysicsProcess(0.1);
-            Check(!objective.RivalWizardDefeated, "Surviving rival castle respawns its wizard");
+            Check(!objective.RivalPilotDefeated, "Surviving rival hub respawns its pilot");
             EnemyEcosystemEnemy replacement = null!;
             foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
                 if (node is EnemyEcosystemEnemy enemy && enemy.Health > 0) replacement = enemy;
@@ -321,15 +321,15 @@ public partial class PlanetGameplayChecks : Node3D
             rival.ApplyDamage(1000);
             replacement.ApplyDamage(1000);
             objective.Evaluate();
-            Check(objective.State == LevelObjective.LevelState.Victory, "Castle plus rival elimination wins on spherical world");
+            Check(objective.State == LevelObjective.LevelState.Victory, "Base plus rival elimination wins on spherical world");
             LevelObjective defeat = new();
-            EnemyEcosystemEnemy anotherRival = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard }, rivalUp, 6);
+            EnemyEcosystemEnemy anotherRival = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.RivalShip }, rivalUp, 6);
             anotherRival.SetPhysicsProcess(false);
             defeat.Initialize(_player, home, rival, anotherRival);
             _room.AddChild(defeat); defeat.SetPhysicsProcess(false);
             home.ApplyDamage(1000);
             defeat.Evaluate();
-            Check(defeat.State == LevelObjective.LevelState.Defeat, "Home castle destruction still causes defeat");
+            Check(defeat.State == LevelObjective.LevelState.Defeat, "Home hub destruction still causes defeat");
             _room.QueueFree(); await Frames(2);
             foreach (Node child in GetChildren()) child.QueueFree();
             await Frames(2);
@@ -341,11 +341,11 @@ public partial class PlanetGameplayChecks : Node3D
             Check(game.UseSphericalWorld, "Default playable scene must enable spherical terrain");
             var arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
             Check(arena != null && arena.IsSpherical && arena.PlanetRadius == 800, "Medium world is the default");
-            Check(GetTree().GetNodesInGroup("spell_discovery").Count == 5, "All five discovery beacons present");
-            Check(GetTree().GetNodesInGroup("balloon").Count == 2, "Both castle balloons present");
+            Check(GetTree().GetNodesInGroup("equipment_discovery").Count == 5, "All five discovery beacons present");
+            Check(GetTree().GetNodesInGroup("drone").Count == 2, "Both hub drones present");
             Check(GetTree().GetNodesInGroup("ecosystem_enemy").Count == 5, "Initial creatures and one designated rival present");
-            Check(GetTree().GetNodesInGroup("level_objective").Count == 1 && GetTree().GetNodesInGroup("world_mana_tracker").Count == 1, "Objective and accounting present");
-            Check(LooseTotal() > 0, "Initial neutral world mana present");
+            Check(GetTree().GetNodesInGroup("level_objective").Count == 1 && GetTree().GetNodesInGroup("world_antimatter_tracker").Count == 1, "Objective and accounting present");
+            Check(LooseTotal() > 0, "Initial neutral world antimatter present");
             await Frames(60);
             foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
                 if (node is EnemyEcosystemEnemy enemy)
@@ -368,9 +368,9 @@ public partial class PlanetGameplayChecks : Node3D
                 AddChild(game);
                 arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
                 Check(arena?.PlanetRadius == PlanetSizes.Radii[preset], "Full gameplay scene respects selected size");
-                Check(GetTree().GetNodesInGroup("player_castle").Count == 1 && GetTree().GetNodesInGroup("enemy_castle").Count == 1
-                    && GetTree().GetNodesInGroup("balloon").Count == 2 && GetTree().GetNodesInGroup("spell_discovery").Count == 5,
-                    "Every planet preset includes castles, balloons, and upgrades");
+                Check(GetTree().GetNodesInGroup("player_base").Count == 1 && GetTree().GetNodesInGroup("enemy_base").Count == 1
+                    && GetTree().GetNodesInGroup("drone").Count == 2 && GetTree().GetNodesInGroup("equipment_discovery").Count == 5,
+                    "Every planet preset includes bases, drones, and upgrades");
                 await Frames(2);
             }
             game.QueueFree(); foreach (Node child in GetChildren()) child.QueueFree(); await Frames(2);

@@ -25,7 +25,7 @@ public partial class EnemyEcosystemDirector : Node
         new("Windward Ridge", new Vector3(-6.0f, 0.0f, 18.0f), 0.2f),
         new("Lowland Shore", new Vector3(20.0f, 0.0f, -8.0f), 0.45f),
         new("Wellfield", new Vector3(4.0f, 0.0f, 4.0f), 0.6f),
-        new("Castle Ruins", new Vector3(18.0f, 0.0f, -14.0f), 0.85f)
+        new("Base Ruins", new Vector3(18.0f, 0.0f, -14.0f), 0.85f)
     };
 
     [Export] public float SpawnIntervalSeconds { get; set; } = 7.5f;
@@ -35,13 +35,13 @@ public partial class EnemyEcosystemDirector : Node
     [Export] public int MaxFlyingSwarms { get; set; } = 3;
     [Export] public int MaxGroundBeasts { get; set; } = 2;
     [Export] public int MaxRangedCasters { get; set; } = 2;
-    [Export] public int MaxCastleAttackers { get; set; } = 2;
-    [Export] public int MaxManaThieves { get; set; } = 2;
-    [Export] public int MaxEnemyWizards { get; set; } = 1;
-    [Export] public bool SpawnEnemyWizards { get; set; } = true;
+    [Export] public int MaxBaseAttackers { get; set; } = 2;
+    [Export] public int MaxAntimatterThieves { get; set; } = 2;
+    [Export] public int MaxRivalShips { get; set; } = 1;
+    [Export] public bool SpawnRivalShips { get; set; } = true;
 
     public float Intensity => _intensity;
-    public string StatusText => $"Ecosystem: {_activeByRole[0]} swarm, {_activeByRole[1]} beasts, {_activeByRole[2]} casters, {_activeByRole[3]} siegers, {_activeByRole[4]} thieves, {_activeByRole[5]} wizards   Intensity {Intensity:0.00}";
+    public string StatusText => $"Ecosystem: {_activeByRole[0]} swarm, {_activeByRole[1]} beasts, {_activeByRole[2]} casters, {_activeByRole[3]} siegers, {_activeByRole[4]} thieves, {_activeByRole[5]} pilots   Intensity {Intensity:0.00}";
 
     private HeightmapArena? _arena;
     private float _spawnTimer;
@@ -91,7 +91,7 @@ public partial class EnemyEcosystemDirector : Node
 
         SpawnZone zone = SelectSpawnZone();
         var role = SelectRole(zone, initialWave, waveIndex);
-        if ((!SpawnEnemyWizards && role == Enemies.EnemyEcosystemEnemy.EnemyRole.EnemyWizard)
+        if ((!SpawnRivalShips && role == Enemies.EnemyEcosystemEnemy.EnemyRole.RivalShip)
             || GetRoleCount(role) >= GetRoleCap(role))
         {
             role = SelectFallbackRole(zone);
@@ -142,7 +142,7 @@ public partial class EnemyEcosystemDirector : Node
                 0 => Enemies.EnemyEcosystemEnemy.EnemyRole.FlyingSwarm,
                 1 => Enemies.EnemyEcosystemEnemy.EnemyRole.GroundBeast,
                 2 => Enemies.EnemyEcosystemEnemy.EnemyRole.RangedCaster,
-                _ => Enemies.EnemyEcosystemEnemy.EnemyRole.ManaThief
+                _ => Enemies.EnemyEcosystemEnemy.EnemyRole.AntimatterThief
             };
         }
 
@@ -152,20 +152,20 @@ public partial class EnemyEcosystemDirector : Node
         if (zone.Name == "Wellfield")
         {
             return zonePressure < 0.55f
-                ? Enemies.EnemyEcosystemEnemy.EnemyRole.ManaThief
-                : Enemies.EnemyEcosystemEnemy.EnemyRole.EnemyWizard;
+                ? Enemies.EnemyEcosystemEnemy.EnemyRole.AntimatterThief
+                : Enemies.EnemyEcosystemEnemy.EnemyRole.RivalShip;
         }
 
-        if (zone.Name == "Castle Ruins")
+        if (zone.Name == "Base Ruins")
         {
             if (zonePressure < 0.45f)
             {
-                return Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker;
+                return Enemies.EnemyEcosystemEnemy.EnemyRole.BaseAttacker;
             }
 
             return zonePressure < 0.7f
-                ? Enemies.EnemyEcosystemEnemy.EnemyRole.EnemyWizard
-                : Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker;
+                ? Enemies.EnemyEcosystemEnemy.EnemyRole.RivalShip
+                : Enemies.EnemyEcosystemEnemy.EnemyRole.BaseAttacker;
         }
 
         if (zone.Name == "Lowland Shore")
@@ -211,9 +211,9 @@ public partial class EnemyEcosystemDirector : Node
             Enemies.EnemyEcosystemEnemy.EnemyRole.FlyingSwarm => MaxFlyingSwarms,
             Enemies.EnemyEcosystemEnemy.EnemyRole.GroundBeast => MaxGroundBeasts,
             Enemies.EnemyEcosystemEnemy.EnemyRole.RangedCaster => MaxRangedCasters,
-            Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker => MaxCastleAttackers,
-            Enemies.EnemyEcosystemEnemy.EnemyRole.ManaThief => MaxManaThieves,
-            Enemies.EnemyEcosystemEnemy.EnemyRole.EnemyWizard => MaxEnemyWizards,
+            Enemies.EnemyEcosystemEnemy.EnemyRole.BaseAttacker => MaxBaseAttackers,
+            Enemies.EnemyEcosystemEnemy.EnemyRole.AntimatterThief => MaxAntimatterThieves,
+            Enemies.EnemyEcosystemEnemy.EnemyRole.RivalShip => MaxRivalShips,
             _ => 1
         };
     }
@@ -230,14 +230,14 @@ public partial class EnemyEcosystemDirector : Node
             return Enemies.EnemyEcosystemEnemy.EnemyRole.GroundBeast;
         }
 
-        if (zone.Name == "Castle Ruins" && _activeByRole[(int)Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker] < MaxCastleAttackers)
+        if (zone.Name == "Base Ruins" && _activeByRole[(int)Enemies.EnemyEcosystemEnemy.EnemyRole.BaseAttacker] < MaxBaseAttackers)
         {
-            return Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker;
+            return Enemies.EnemyEcosystemEnemy.EnemyRole.BaseAttacker;
         }
 
-        if (_activeByRole[(int)Enemies.EnemyEcosystemEnemy.EnemyRole.ManaThief] < MaxManaThieves)
+        if (_activeByRole[(int)Enemies.EnemyEcosystemEnemy.EnemyRole.AntimatterThief] < MaxAntimatterThieves)
         {
-            return Enemies.EnemyEcosystemEnemy.EnemyRole.ManaThief;
+            return Enemies.EnemyEcosystemEnemy.EnemyRole.AntimatterThief;
         }
 
         return Enemies.EnemyEcosystemEnemy.EnemyRole.RangedCaster;
@@ -262,7 +262,7 @@ public partial class EnemyEcosystemDirector : Node
 
     private Vector3 SpawnPosition(SpawnZone zone, Enemies.EnemyEcosystemEnemy.EnemyRole role)
     {
-        float clearance = role is Enemies.EnemyEcosystemEnemy.EnemyRole.GroundBeast or Enemies.EnemyEcosystemEnemy.EnemyRole.CastleAttacker ? 1.1f : 5.5f;
+        float clearance = role is Enemies.EnemyEcosystemEnemy.EnemyRole.GroundBeast or Enemies.EnemyEcosystemEnemy.EnemyRole.BaseAttacker ? 1.1f : 5.5f;
         if (_arena != null && _habitat != null)
         {
             float angle = GD.Randf() * Mathf.Tau;

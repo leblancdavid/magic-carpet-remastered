@@ -1,5 +1,7 @@
 # Strategic Planet Layout And Navigation
 
+Terminology update (2026-10-11): the implemented radar is now Tactical Radar. Current markers/UI use bases, pilots, antimatter, drones and equipment; paused-survey behavior and layout are preserved. Historical notes below retain the legacy vocabulary. See `TERMINOLOGY_MIGRATION.md` for IDs/types and `README.md` for current controls and commands.
+
 ## Approved Direction Update (2026-10-11)
 
 The sections below describe the implemented legacy navigation/landmark milestone, not the new reward/capture systems. Basic spherical gameplay is now accepted as a smooth playtest baseline; detailed route and balance tuning continues.
@@ -65,7 +67,7 @@ dotnet build MagicCarpetRemastered.sln
 $godot = 'D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_mono_win64_console.exe'
 & $godot --headless --path . 'res://tools/StrategicNavigationChecks.tscn'
 & $godot --headless --path . 'res://tools/PlanetGameplayChecks.tscn'
-& $godot --headless --path . 'res://tools/SpellProgressionChecks.tscn'
+& $godot --headless --path . 'res://tools/EquipmentProgressionChecks.tscn'
 ```
 
 Navigation checks cover projection/seam/pole geometry, multi-hemisphere radar, all-radius layouts, actual grounded resource totals, ownership/local visibility, pending/carried exclusion, chart persistence, far-side upgrades, actual curved distant hauling, habitat spawn placement, waypoint snapping, viewport-routed M/Esc/F2 input, pause/mouse ownership, and restart. Optional rendered capture: append `-- --capture=<absolute-existing-directory>/survey.png` without `--headless`; it also saves `survey_radar.png`.

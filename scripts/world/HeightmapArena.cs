@@ -406,7 +406,7 @@ public partial class HeightmapArena : Node3D
                 Vector3 d = PointAt(x + 1, z + 1);
 
                 // Godot uses clockwise front faces. The terrain's solid side
-                // must face upward so rigid mana spheres contact the slopes.
+                // must face upward so rigid antimatter spheres contact the slopes.
                 AddTriangle(surface, collisionTriangles, a, b, c);
                 AddTriangle(surface, collisionTriangles, b, d, c);
             }

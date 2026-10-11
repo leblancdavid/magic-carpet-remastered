@@ -4,24 +4,24 @@ using System.Runtime.CompilerServices;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
-// One broad-phase snapshot per physics frame, shared by attraction and possession.
+// One broad-phase snapshot per physics frame, shared by attraction and claim.
 // Exact availability, ownership and hit/contact tests remain with the callers.
-public static class ManaNeighborhood
+public static class AntimatterNeighborhood
 {
     private const float CellSize = 8;
     private sealed class Snapshot
     {
         public ulong Frame = ulong.MaxValue;
         public float MaximumRadius;
-        public readonly Dictionary<Vector3I, List<ManaPickup>> Cells = new();
-        public readonly List<ManaPickup> All = new();
-        public readonly Stack<List<ManaPickup>> SpareLists = new();
+        public readonly Dictionary<Vector3I, List<AntimatterPickup>> Cells = new();
+        public readonly List<AntimatterPickup> All = new();
+        public readonly Stack<List<AntimatterPickup>> SpareLists = new();
     }
     private static readonly ConditionalWeakTable<SceneTree, Snapshot> Snapshots = new();
 
     public static void Invalidate(SceneTree tree) => Snapshots.GetOrCreateValue(tree).Frame = ulong.MaxValue;
 
-    public static void Query(SceneTree tree, Vector3 center, float radius, List<ManaPickup> result)
+    public static void Query(SceneTree tree, Vector3 center, float radius, List<AntimatterPickup> result)
     {
         Snapshot snapshot = Snapshots.GetOrCreateValue(tree);
         ulong frame = Engine.GetPhysicsFrames();
@@ -35,15 +35,15 @@ public static class ManaNeighborhood
             snapshot.Cells.Clear();
             snapshot.All.Clear();
             snapshot.MaximumRadius = 0;
-            var nodes = tree.GetNodesInGroup("loose_mana");
+            var nodes = tree.GetNodesInGroup("loose_antimatter");
             foreach (Node node in nodes)
             {
-                if (node is not ManaPickup orb || orb.IsQueuedForDeletion()) continue;
+                if (node is not AntimatterPickup orb || orb.IsQueuedForDeletion()) continue;
                 snapshot.All.Add(orb);
                 snapshot.MaximumRadius = Mathf.Max(snapshot.MaximumRadius, Mathf.Max(orb.Radius, orb.TargetRadius));
                 Vector3I cell = Cell(orb.GlobalPosition);
                 if (!snapshot.Cells.TryGetValue(cell, out var occupants))
-                    snapshot.Cells[cell] = occupants = snapshot.SpareLists.Count > 0 ? snapshot.SpareLists.Pop() : new List<ManaPickup>();
+                    snapshot.Cells[cell] = occupants = snapshot.SpareLists.Count > 0 ? snapshot.SpareLists.Pop() : new List<AntimatterPickup>();
                 occupants.Add(orb);
             }
             snapshot.Frame = frame;

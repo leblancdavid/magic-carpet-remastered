@@ -10,31 +10,31 @@ using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Game;
 using MagicCarpetRemastered.Scripts.Player;
-using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.Equipment;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Tools;
 
 // Automated workload: AI and hauling are held still, while real rendering,
-// projectile physics, mana simulation, terrain queues, HUD and audio remain live.
+// projectile physics, antimatter simulation, terrain queues, HUD and audio remain live.
 public partial class CombatFrameProfile : Node3D
 {
     private readonly record struct Sample(int Radius, string Phase, int Frame, double WallMs,
-        double ProcessMs, double PhysicsMs, double RebuildMs, int Patches, int Pending, int ManaBodies,
-        double EventMs, double ManaLogicMs, double ManaIntegrationMs, int LogicCalls, int IntegrationCalls,
+        double ProcessMs, double PhysicsMs, double RebuildMs, int Patches, int Pending, int AntimatterBodies,
+        double EventMs, double AntimatterLogicMs, double AntimatterIntegrationMs, int LogicCalls, int IntegrationCalls,
         int ActiveBodies, int CollisionPairs, int Islands);
     private readonly List<Sample> _samples = new(5000);
     private readonly Stopwatch _clock = new();
     private Game _game = null!;
     private HeightmapArena _arena = null!;
     private PlanetTerrain _terrain = null!;
-    private CarpetFlightController _player = null!;
+    private ShipFlightController _player = null!;
     private Camera3D _camera = null!;
     private Label _status = null!;
     private Vector3 _center;
     private int _radius;
-    private int _possessions;
-    private bool _manaIsolation;
+    private int _claims;
+    private bool _antimatterIsolation;
 
     public override async void _Ready()
     {
@@ -44,7 +44,7 @@ public partial class CombatFrameProfile : Node3D
             if (DisplayServer.GetName() == "headless")
                 throw new InvalidOperationException("Run CombatFrameProfile with a rendered display; headless timings are not comparable.");
             var args = OS.GetCmdlineUserArgs();
-            _manaIsolation = args.Contains("--mana-isolation");
+            _antimatterIsolation = args.Contains("--antimatter-isolation") || args.Contains("--mana-isolation");
             int[] sizes = args.Contains("--medium") ? new[] { 1 } : args.Contains("--xl") ? new[] { 3 } : new[] { 1, 3 };
             DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed);
             DisplayServer.WindowSetSize(new Vector2I(1280, 720));
@@ -54,7 +54,7 @@ public partial class CombatFrameProfile : Node3D
             layer.AddChild(_status);
             foreach (int size in sizes) await RunWorld(size);
             WriteReports();
-            GD.Print($"Combat frame profile completed: {_samples.Count} rendered samples; {_possessions} successful possessions.");
+            GD.Print($"Combat frame profile completed: {_samples.Count} rendered samples; {_claims} successful claims.");
             GetTree().Quit();
         }
         catch (Exception exception)
@@ -75,12 +75,12 @@ public partial class CombatFrameProfile : Node3D
         _game.SetProcessUnhandledInput(false);
         _arena = (HeightmapArena)GetTree().GetFirstNodeInGroup("heightmap_arena");
         _terrain = _arena.GetChildren().OfType<PlanetTerrain>().Single();
-        _player = (CarpetFlightController)GetTree().GetFirstNodeInGroup("player");
+        _player = (ShipFlightController)GetTree().GetFirstNodeInGroup("player");
         _player.SetPhysicsProcess(false);
         _player.SetProcessUnhandledInput(false);
         foreach (Node child in _game.GetChildren())
             if (child is EnemyEcosystemDirector or LevelObjective) child.SetPhysicsProcess(false);
-        foreach (string group in new[] { "ecosystem_enemy", "balloon" })
+        foreach (string group in new[] { "ecosystem_enemy", "drone" })
             foreach (Node node in GetTree().GetNodesInGroup(group)) node.SetPhysicsProcess(false);
         _center = _arena.OnSurface(_player.GlobalPosition + _player.GlobalBasis.X * 35, 0);
         _camera = new Camera3D { Far = 4000 };
@@ -92,9 +92,9 @@ public partial class CombatFrameProfile : Node3D
         _arena.RefreshPlanetDetail();
         _status.Text = $"Profiling radius {_radius}: warmup";
         for (int i = 0; i < 180; i++) await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
-        if (_manaIsolation)
+        if (_antimatterIsolation)
         {
-            await RunManaIsolation();
+            await RunAntimatterIsolation();
             _game.QueueFree();
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -110,20 +110,20 @@ public partial class CombatFrameProfile : Node3D
             throw new InvalidOperationException("Ground-impact workload did not rebuild terrain.");
         await Window("death-first", 90, i => { if (i == 0) KillCreature(0); });
         await Window("death-repeat", 180, i => { if (i % 30 == 0) KillCreature(i / 30 + 1); });
-        int previous = _possessions;
-        await Window("possess-first", 90, i => { if (i == 0) Possess(0); });
-        await Window("possess-repeat", 180, i => { if (i % 30 == 0) Possess(i / 30 + 1); });
-        if (_possessions - previous != 7) throw new InvalidOperationException("Possession workload missed a target.");
-        await Window("dense-mana-create", 90, i => { if (i == 0) CreateDenseMana(); });
-        await Window("dense-mana-active", 240);
-        await Window("castle-spill", 180, i =>
+        int previous = _claims;
+        await Window("claim-first", 90, i => { if (i == 0) Claim(0); });
+        await Window("claim-repeat", 180, i => { if (i % 30 == 0) Claim(i / 30 + 1); });
+        if (_claims - previous != 7) throw new InvalidOperationException("Claim workload missed a target.");
+        await Window("dense-antimatter-create", 90, i => { if (i == 0) CreateDenseAntimatter(); });
+        await Window("dense-antimatter-active", 240);
+        await Window("base-spill", 180, i =>
         {
             if (i != 0) return;
-            var castle = new CastleKeep { IsPlayerCastle = false, ManaStorageCapacity = 256, InitialStoredMana = 256,
+            var hub = new FactionBase { IsPlayerBase = false, AntimatterStorageCapacity = 256, InitialStoredAntimatter = 256,
                 Position = Point(12, 0, 2) };
-            _game.AddChild(castle);
-            castle.ApplyDamage(1000);
-            if (!castle.IsDestroyed || castle.StoredMana != 0) throw new InvalidOperationException("Castle spill did not execute.");
+            _game.AddChild(hub);
+            hub.ApplyDamage(1000);
+            if (!hub.IsDestroyed || hub.StoredAntimatter != 0) throw new InvalidOperationException("Base spill did not execute.");
         });
         await Window("sustained-edits", 360, i => { if (i % 12 == 0) GroundImpact(i / 12); });
         await Window("post-stress", 180);
@@ -139,7 +139,7 @@ public partial class CombatFrameProfile : Node3D
 
     private void Fire(Vector3 position, Vector3 direction)
     {
-        var bolt = new SpellProjectile { Position = position };
+        var bolt = new WeaponProjectile { Position = position };
         _game.AddChild(bolt);
         bolt.Launch(direction, _player);
     }
@@ -160,46 +160,46 @@ public partial class CombatFrameProfile : Node3D
         if (!creature.IsQueuedForDeletion()) throw new InvalidOperationException("Creature death workload did not execute.");
     }
 
-    private void Possess(int index)
+    private void Claim(int index)
     {
         // Separate from death loot so first-hit targeting is repeatable.
-        var target = new ManaPickup { Position = Point(-18 + index * 3, 15, 0.5f), ManaAmount = 2 };
+        var target = new AntimatterPickup { Position = Point(-18 + index * 3, 15, 0.5f), AntimatterAmount = 2 };
         _game.AddChild(target);
         target.Freeze = true;
         target.SetPhysicsProcess(false);
-        var bolt = new PossessProjectile { Position = target.GlobalPosition + _arena.UpAt(target.GlobalPosition) * 3 };
+        var bolt = new ClaimProjectile { Position = target.GlobalPosition + _arena.UpAt(target.GlobalPosition) * 3 };
         _game.AddChild(bolt);
-        bolt.ManaPossessed += _ => { _possessions++; target.QueueFree(); };
+        bolt.AntimatterClaimed += _ => { _claims++; target.QueueFree(); };
         bolt.Launch(-_arena.UpAt(target.GlobalPosition));
     }
 
-    private void CreateDenseMana()
+    private void CreateDenseAntimatter()
     {
         for (int i = 0; i < 192; i++)
-            _game.AddChild(new ProfiledManaPickup { Position = Point((i % 16 - 8) * 1.2f, (i / 16 - 6) * 1.2f, 3),
-                ManaAmount = i % 4 + 1, Ownership = (ManaOwnership)(i % 3) });
+            _game.AddChild(new ProfiledAntimatterPickup { Position = Point((i % 16 - 8) * 1.2f, (i / 16 - 6) * 1.2f, 3),
+                AntimatterAmount = i % 4 + 1, Ownership = (AntimatterOwnership)(i % 3) });
     }
 
-    private async Task RunManaIsolation()
+    private async Task RunAntimatterIsolation()
     {
         // Remove seeded loose resources so every case starts with the same population.
-        foreach (Node node in GetTree().GetNodesInGroup("loose_mana")) node.QueueFree();
+        foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter")) node.QueueFree();
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-        await Window("mana-isolation-idle", 120);
+        await Window("antimatter-isolation-idle", 120);
         foreach (string mode in new[] { "frozen", "solver-radial", "full" })
         {
-            var bodies = new List<ProfiledManaPickup>();
+            var bodies = new List<ProfiledAntimatterPickup>();
             GD.Seed(20261010);
-            await Window($"mana-{mode}-create", 90, i =>
+            await Window($"antimatter-{mode}-create", 90, i =>
             {
                 if (i != 0) return;
                 for (int index = 0; index < 192; index++)
                 {
-                    var orb = new ProfiledManaPickup
+                    var orb = new ProfiledAntimatterPickup
                     {
                         Position = Point((index % 16 - 8) * 1.2f, (index / 16 - 6) * 1.2f, 3),
-                        ManaAmount = index % 4 + 1,
-                        Ownership = (ManaOwnership)(index % 3),
+                        AntimatterAmount = index % 4 + 1,
+                        Ownership = (AntimatterOwnership)(index % 3),
                         Freeze = mode == "frozen"
                     };
                     _game.AddChild(orb);
@@ -210,17 +210,17 @@ public partial class CombatFrameProfile : Node3D
                     bodies.Add(orb);
                 }
             });
-            await Window($"mana-{mode}-active", 360);
-            var measurements = _samples.Where(s => s.Radius == _radius && s.Phase == $"mana-{mode}-active").ToArray();
+            await Window($"antimatter-{mode}-active", 360);
+            var measurements = _samples.Where(s => s.Radius == _radius && s.Phase == $"antimatter-{mode}-active").ToArray();
             if ((mode == "full") != measurements.Any(s => s.LogicCalls > 0)
                 || (mode != "frozen") != measurements.Any(s => s.IntegrationCalls > 0))
-                throw new InvalidOperationException($"Mana isolation callback gates failed for {mode}.");
-            int total = bodies.Where(IsInstanceValid).Sum(orb => orb.ManaAmount);
-            if (total != 480) throw new InvalidOperationException($"Mana isolation lost resources in {mode}: {total}.");
+                throw new InvalidOperationException($"Antimatter isolation callback gates failed for {mode}.");
+            int total = bodies.Where(IsInstanceValid).Sum(orb => orb.AntimatterAmount);
+            if (total != 480) throw new InvalidOperationException($"Antimatter isolation lost resources in {mode}: {total}.");
             foreach (var orb in bodies)
                 if (IsInstanceValid(orb) && !orb.IsQueuedForDeletion()) orb.QueueFree();
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            await Window($"mana-{mode}-recovery", 60);
+            await Window($"antimatter-{mode}-recovery", 60);
         }
     }
 
@@ -230,7 +230,7 @@ public partial class CombatFrameProfile : Node3D
         // Establish a draw boundary outside the sample; event work below is included.
         await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
         _clock.Restart();
-        ProfiledManaPickup.ResetMeasurements();
+        ProfiledAntimatterPickup.ResetMeasurements();
         for (int i = 0; i < frames; i++)
         {
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -244,13 +244,13 @@ public partial class CombatFrameProfile : Node3D
                 Performance.GetMonitor(Performance.Monitor.TimeProcess) * 1000,
                 Performance.GetMonitor(Performance.Monitor.TimePhysicsProcess) * 1000,
                 _terrain.FrameRebuildMilliseconds, _terrain.FrameRebuiltPatchCount,
-                _terrain.PendingPatchCount, GetTree().GetNodesInGroup("loose_mana").Count,
-                eventMs, ProfiledManaPickup.LogicMilliseconds, ProfiledManaPickup.IntegrationMilliseconds,
-                ProfiledManaPickup.LogicCalls, ProfiledManaPickup.IntegrationCalls,
+                _terrain.PendingPatchCount, GetTree().GetNodesInGroup("loose_antimatter").Count,
+                eventMs, ProfiledAntimatterPickup.LogicMilliseconds, ProfiledAntimatterPickup.IntegrationMilliseconds,
+                ProfiledAntimatterPickup.LogicCalls, ProfiledAntimatterPickup.IntegrationCalls,
                 (int)Performance.GetMonitor(Performance.Monitor.Physics3DActiveObjects),
                 (int)Performance.GetMonitor(Performance.Monitor.Physics3DCollisionPairs),
                 (int)Performance.GetMonitor(Performance.Monitor.Physics3DIslandCount)));
-            ProfiledManaPickup.ResetMeasurements();
+            ProfiledAntimatterPickup.ResetMeasurements();
         }
         var window = _samples.Where(s => s.Radius == _radius && s.Phase == phase).ToArray();
         GD.Print(Summary(window));
@@ -260,7 +260,7 @@ public partial class CombatFrameProfile : Node3D
     {
         double[] times = samples.Select(s => s.WallMs).OrderBy(v => v).ToArray();
         double Percentile(double p) => times[Math.Clamp((int)Math.Ceiling(times.Length * p) - 1, 0, times.Length - 1)];
-        return FormattableString.Invariant($"radius={samples[0].Radius} {samples[0].Phase}: n={times.Length}, p50={Percentile(.5):F2}, p95={Percentile(.95):F2}, p99={Percentile(.99):F2}, max={times[^1]:F2} ms; >33ms={times.Count(t => t > 33.333)}, >50ms={times.Count(t => t > 50)}; rebuildMax={samples.Max(s => s.RebuildMs):F2}ms, backlogMax={samples.Max(s => s.Pending)}, bodiesMax={samples.Max(s => s.ManaBodies)}; eventMax={samples.Max(s => s.EventMs):F2}ms, logicMax={samples.Max(s => s.ManaLogicMs):F2}ms, radialMax={samples.Max(s => s.ManaIntegrationMs):F2}ms, pairsMax={samples.Max(s => s.CollisionPairs)}");
+        return FormattableString.Invariant($"radius={samples[0].Radius} {samples[0].Phase}: n={times.Length}, p50={Percentile(.5):F2}, p95={Percentile(.95):F2}, p99={Percentile(.99):F2}, max={times[^1]:F2} ms; >33ms={times.Count(t => t > 33.333)}, >50ms={times.Count(t => t > 50)}; rebuildMax={samples.Max(s => s.RebuildMs):F2}ms, backlogMax={samples.Max(s => s.Pending)}, bodiesMax={samples.Max(s => s.AntimatterBodies)}; eventMax={samples.Max(s => s.EventMs):F2}ms, logicMax={samples.Max(s => s.AntimatterLogicMs):F2}ms, radialMax={samples.Max(s => s.AntimatterIntegrationMs):F2}ms, pairsMax={samples.Max(s => s.CollisionPairs)}");
     }
 
     private void WriteReports()
@@ -268,11 +268,11 @@ public partial class CombatFrameProfile : Node3D
         string directory = ProjectSettings.GlobalizePath("user://combat-profiles");
         Directory.CreateDirectory(directory);
         string stem = Path.Combine(directory, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
-        var csv = new StringBuilder("radius,phase,frame,wall_ms,process_ms,physics_ms,rebuild_ms,rebuilt_patches,pending_patches,mana_bodies,event_ms,mana_logic_ms,mana_integration_ms,logic_calls,integration_calls,active_bodies,collision_pairs,islands\n");
+        var csv = new StringBuilder("radius,phase,frame,wall_ms,process_ms,physics_ms,rebuild_ms,rebuilt_patches,pending_patches,antimatter_bodies,event_ms,antimatter_logic_ms,antimatter_integration_ms,logic_calls,integration_calls,active_bodies,collision_pairs,islands\n");
         foreach (Sample s in _samples)
-            csv.AppendLine(FormattableString.Invariant($"{s.Radius},{s.Phase},{s.Frame},{s.WallMs:F4},{s.ProcessMs:F4},{s.PhysicsMs:F4},{s.RebuildMs:F4},{s.Patches},{s.Pending},{s.ManaBodies},{s.EventMs:F4},{s.ManaLogicMs:F4},{s.ManaIntegrationMs:F4},{s.LogicCalls},{s.IntegrationCalls},{s.ActiveBodies},{s.CollisionPairs},{s.Islands}"));
+            csv.AppendLine(FormattableString.Invariant($"{s.Radius},{s.Phase},{s.Frame},{s.WallMs:F4},{s.ProcessMs:F4},{s.PhysicsMs:F4},{s.RebuildMs:F4},{s.Patches},{s.Pending},{s.AntimatterBodies},{s.EventMs:F4},{s.AntimatterLogicMs:F4},{s.AntimatterIntegrationMs:F4},{s.LogicCalls},{s.IntegrationCalls},{s.ActiveBodies},{s.CollisionPairs},{s.Islands}"));
         File.WriteAllText(stem + ".csv", csv.ToString());
-        string header = $"UTC: {DateTime.UtcNow:O}\nGodot: {Engine.GetVersionInfo()["string"]}\nDisplay: {DisplayServer.GetName()}\nRenderer: {ProjectSettings.GetSetting("rendering/renderer/rendering_method")}\nGPU: {RenderingServer.GetVideoAdapterName()}\nViewport: {GetViewport().GetVisibleRect().Size}\nVSync: {DisplayServer.WindowGetVsyncMode()}\nMax FPS: {Engine.MaxFps}\nPhysics ticks: {Engine.PhysicsTicksPerSecond}\nSeed: 20261010 per world\nMana isolation: {_manaIsolation}\nWall time is post-draw interval, including frame pacing; process/physics monitors may lag. GPU execution time is not measured.\nMana callback timings include only the 192 instrumented stress bodies (summed across physics ticks per draw); integration is managed radial/support work, not native solver time. Event time measures synchronous injection; timings overlap and must not be added.\n";
+        string header = $"UTC: {DateTime.UtcNow:O}\nGodot: {Engine.GetVersionInfo()["string"]}\nDisplay: {DisplayServer.GetName()}\nRenderer: {ProjectSettings.GetSetting("rendering/renderer/rendering_method")}\nGPU: {RenderingServer.GetVideoAdapterName()}\nViewport: {GetViewport().GetVisibleRect().Size}\nVSync: {DisplayServer.WindowGetVsyncMode()}\nMax FPS: {Engine.MaxFps}\nPhysics ticks: {Engine.PhysicsTicksPerSecond}\nSeed: 20261010 per world\nAntimatter isolation: {_antimatterIsolation}\nWall time is post-draw interval, including frame pacing; process/physics monitors may lag. GPU execution time is not measured.\nAntimatter callback timings include only the 192 instrumented stress bodies (summed across physics ticks per draw); integration is managed radial/support work, not native solver time. Event time measures synchronous injection; timings overlap and must not be added.\n";
         string summary = header + string.Join("\n", _samples.GroupBy(s => (s.Radius, s.Phase)).Select(g => Summary(g.ToArray())));
         File.WriteAllText(stem + ".txt", summary);
         GD.Print($"Reports: {stem}.csv and {stem}.txt");

@@ -1,20 +1,20 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Audio;
-using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.Equipment;
 using System.Collections.Generic;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
-public partial class ManaBalloon : Node3D
+public partial class CollectorDrone : Node3D
 {
-    private enum BalloonState
+    private enum DroneState
     {
         Seeking,
         Returning,
         Docked
     }
 
-    [Export] public bool UsePlayerMana { get; set; } = true;
+    [Export] public bool UsePlayerAntimatter { get; set; } = true;
     [Export] public float MoveSpeed { get; set; } = 10.0f;
     [Export] public float ScoopRadius { get; set; } = 2.2f;
     [Export] public int CarryCapacity { get; set; } = 3;
@@ -27,9 +27,9 @@ public partial class ManaBalloon : Node3D
     public int Health { get; private set; }
     public int CarriedCount => _carried.Count;
 
-    private BalloonState _state = BalloonState.Seeking;
-    private readonly List<ManaPickup> _carried = new();
-    private CastleKeep? _castle;
+    private DroneState _state = DroneState.Seeking;
+    private readonly List<AntimatterPickup> _carried = new();
+    private FactionBase? _base;
     private StandardMaterial3D _material = null!;
     private float _dockTimer;
     private Vector3 _homeAnchor;
@@ -38,11 +38,11 @@ public partial class ManaBalloon : Node3D
 
     public override void _Ready()
     {
-        AddToGroup("balloon");
-        AddToGroup(UsePlayerMana ? "player_balloon" : "enemy_balloon");
+        AddToGroup("drone");
+        AddToGroup(UsePlayerAntimatter ? "player_drone" : "enemy_drone");
         Health = MaxHealth;
         SetPhysicsProcess(true);
-        _castle = GetTree().GetFirstNodeInGroup(UsePlayerMana ? "player_castle" : "enemy_castle") as CastleKeep;
+        _base = GetTree().GetFirstNodeInGroup(UsePlayerAntimatter ? "player_base" : "enemy_base") as FactionBase;
         BuildVisuals();
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         if (_arena != null) GlobalPosition = _arena.ClampFlightPosition(GlobalPosition);
@@ -58,16 +58,16 @@ public partial class ManaBalloon : Node3D
             _homeAnchorSet = true;
         }
 
-        if (_castle == null)
+        if (_base == null)
         {
-            _castle = GetTree().GetFirstNodeInGroup(UsePlayerMana ? "player_castle" : "enemy_castle") as CastleKeep;
-            if (_castle == null)
+            _base = GetTree().GetFirstNodeInGroup(UsePlayerAntimatter ? "player_base" : "enemy_base") as FactionBase;
+            if (_base == null)
             {
                 return;
             }
         }
 
-        if (_castle.IsDestroyed)
+        if (_base.IsDestroyed)
         {
             ReturnToAnchor(deltaF);
             return;
@@ -75,17 +75,17 @@ public partial class ManaBalloon : Node3D
 
         switch (_state)
         {
-            case BalloonState.Seeking:
+            case DroneState.Seeking:
                 HandleSeeking(deltaF);
                 break;
-            case BalloonState.Returning:
+            case DroneState.Returning:
                 HandleReturning(deltaF);
                 break;
-            case BalloonState.Docked:
+            case DroneState.Docked:
                 _dockTimer = Mathf.Max(0.0f, _dockTimer - deltaF);
                 if (_dockTimer <= 0.0f)
                 {
-                    _state = BalloonState.Seeking;
+                    _state = DroneState.Seeking;
                 }
 
                 break;
@@ -111,11 +111,11 @@ public partial class ManaBalloon : Node3D
 
     private void HandleSeeking(float delta)
     {
-        ManaPickup? best = null;
+        AntimatterPickup? best = null;
         float bestDistance = float.MaxValue;
-        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+        foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {
-            if (node is not ManaPickup pickup || pickup.Ownership != (UsePlayerMana ? ManaOwnership.Player : ManaOwnership.Enemy) || !pickup.IsAvailable)
+            if (node is not AntimatterPickup pickup || pickup.Ownership != (UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy) || !pickup.IsAvailable)
             {
                 continue;
             }
@@ -147,7 +147,7 @@ public partial class ManaBalloon : Node3D
 
         if (_carried.Count > 0)
         {
-            _state = BalloonState.Returning;
+            _state = DroneState.Returning;
         }
         else
         {
@@ -155,7 +155,7 @@ public partial class ManaBalloon : Node3D
         }
     }
 
-    private void Scoop(ManaPickup pickup)
+    private void Scoop(AntimatterPickup pickup)
     {
         if (_carried.Count >= CarryCapacity || !pickup.IsAvailable)
         {
@@ -168,43 +168,43 @@ public partial class ManaBalloon : Node3D
 
         if (_carried.Count >= CarryCapacity)
         {
-            _state = BalloonState.Returning;
+            _state = DroneState.Returning;
         }
     }
 
     private void HandleReturning(float delta)
     {
-        if (_castle == null || _carried.Count == 0)
+        if (_base == null || _carried.Count == 0)
         {
-            _state = BalloonState.Seeking;
+            _state = DroneState.Seeking;
             return;
         }
 
-        Vector3 dockPosition = _castle.GlobalPosition + (_arena?.UpAt(_castle.GlobalPosition) ?? Vector3.Up) * HoverHeight;
+        Vector3 dockPosition = _base.GlobalPosition + (_arena?.UpAt(_base.GlobalPosition) ?? Vector3.Up) * HoverHeight;
         MoveToward(dockPosition, delta);
         if (GlobalPosition.DistanceTo(dockPosition) <= HomeRadius)
         {
             DepositAll();
             _dockTimer = DockDelaySeconds;
-            _state = BalloonState.Docked;
+            _state = DroneState.Docked;
         }
     }
 
     private void DepositAll()
     {
-        if (_castle == null)
+        if (_base == null)
         {
             return;
         }
-        foreach (ManaPickup pickup in _carried)
+        foreach (AntimatterPickup pickup in _carried)
         {
-            int accepted = _castle.DepositMana(pickup.ManaAmount);
-            pickup.TakeMana(accepted);
-            if (pickup.ManaAmount > 0)
+            int accepted = _base.DepositAntimatter(pickup.AntimatterAmount);
+            pickup.TakeAntimatter(accepted);
+            if (pickup.AntimatterAmount > 0)
             {
                 // Release overflow outside the solid keep, not inside its collider.
-                pickup.SpillAt(_castle.GlobalPosition + _castle.GlobalBasis * new Vector3(5.0f + pickup.Radius, 2.0f, GD.Randf() * 2.0f - 1.0f));
-                pickup.ReassignOwnership(ManaOwnership.Neutral);
+                pickup.SpillAt(_base.GlobalPosition + _base.GlobalBasis * new Vector3(5.0f + pickup.Radius, 2.0f, GD.Randf() * 2.0f - 1.0f));
+                pickup.ReassignOwnership(AntimatterOwnership.Neutral);
             }
         }
         _carried.Clear();
@@ -213,21 +213,21 @@ public partial class ManaBalloon : Node3D
     private void Pop()
     {
         int amount = 0;
-        foreach (ManaPickup pickup in _carried)
+        foreach (AntimatterPickup pickup in _carried)
         {
-            amount += pickup.TakeMana(pickup.ManaAmount);
+            amount += pickup.TakeAntimatter(pickup.AntimatterAmount);
         }
 
         _carried.Clear();
-        ManaScatter.Spawn(GetParent(), GlobalPosition, amount, name: "BalloonManaSpill");
+        AntimatterScatter.Spawn(GetParent(), GlobalPosition, amount, name: "DroneAntimatterSpill");
 
-        var burst = new SpellImpactBurst
+        var burst = new EquipmentImpactBurst
         {
-            Name = "BalloonPopBurst",
-            BurstColor = UsePlayerMana
+            Name = "DronePopBurst",
+            BurstColor = UsePlayerAntimatter
                 ? new Color(0.25f, 0.85f, 1.0f, 0.9f)
                 : new Color(0.95f, 0.3f, 0.45f, 0.9f),
-            EmissionColor = UsePlayerMana
+            EmissionColor = UsePlayerAntimatter
                 ? new Color(0.1f, 0.6f, 0.95f)
                 : new Color(0.85f, 0.15f, 0.35f),
             DurationSeconds = 0.5f,
@@ -273,20 +273,20 @@ public partial class ManaBalloon : Node3D
 
     private void BuildVisuals()
     {
-        var balloonMesh = new MeshInstance3D
+        var droneMesh = new MeshInstance3D
         {
             Mesh = new SphereMesh { Radius = 0.9f, Height = 2.0f }
         };
         _material = new StandardMaterial3D
         {
-            AlbedoColor = UsePlayerMana ? new Color(0.2f, 0.84f, 1.0f) : new Color(0.95f, 0.3f, 0.45f),
+            AlbedoColor = UsePlayerAntimatter ? new Color(0.2f, 0.84f, 1.0f) : new Color(0.95f, 0.3f, 0.45f),
             Roughness = 0.35f,
             EmissionEnabled = true,
-            Emission = UsePlayerMana ? new Color(0.1f, 0.55f, 0.95f) : new Color(0.85f, 0.15f, 0.3f),
+            Emission = UsePlayerAntimatter ? new Color(0.1f, 0.55f, 0.95f) : new Color(0.85f, 0.15f, 0.3f),
             EmissionEnergyMultiplier = 0.6f
         };
-        balloonMesh.MaterialOverride = _material;
-        AddChild(balloonMesh);
+        droneMesh.MaterialOverride = _material;
+        AddChild(droneMesh);
 
         var basket = new MeshInstance3D
         {
@@ -304,7 +304,7 @@ public partial class ManaBalloon : Node3D
     private void UpdateHealthColor()
     {
         float damageBlend = 1.0f - Mathf.Clamp((float)Health / MaxHealth, 0.0f, 1.0f);
-        Color baseColor = UsePlayerMana ? new Color(0.2f, 0.84f, 1.0f) : new Color(0.95f, 0.3f, 0.45f);
+        Color baseColor = UsePlayerAntimatter ? new Color(0.2f, 0.84f, 1.0f) : new Color(0.95f, 0.3f, 0.45f);
         _material.AlbedoColor = baseColor.Lerp(new Color(0.25f, 0.25f, 0.3f), damageBlend * 0.6f);
     }
 }

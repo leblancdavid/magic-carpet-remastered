@@ -27,7 +27,7 @@ Approved design:
 
 Next work, in order:
 
-1. Behavior-preserving terminology conversion: castle → base, wizard/carpet player → ship/pilot, spells → equipment, mana → antimatter, balloons → collector drones, Possess → Claim. Update files/types/references and UI together; retain historical research and project identity until a title is chosen. See `docs/TERMINOLOGY_MIGRATION.md` for type/path mappings and verification gates.
+1. **Completed 2026-10-11:** behavior-preserving terminology conversion to bases, ships/pilots, equipment, antimatter, collector drones and Claim. Files/types/references, identifiers, controls, UI and verification tools are migrated; build/import, gameplay regressions and rendered UI checks pass. Historical research and working project identity remain. See `docs/TERMINOLOGY_MIGRATION.md` for mappings and profiler compatibility.
 2. Explicit base tiers and stored-antimatter/player-energy accounting; replace legacy automatic growth and starting-power formulas only in this mechanics milestone.
 3. Five-slot construction lifecycle, cancellation/refunds, tier loss/project destruction and sequential rebuilding.
 4. Real-time base management UI with prerequisites, costs, progress, capacity and siege alerts.
@@ -37,7 +37,7 @@ Next work, in order:
 8. Economic capture points: timed/contested capture, direct antimatter income, research modifiers, drone/cargo ownership transfer and navigation feedback.
 9. Matter collection/storage, material-dependent construction and matter extractors, then deeper faction/AI/campaign/content iteration. Matter sites require that resource foundation before activation.
 
-These are approved planned systems, not implemented features. Exact costs, timings, damage thresholds and unresolved policies are listed in the design documents. Existing mechanics and controls remain the baseline during terminology conversion. The historical phases below describe implementation history and inherited backlogs; this active milestone takes priority.
+Items 2–9 are approved planned systems, not implemented features. **Active next work: item 2, explicit base tiers and stored-antimatter/player-energy accounting.** The rename preserves legacy starting power, HP-scaled storage, storage-driven visual stages, five-item quick cycling, beacon ranks and paused survey. Exact costs, timings, damage thresholds and unresolved policies are listed in the design documents. The historical phases below describe implementation history and inherited backlogs; this active milestone takes priority.
 
 Current victory direction (user update, 2026-10-10): destroy the rival player's castle AND defeat its wizard, in either order. Mana possession/storage supports combat power and logistics; it is not a victory condition. This supersedes the earlier equilibrium-quota objective plan.
 
@@ -51,7 +51,7 @@ User-approved direction: spherical planets with radial gravity and surface-relat
 
 Playable conversion implemented: default `scenes/PlanetGame.tscn` includes patch-based procedural spherical terrain/oceans/deformation/collision, upright carpet flight/cameras, radial physical mana/merging/spills, curved possession and balloon routes, castles/storage/power/repair, all spells/discoveries, enemy roles/rival wizard, respawns, objectives, HUD/VFX/audio, and F2 size selection. `PlanetFlightTest.tscn` remains a diagnostic lab with the same presets. Geometry and integrated gameplay regressions pass; hands-on tuning of the converted full loop remains pending. See `docs/SPHERICAL_WORLD.md`.
 
-Active next priorities: science-fiction terminology conversion → RTS-style base development/equipment milestones above. Route/habitat/long-haul tuning and targeted performance work continue from playtest feedback. The original phase statuses below retain their historical prototype scope and tuning backlog; their shared systems now also run on the globe. Basic hands-on smoothness is accepted as of 2026-10-11; detailed per-size/balance acceptance remains iterative.
+Active next priorities: explicit base/resource accounting → RTS-style construction/equipment milestones above. The science-fiction terminology conversion is complete. Route/habitat/long-haul tuning and targeted performance work continue from playtest feedback. The original phase statuses below retain their historical prototype scope and tuning backlog; their shared systems now also run on the globe. Basic hands-on smoothness is accepted as of 2026-10-11; detailed per-size/balance acceptance remains iterative.
 
 Strategic navigation milestone (2026-10-10): implemented five named resource/exploration landmarks, regional encounter bias, three resource fields, and relocated rank-II upgrades including distant/far-side rewards. Added All-Seeing Eye local radar, paused M-key whole-world survey, exploration/ownership visibility, static waypoints with surface-distance/bearing guidance, and globe-wide balloon reach for remote claimed drops. One rival and existing elimination/respawn rules remain. Implementation is regression-verified; hands-on pacing/readability acceptance is pending. See `docs/STRATEGIC_NAVIGATION.md`.
 

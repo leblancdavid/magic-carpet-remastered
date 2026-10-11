@@ -57,26 +57,26 @@ public partial class PlanetFlightTest : Node3D
             AddBox(marker, new Vector3(1, 6, 1), new Vector3(0, 3, 0), ring == 0 ? Colors.Gold : Colors.Cyan);
             marker.AddChild(new Label3D { Text = $"{(i + 0.5f) * Mathf.Tau * PlanetRadius / count:0} m", Position = new Vector3(0, 8, 0), FontSize = 48, PixelSize = 0.02f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled });
         }
-        CreateCastle(0, Colors.DodgerBlue, "HOME");
-        _rivalPosition = CreateCastle(300 / PlanetRadius, Colors.IndianRed, "RIVAL — 300 m from home");
+        CreateBase(0, Colors.DodgerBlue, "HOME");
+        _rivalPosition = CreateBase(300 / PlanetRadius, Colors.IndianRed, "RIVAL — 300 m from home");
         _player.Radius = PlanetRadius;
         _player.ResetFlight();
     }
 
-    private Vector3 CreateCastle(float angle, Color color, string text)
+    private Vector3 CreateBase(float angle, Color color, string text)
     {
         Vector3 up = new Vector3(0, Mathf.Cos(angle), -Mathf.Sin(angle));
         Vector3 forward = new Vector3(0, -Mathf.Sin(angle), -Mathf.Cos(angle));
         // Offset from the travel line so flight markers stay unobstructed.
         up = up.Rotated(forward, 18 / PlanetRadius);
-        Node3D castle = new Node3D { Transform = new Transform3D(PlanetGeometry.Frame(up, forward), up * PlanetRadius) };
-        _world.AddChild(castle);
-        AddBox(castle, new Vector3(10, 8, 10), new Vector3(0, 4, 0), color);
+        Node3D hub = new Node3D { Transform = new Transform3D(PlanetGeometry.Frame(up, forward), up * PlanetRadius) };
+        _world.AddChild(hub);
+        AddBox(hub, new Vector3(10, 8, 10), new Vector3(0, 4, 0), color);
         foreach (float x in new[] { -5f, 5f })
         foreach (float z in new[] { -5f, 5f })
-            AddBox(castle, new Vector3(3, 12, 3), new Vector3(x, 6, z), color.Lightened(0.15f));
-        castle.AddChild(new Label3D { Text = text, Position = new Vector3(0, 15, 0), FontSize = 48, PixelSize = 0.025f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled });
-        return castle.Position;
+            AddBox(hub, new Vector3(3, 12, 3), new Vector3(x, 6, z), color.Lightened(0.15f));
+        hub.AddChild(new Label3D { Text = text, Position = new Vector3(0, 15, 0), FontSize = 48, PixelSize = 0.025f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled });
+        return hub.Position;
     }
 
     private static void AddBox(Node parent, Vector3 size, Vector3 position, Color color)

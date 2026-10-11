@@ -2,7 +2,7 @@ using System;
 using Godot;
 using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Player;
-using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.Equipment;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Enemies;
@@ -14,9 +14,9 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         FlyingSwarm,
         GroundBeast,
         RangedCaster,
-        CastleAttacker,
-        ManaThief,
-        EnemyWizard
+        BaseAttacker,
+        AntimatterThief,
+        RivalShip
     }
 
     [Export] public EnemyRole Role { get; set; } = EnemyRole.FlyingSwarm;
@@ -24,8 +24,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public int Health { get; set; } = 24;
     [Export] public int ContactDamage { get; set; } = 6;
     [Export] public int RangedDamage { get; set; } = 8;
-    [Export] public int ManaReserve { get; set; } = 0;
-    [Export] public int NeutralManaValue { get; set; } = 12;
+    [Export] public int AntimatterReserve { get; set; } = 0;
+    [Export] public int NeutralAntimatterValue { get; set; } = 12;
     [Export] public float AwarenessRadius { get; set; } = 48.0f;
     [Export] public float AttackRadius { get; set; } = 2.0f;
     [Export] public float RangedMinDistance { get; set; } = 6.0f;
@@ -35,16 +35,16 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public float RangedWindupSeconds { get; set; } = 0.35f;
     [Export] public float GroundClearance { get; set; } = 1.25f;
     [Export] public float OrbitalRadius { get; set; } = 8.0f;
-    [Export] public float ManaStealRadius { get; set; } = 2.7f;
-    [Export] public int ManaStealAmount { get; set; } = 6;
-    [Export] public int RetreatManaThreshold { get; set; } = 18;
+    [Export] public float AntimatterStealRadius { get; set; } = 2.7f;
+    [Export] public int AntimatterStealAmount { get; set; } = 6;
+    [Export] public int RetreatAntimatterThreshold { get; set; } = 18;
     [Export] public float RetreatDistance { get; set; } = 14.0f;
     [Export] public float PlayerContactCooldownSeconds { get; set; } = 0.8f;
-    [Export] public float ManaTargetAcquireInterval { get; set; } = 0.6f;
+    [Export] public float AntimatterTargetAcquireInterval { get; set; } = 0.6f;
     [Export] public float MaxOrbSeekRadius { get; set; } = 42.0f;
-    [Export] public float WizardHoverClearance { get; set; } = 5.5f;
-    [Export] public float WizardMaxFlightClearance { get; set; } = 12.0f;
-    [Export] public float WizardVerticalSpeed { get; set; } = 6.0f;
+    [Export] public float PilotHoverClearance { get; set; } = 5.5f;
+    [Export] public float PilotMaxFlightClearance { get; set; } = 12.0f;
+    [Export] public float PilotVerticalSpeed { get; set; } = 6.0f;
 
     public event Action? Defeated;
 
@@ -53,17 +53,17 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         EnemyRole.FlyingSwarm => "Swarm",
         EnemyRole.GroundBeast => "Beast",
         EnemyRole.RangedCaster => "Caster",
-        EnemyRole.CastleAttacker => "Sieger",
-        EnemyRole.ManaThief => "Thief",
-        EnemyRole.EnemyWizard => "Wizard",
+        EnemyRole.BaseAttacker => "Sieger",
+        EnemyRole.AntimatterThief => "Thief",
+        EnemyRole.RivalShip => "Pilot",
         _ => "Enemy"
     };
 
-    private CarpetFlightController? _player;
-    private CastleKeep? _playerCastle;
-    private CastleKeep? _enemyCastle;
+    private ShipFlightController? _player;
+    private FactionBase? _playerBase;
+    private FactionBase? _enemyBase;
     private HeightmapArena? _arena;
-    private ManaPickup? _targetOrb;
+    private AntimatterPickup? _targetOrb;
     private float _targetOrbCooldown;
     private StandardMaterial3D _material = null!;
     private float _attackCooldown;
@@ -81,9 +81,9 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         AddCollisionAndVisuals();
         ConfigureForRole();
-        if (Role is not (EnemyRole.ManaThief or EnemyRole.EnemyWizard))
+        if (Role is not (EnemyRole.AntimatterThief or EnemyRole.RivalShip))
         {
-            ManaReserve += Mathf.Max(0, NeutralManaValue);
+            AntimatterReserve += Mathf.Max(0, NeutralAntimatterValue);
         }
         _arena?.ClampFlightBody(this, GroundClearance);
     }
@@ -97,9 +97,9 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         _hitFlashTimer = Mathf.Max(0.0f, _hitFlashTimer - deltaF);
         _playerContactCooldown = Mathf.Max(0.0f, _playerContactCooldown - deltaF);
 
-        _player ??= GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
-        _playerCastle ??= GetTree().GetFirstNodeInGroup("player_castle") as CastleKeep;
-        _enemyCastle ??= GetTree().GetFirstNodeInGroup("enemy_castle") as CastleKeep;
+        _player ??= GetTree().GetFirstNodeInGroup("player") as ShipFlightController;
+        _playerBase ??= GetTree().GetFirstNodeInGroup("player_base") as FactionBase;
+        _enemyBase ??= GetTree().GetFirstNodeInGroup("enemy_base") as FactionBase;
         _arena ??= GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         _targetOrbCooldown = Mathf.Max(0.0f, _targetOrbCooldown - deltaF);
 
@@ -119,15 +119,15 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             Velocity = Vector3.Zero;
         }
 
-        if (Role is EnemyRole.EnemyWizard or EnemyRole.FlyingSwarm or EnemyRole.RangedCaster)
+        if (Role is EnemyRole.RivalShip or EnemyRole.FlyingSwarm or EnemyRole.RangedCaster)
         {
             UpdateFlyingVelocity(move);
         }
 
         if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
-        if (Role == EnemyRole.EnemyWizard)
+        if (Role == EnemyRole.RivalShip)
         {
-            ClampWizardAltitude();
+            ClampPilotAltitude();
         }
         ClampToGroundIfNeeded();
         _arena?.ClampFlightBody(this, GroundClearance);
@@ -149,20 +149,20 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         if (Health <= 0)
         {
             SpawnDeathBurst();
-            DropMana();
+            DropAntimatter();
             Defeated?.Invoke();
             QueueFree();
         }
     }
 
-    public void AbsorbMana(int amount)
+    public void AbsorbAntimatter(int amount)
     {
         if (amount <= 0)
         {
             return;
         }
 
-        ManaReserve += amount;
+        AntimatterReserve += amount;
         Health = Mathf.Min(Health + Mathf.Max(1, amount / 3), GetBaseHealth() + 20);
     }
 
@@ -194,20 +194,20 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
                 RangedAttackCooldownSeconds = 1.4f;
                 RangedWindupSeconds = 0.15f;
                 break;
-            case EnemyRole.CastleAttacker:
+            case EnemyRole.BaseAttacker:
                 MoveSpeed = 7.0f;
                 Health = 34;
                 ContactDamage = 11;
                 AttackRadius = 2.8f;
                 break;
-            case EnemyRole.ManaThief:
+            case EnemyRole.AntimatterThief:
                 MoveSpeed = 9.0f;
                 Health = 22;
                 ContactDamage = 3;
-                ManaStealAmount = 8;
-                ManaStealRadius = 3.0f;
+                AntimatterStealAmount = 8;
+                AntimatterStealRadius = 3.0f;
                 break;
-            case EnemyRole.EnemyWizard:
+            case EnemyRole.RivalShip:
                 MoveSpeed = 8.5f;
                 Health = 36;
                 ContactDamage = 6;
@@ -253,9 +253,9 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             EnemyRole.FlyingSwarm => MoveFlyingSwarm(direction, distance),
             EnemyRole.GroundBeast => MoveGroundBeast(direction, distance),
             EnemyRole.RangedCaster => MoveRangedCaster(direction, distance),
-            EnemyRole.CastleAttacker => MoveCastleAttacker(direction, distance),
-            EnemyRole.ManaThief => MoveManaThief(direction, distance),
-            EnemyRole.EnemyWizard => MoveEnemyWizard(direction, distance),
+            EnemyRole.BaseAttacker => MoveBaseAttacker(direction, distance),
+            EnemyRole.AntimatterThief => MoveAntimatterThief(direction, distance),
+            EnemyRole.RivalShip => MoveRivalShip(direction, distance),
             _ => direction * MoveSpeed
         };
     }
@@ -314,9 +314,9 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         return strafe + LocalUp * 0.3f;
     }
 
-    private Vector3 MoveCastleAttacker(Vector3 direction, float distance)
+    private Vector3 MoveBaseAttacker(Vector3 direction, float distance)
     {
-        if (_playerCastle == null)
+        if (_playerBase == null)
         {
             return direction * MoveSpeed;
         }
@@ -330,16 +330,16 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         return direction * MoveSpeed;
     }
 
-private Vector3 MoveManaThief(Vector3 direction, float distance)
+private Vector3 MoveAntimatterThief(Vector3 direction, float distance)
     {
-        if (ManaReserve >= 12)
+        if (AntimatterReserve >= 12)
         {
             return GetRetreatVector();
         }
 
         if (_targetOrb != null && IsInstanceValid(_targetOrb))
         {
-            if (distance > ManaStealRadius)
+            if (distance > AntimatterStealRadius)
             {
                 return direction * (MoveSpeed * 1.15f);
             }
@@ -349,7 +349,7 @@ private Vector3 MoveManaThief(Vector3 direction, float distance)
 
         _targetOrb = null;
 
-        if (_playerCastle != null)
+        if (_playerBase != null)
         {
             return direction * (MoveSpeed * 0.55f);
         }
@@ -357,11 +357,11 @@ private Vector3 MoveManaThief(Vector3 direction, float distance)
         return direction * (MoveSpeed * 0.7f);
     }
 
-private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
+private Vector3 MoveRivalShip(Vector3 direction, float distance)
     {
-        if (_targetOrb != null && IsInstanceValid(_targetOrb) && ManaReserve < RetreatManaThreshold)
+        if (_targetOrb != null && IsInstanceValid(_targetOrb) && AntimatterReserve < RetreatAntimatterThreshold)
         {
-            if (distance > ManaStealRadius * 0.85f)
+            if (distance > AntimatterStealRadius * 0.85f)
             {
                 return direction * (MoveSpeed * 1.05f);
             }
@@ -371,7 +371,7 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
 
         _targetOrb = null;
 
-        if (_playerCastle != null && _playerCastle.IsDestroyed == false)
+        if (_playerBase != null && _playerBase.IsDestroyed == false)
         {
             if (distance > RangedMaxDistance)
             {
@@ -396,11 +396,11 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
         {
             Vector3 tangent = _arena.Tangent(desiredMove, GlobalPosition);
             tangent = tangent.LengthSquared() > 0.0001f ? tangent.Normalized() * MoveSpeed : Vector3.Zero;
-            float limit = Mathf.Min(WizardMaxFlightClearance, _arena.MaxFlightClearance);
-            float clearance = Mathf.Min(WizardHoverClearance, limit);
+            float limit = Mathf.Min(PilotMaxFlightClearance, _arena.MaxFlightClearance);
+            float clearance = Mathf.Min(PilotHoverClearance, limit);
             if (_targetOrb == null && !ShouldRetreat() && _player != null && _player.Health > 0)
                 clearance = Mathf.Clamp(_arena.Clearance(_player.GlobalPosition), clearance, limit);
-            float radialSpeed = Mathf.Clamp((clearance - _arena.Clearance(GlobalPosition)) * 2, -WizardVerticalSpeed, WizardVerticalSpeed);
+            float radialSpeed = Mathf.Clamp((clearance - _arena.Clearance(GlobalPosition)) * 2, -PilotVerticalSpeed, PilotVerticalSpeed);
             Velocity = tangent + LocalUp * radialSpeed;
             _arena.Orient(this, tangent.LengthSquared() > 0.0001f ? tangent : null);
             return;
@@ -409,14 +409,14 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
         // a tiny upward hover bias otherwise becomes full-speed perpetual ascent.
         Vector3 horizontal = new(desiredMove.X, 0, desiredMove.Z);
         horizontal = horizontal.LengthSquared() > 0.0001f ? horizontal.Normalized() * MoveSpeed : Vector3.Zero;
-        float surface = WizardSurfaceHeight();
-        float maxClearance = Mathf.Min(WizardMaxFlightClearance, _arena?.MaxFlightClearance ?? 12.0f);
-        float targetHeight = surface + Mathf.Min(WizardHoverClearance, maxClearance);
+        float surface = PilotSurfaceHeight();
+        float maxClearance = Mathf.Min(PilotMaxFlightClearance, _arena?.MaxFlightClearance ?? 12.0f);
+        float targetHeight = surface + Mathf.Min(PilotHoverClearance, maxClearance);
         if (_targetOrb == null && !ShouldRetreat() && _player != null && _player.Health > 0)
         {
             targetHeight = Mathf.Clamp(_player.GlobalPosition.Y, targetHeight, surface + maxClearance);
         }
-        float vertical = Mathf.Clamp((targetHeight - GlobalPosition.Y) * 2.0f, -WizardVerticalSpeed, WizardVerticalSpeed);
+        float vertical = Mathf.Clamp((targetHeight - GlobalPosition.Y) * 2.0f, -PilotVerticalSpeed, PilotVerticalSpeed);
         Velocity = new Vector3(horizontal.X, vertical, horizontal.Z);
         if (horizontal.LengthSquared() > 0.0001f)
         {
@@ -424,40 +424,40 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
         }
     }
 
-    private float WizardSurfaceHeight() => _arena == null ? 0
+    private float PilotSurfaceHeight() => _arena == null ? 0
         : Mathf.Max(_arena.HeightAt(GlobalPosition.X, GlobalPosition.Z), _arena.WaterHeight);
 
-    private void ClampWizardAltitude()
+    private void ClampPilotAltitude()
     {
-        if (_arena?.IsSpherical == true) { _arena.ClampFlightBody(this, GroundClearance, WizardMaxFlightClearance); return; }
-        float surface = WizardSurfaceHeight();
+        if (_arena?.IsSpherical == true) { _arena.ClampFlightBody(this, GroundClearance, PilotMaxFlightClearance); return; }
+        float surface = PilotSurfaceHeight();
         GlobalPosition = new Vector3(GlobalPosition.X,
-            Mathf.Clamp(GlobalPosition.Y, surface + GroundClearance, surface + Mathf.Min(WizardMaxFlightClearance, _arena?.MaxFlightClearance ?? 12.0f)), GlobalPosition.Z);
+            Mathf.Clamp(GlobalPosition.Y, surface + GroundClearance, surface + Mathf.Min(PilotMaxFlightClearance, _arena?.MaxFlightClearance ?? 12.0f)), GlobalPosition.Z);
     }
 
     private bool ShouldRetreat()
     {
-        if (Role == EnemyRole.ManaThief && ManaReserve >= 12)
+        if (Role == EnemyRole.AntimatterThief && AntimatterReserve >= 12)
         {
             return true;
         }
 
-        return Role == EnemyRole.EnemyWizard && ManaReserve >= RetreatManaThreshold
-            && _enemyCastle != null && !_enemyCastle.IsDestroyed;
+        return Role == EnemyRole.RivalShip && AntimatterReserve >= RetreatAntimatterThreshold
+            && _enemyBase != null && !_enemyBase.IsDestroyed;
     }
 
     private Vector3 GetRetreatVector()
     {
-        if (_enemyCastle != null)
+        if (_enemyBase != null)
         {
-            Vector3 toCastle = _enemyCastle.GlobalPosition - GlobalPosition;
-            if (_arena?.IsSpherical == true) toCastle = _arena.DirectionTo(GlobalPosition, _enemyCastle.GlobalPosition) * HorizontalDistanceTo(_enemyCastle.GlobalPosition);
-            if (toCastle.Length() > RetreatDistance)
+            Vector3 toBase = _enemyBase.GlobalPosition - GlobalPosition;
+            if (_arena?.IsSpherical == true) toBase = _arena.DirectionTo(GlobalPosition, _enemyBase.GlobalPosition) * HorizontalDistanceTo(_enemyBase.GlobalPosition);
+            if (toBase.Length() > RetreatDistance)
             {
-                return toCastle;
+                return toBase;
             }
 
-            return toCastle * 0.35f;
+            return toBase * 0.35f;
         }
 
         return -GlobalBasis.Z * MoveSpeed;
@@ -474,9 +474,9 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
                 }
                 break;
             case EnemyRole.GroundBeast:
-                if (_playerCastle != null)
+                if (_playerBase != null)
                 {
-                    return _playerCastle.GlobalPosition;
+                    return _playerBase.GlobalPosition;
                 }
                 break;
             case EnemyRole.RangedCaster:
@@ -485,25 +485,25 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
                     return _player.GlobalPosition;
                 }
                 break;
-            case EnemyRole.CastleAttacker:
-                if (_playerCastle != null && !_playerCastle.IsDestroyed)
+            case EnemyRole.BaseAttacker:
+                if (_playerBase != null && !_playerBase.IsDestroyed)
                 {
-                    return _playerCastle.GlobalPosition;
+                    return _playerBase.GlobalPosition;
                 }
                 break;
-            case EnemyRole.ManaThief:
+            case EnemyRole.AntimatterThief:
                 AcquireTargetOrb(preferPlayerOwned: true);
                 if (_targetOrb != null && IsInstanceValid(_targetOrb))
                 {
                     return _targetOrb.GlobalPosition;
                 }
-                if (_playerCastle != null)
+                if (_playerBase != null)
                 {
-                    return _playerCastle.GlobalPosition;
+                    return _playerBase.GlobalPosition;
                 }
                 break;
-            case EnemyRole.EnemyWizard:
-                if (ManaReserve < RetreatManaThreshold)
+            case EnemyRole.RivalShip:
+                if (AntimatterReserve < RetreatAntimatterThreshold)
                 {
                     AcquireTargetOrb(preferPlayerOwned: false);
                     if (_targetOrb != null && IsInstanceValid(_targetOrb))
@@ -511,9 +511,9 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
                         return _targetOrb.GlobalPosition;
                     }
                 }
-                if (_playerCastle != null && !_playerCastle.IsDestroyed)
+                if (_playerBase != null && !_playerBase.IsDestroyed)
                 {
-                    return _playerCastle.GlobalPosition;
+                    return _playerBase.GlobalPosition;
                 }
                 if (_player != null)
                 {
@@ -536,15 +536,15 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
             }
         }
 
-        if (Role is EnemyRole.ManaThief or EnemyRole.EnemyWizard)
+        if (Role is EnemyRole.AntimatterThief or EnemyRole.RivalShip)
         {
-            TryAbsorbLooseMana();
-            TryDepositManaAtCastle();
+            TryAbsorbLooseAntimatter();
+            TryDepositAntimatterAtBase();
         }
 
-        if (Role == EnemyRole.CastleAttacker)
+        if (Role == EnemyRole.BaseAttacker)
         {
-            TryRamCastle();
+            TryRamBase();
         }
 
         TryDamagePlayerOnContact();
@@ -563,7 +563,7 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
             return false;
         }
 
-        if (Role is not (EnemyRole.RangedCaster or EnemyRole.EnemyWizard))
+        if (Role is not (EnemyRole.RangedCaster or EnemyRole.RivalShip))
         {
             return false;
         }
@@ -606,7 +606,7 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
         projectile.GlobalPosition = GlobalPosition + direction * 1.3f;
         projectile.Launch(direction, this);
 
-        var launchBurst = new SpellImpactBurst
+        var launchBurst = new EquipmentImpactBurst
         {
             Name = $"{RoleText}LaunchBurst",
             BurstColor = new Color(0.6f, 0.25f, 1.0f, 0.8f),
@@ -619,28 +619,28 @@ private Vector3 MoveEnemyWizard(Vector3 direction, float distance)
         launchBurst.GlobalPosition = projectile.GlobalPosition;
     }
 
-private void TryAbsorbLooseMana()
+private void TryAbsorbLooseAntimatter()
     {
         if (ShouldRetreat() || _targetOrb == null || !IsInstanceValid(_targetOrb) || !_targetOrb.IsAvailable)
         {
             return;
         }
 
-        if (HorizontalDistanceTo(_targetOrb.GlobalPosition) > ManaStealRadius || _attackCooldown > 0.0f)
+        if (HorizontalDistanceTo(_targetOrb.GlobalPosition) > AntimatterStealRadius || _attackCooldown > 0.0f)
         {
             return;
         }
 
-        ManaPickup orb = _targetOrb;
-        bool eligible = orb.Ownership == ManaOwnership.Neutral
-            || (Role == EnemyRole.ManaThief && orb.Ownership == ManaOwnership.Player);
+        AntimatterPickup orb = _targetOrb;
+        bool eligible = orb.Ownership == AntimatterOwnership.Neutral
+            || (Role == EnemyRole.AntimatterThief && orb.Ownership == AntimatterOwnership.Player);
         if (!eligible)
         {
             _targetOrb = null;
             return;
         }
 
-        AbsorbMana(orb.TakeMana(orb.ManaAmount));
+        AbsorbAntimatter(orb.TakeAntimatter(orb.AntimatterAmount));
         _targetOrb = null;
         _attackCooldown = AttackCooldownSeconds;
     }
@@ -652,13 +652,13 @@ private void TryAbsorbLooseMana()
             return;
         }
 
-        _targetOrbCooldown = ManaTargetAcquireInterval;
+        _targetOrbCooldown = AntimatterTargetAcquireInterval;
 
         if (_targetOrb != null && IsInstanceValid(_targetOrb))
         {
             bool stillValid = preferPlayerOwned
-                ? _targetOrb.Ownership == ManaOwnership.Player || _targetOrb.Ownership == ManaOwnership.Neutral
-                : _targetOrb.Ownership == ManaOwnership.Neutral;
+                ? _targetOrb.Ownership == AntimatterOwnership.Player || _targetOrb.Ownership == AntimatterOwnership.Neutral
+                : _targetOrb.Ownership == AntimatterOwnership.Neutral;
             if (stillValid && _targetOrb.IsAvailable)
             {
                 return;
@@ -667,14 +667,14 @@ private void TryAbsorbLooseMana()
             _targetOrb = null;
         }
 
-        ManaPickup? bestPlayer = null;
-        ManaPickup? bestNeutral = null;
+        AntimatterPickup? bestPlayer = null;
+        AntimatterPickup? bestNeutral = null;
         float bestPlayerDistance = float.MaxValue;
         float bestNeutralDistance = float.MaxValue;
 
-        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+        foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {
-            if (node is not ManaPickup pickup || !pickup.IsAvailable)
+            if (node is not AntimatterPickup pickup || !pickup.IsAvailable)
             {
                 continue;
             }
@@ -685,13 +685,13 @@ private void TryAbsorbLooseMana()
                 continue;
             }
 
-            if (pickup.Ownership == ManaOwnership.Player && distance < bestPlayerDistance)
+            if (pickup.Ownership == AntimatterOwnership.Player && distance < bestPlayerDistance)
             {
                 bestPlayerDistance = distance;
                 bestPlayer = pickup;
             }
 
-            if (pickup.Ownership == ManaOwnership.Neutral && distance < bestNeutralDistance)
+            if (pickup.Ownership == AntimatterOwnership.Neutral && distance < bestNeutralDistance)
             {
                 bestNeutralDistance = distance;
                 bestNeutral = pickup;
@@ -708,42 +708,42 @@ private void TryAbsorbLooseMana()
         }
     }
 
-    private void TryRamCastle()
+    private void TryRamBase()
     {
-        if (_playerCastle == null || _playerCastle.IsDestroyed || _attackCooldown > 0.0f)
+        if (_playerBase == null || _playerBase.IsDestroyed || _attackCooldown > 0.0f)
         {
             return;
         }
 
         float ramDistance = AttackRadius + 4.0f;
-        if (HorizontalDistanceTo(_playerCastle.GlobalPosition) > ramDistance)
+        if (HorizontalDistanceTo(_playerBase.GlobalPosition) > ramDistance)
         {
             return;
         }
 
-        _playerCastle.ApplyDamage(ContactDamage);
+        _playerBase.ApplyDamage(ContactDamage);
         _attackCooldown = AttackCooldownSeconds;
     }
 
-    private void TryDepositManaAtCastle()
+    private void TryDepositAntimatterAtBase()
     {
-        if (_enemyCastle == null || ManaReserve <= 0 || _attackCooldown > 0.0f)
+        if (_enemyBase == null || AntimatterReserve <= 0 || _attackCooldown > 0.0f)
         {
             return;
         }
 
-        if (HorizontalDistanceTo(_enemyCastle.GlobalPosition) > RetreatDistance)
+        if (HorizontalDistanceTo(_enemyBase.GlobalPosition) > RetreatDistance)
         {
             return;
         }
 
-        int deposited = _enemyCastle.DepositMana(ManaReserve);
+        int deposited = _enemyBase.DepositAntimatter(AntimatterReserve);
         if (deposited <= 0)
         {
             return;
         }
 
-        ManaReserve -= deposited;
+        AntimatterReserve -= deposited;
         _attackCooldown = AttackCooldownSeconds;
     }
 
@@ -766,7 +766,7 @@ private void TryAbsorbLooseMana()
 
     private void ClampToGroundIfNeeded()
     {
-        if (Role is EnemyRole.FlyingSwarm or EnemyRole.RangedCaster or EnemyRole.EnemyWizard)
+        if (Role is EnemyRole.FlyingSwarm or EnemyRole.RangedCaster or EnemyRole.RivalShip)
         {
             return;
         }
@@ -794,15 +794,15 @@ private void TryAbsorbLooseMana()
             EnemyRole.FlyingSwarm => new Color(0.9f, 0.42f, 0.1f),
             EnemyRole.GroundBeast => new Color(0.32f, 0.8f, 0.2f),
             EnemyRole.RangedCaster => new Color(0.25f, 0.52f, 1.0f),
-            EnemyRole.CastleAttacker => new Color(0.75f, 0.12f, 0.14f),
-            EnemyRole.ManaThief => new Color(0.95f, 0.82f, 0.2f),
-            EnemyRole.EnemyWizard => new Color(0.56f, 0.18f, 1.0f),
+            EnemyRole.BaseAttacker => new Color(0.75f, 0.12f, 0.14f),
+            EnemyRole.AntimatterThief => new Color(0.95f, 0.82f, 0.2f),
+            EnemyRole.RivalShip => new Color(0.56f, 0.18f, 1.0f),
             _ => new Color(0.72f, 0.08f, 0.16f)
         };
 
-        if (ManaReserve > 0)
+        if (AntimatterReserve > 0)
         {
-            targetColor = targetColor.Lerp(new Color(0.22f, 0.9f, 1.0f), Mathf.Clamp(ManaReserve / 36.0f, 0.0f, 1.0f) * 0.45f);
+            targetColor = targetColor.Lerp(new Color(0.22f, 0.9f, 1.0f), Mathf.Clamp(AntimatterReserve / 36.0f, 0.0f, 1.0f) * 0.45f);
         }
 
         _material.AlbedoColor = _material.AlbedoColor.Lerp(targetColor, 10.0f * delta);
@@ -812,10 +812,10 @@ private void TryAbsorbLooseMana()
     {
         AddChild(new CollisionShape3D
         {
-            Shape = Role == EnemyRole.EnemyWizard
+            Shape = Role == EnemyRole.RivalShip
                 ? new CapsuleShape3D { Radius = 0.65f, Height = 3.0f }
                 : new SphereShape3D { Radius = 0.85f },
-            Position = Role == EnemyRole.EnemyWizard ? new Vector3(0, 0.7f, 0) : Vector3.Zero
+            Position = Role == EnemyRole.RivalShip ? new Vector3(0, 0.7f, 0) : Vector3.Zero
         });
 
         _material = new StandardMaterial3D
@@ -823,9 +823,9 @@ private void TryAbsorbLooseMana()
             AlbedoColor = new Color(0.72f, 0.08f, 0.16f),
             Roughness = 0.9f
         };
-        if (Role == EnemyRole.EnemyWizard)
+        if (Role == EnemyRole.RivalShip)
         {
-            BuildWizardVisuals();
+            BuildPilotVisuals();
             return;
         }
 
@@ -841,29 +841,29 @@ private void TryAbsorbLooseMana()
         AddChild(mesh);
     }
 
-    private void BuildWizardVisuals()
+    private void BuildPilotVisuals()
     {
         _material.AlbedoColor = new Color(0.56f, 0.18f, 1.0f);
         _material.EmissionEnabled = true;
         _material.Emission = new Color(0.22f, 0.04f, 0.45f);
-        AddWizardPart("Robe", new CylinderMesh { TopRadius = 0.32f, BottomRadius = 0.58f, Height = 1.45f },
+        AddPilotPart("Robe", new CylinderMesh { TopRadius = 0.32f, BottomRadius = 0.58f, Height = 1.45f },
             new Vector3(0, 0.3f, 0), _material);
         var face = new StandardMaterial3D { AlbedoColor = new Color(0.92f, 0.72f, 0.52f) };
-        AddWizardPart("Head", new SphereMesh { Radius = 0.28f, Height = 0.56f }, new Vector3(0, 1.23f, 0), face);
-        AddWizardPart("Hat", new CylinderMesh { TopRadius = 0, BottomRadius = 0.45f, Height = 0.8f },
+        AddPilotPart("Head", new SphereMesh { Radius = 0.28f, Height = 0.56f }, new Vector3(0, 1.23f, 0), face);
+        AddPilotPart("Hat", new CylinderMesh { TopRadius = 0, BottomRadius = 0.45f, Height = 0.8f },
             new Vector3(0, 1.8f, 0), _material);
-        var carpet = new StandardMaterial3D
+        var ship = new StandardMaterial3D
         {
             AlbedoColor = new Color(0.65f, 0.12f, 0.55f),
             EmissionEnabled = true,
             Emission = new Color(0.28f, 0.04f, 0.2f)
         };
-        AddWizardPart("Carpet", new BoxMesh { Size = new Vector3(2.8f, 0.16f, 1.8f) },
-            new Vector3(0, -0.52f, 0), carpet);
+        AddPilotPart("Ship", new BoxMesh { Size = new Vector3(2.8f, 0.16f, 1.8f) },
+            new Vector3(0, -0.52f, 0), ship);
         AddChild(new Label3D
         {
-            Name = "WizardLabel",
-            Text = "RIVAL WIZARD",
+            Name = "PilotLabel",
+            Text = "RIVAL PILOT",
             Position = new Vector3(0, 2.75f, 0),
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             FontSize = 48,
@@ -872,30 +872,30 @@ private void TryAbsorbLooseMana()
         });
     }
 
-    private void AddWizardPart(string name, Mesh mesh, Vector3 position, Material material)
+    private void AddPilotPart(string name, Mesh mesh, Vector3 position, Material material)
     {
         AddChild(new MeshInstance3D { Name = name, Mesh = mesh, Position = position, MaterialOverride = material });
     }
 
     private void SpawnDeathBurst()
     {
-        SpellImpactPool.Prepare(GetTree().CurrentScene).Emit(GlobalPosition,
+        EquipmentImpactPool.Prepare(GetTree().CurrentScene).Emit(GlobalPosition,
             new Color(1, 0.45f, 0.1f, 0.9f), new Color(1, 0.2f, 0.05f), 0.45f, 0.8f, 3.5f);
     }
 
-    private void DropMana()
+    private void DropAntimatter()
     {
-        if (ManaReserve <= 0)
+        if (AntimatterReserve <= 0)
         {
             return;
         }
 
-        ManaOwnership dropOwnership = Role is EnemyRole.ManaThief or EnemyRole.EnemyWizard
-            ? ManaOwnership.Enemy
-            : ManaOwnership.Neutral;
-        int amount = ManaReserve;
-        ManaReserve = 0;
-        ManaScatter.Spawn(GetParent(), GlobalPosition, amount, dropOwnership, name: "EnemyManaDrop");
+        AntimatterOwnership dropOwnership = Role is EnemyRole.AntimatterThief or EnemyRole.RivalShip
+            ? AntimatterOwnership.Enemy
+            : AntimatterOwnership.Neutral;
+        int amount = AntimatterReserve;
+        AntimatterReserve = 0;
+        AntimatterScatter.Spawn(GetParent(), GlobalPosition, amount, dropOwnership, name: "EnemyAntimatterDrop");
     }
 
     private int GetBaseHealth()
@@ -905,9 +905,9 @@ private void TryAbsorbLooseMana()
             EnemyRole.FlyingSwarm => 16,
             EnemyRole.GroundBeast => 42,
             EnemyRole.RangedCaster => 28,
-            EnemyRole.CastleAttacker => 34,
-            EnemyRole.ManaThief => 22,
-            EnemyRole.EnemyWizard => 36,
+            EnemyRole.BaseAttacker => 34,
+            EnemyRole.AntimatterThief => 22,
+            EnemyRole.RivalShip => 36,
             _ => 24
         };
     }

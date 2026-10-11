@@ -2,9 +2,9 @@ using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.World;
 
-namespace MagicCarpetRemastered.Scripts.Spells;
+namespace MagicCarpetRemastered.Scripts.Equipment;
 
-public partial class SummonedGuardian : CharacterBody3D
+public partial class GuardianDrone : CharacterBody3D
 {
     [Export] public float MoveSpeed { get; set; } = 12.0f;
     [Export] public float LifetimeSeconds { get; set; } = 12.0f;
@@ -20,7 +20,7 @@ public partial class SummonedGuardian : CharacterBody3D
 
     public override void _Ready()
     {
-        AddToGroup("guardian");
+        AddToGroup("guardian-drone");
         _lifeRemaining = LifetimeSeconds;
         AddCollisionAndVisuals();
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;

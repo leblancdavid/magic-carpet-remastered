@@ -70,7 +70,7 @@ public partial class PlanetFlightController : Node3D
             FirstPerson = !FirstPerson;
             _visual.Visible = !FirstPerson;
         }
-        if (@event.IsActionPressed("cast_mobility") && _dashCooldown <= 0 && Input.MouseMode == Input.MouseModeEnum.Captured)
+        if (@event.IsActionPressed("activate_mobility") && _dashCooldown <= 0 && Input.MouseMode == Input.MouseModeEnum.Captured)
         {
             _dashTimer = 0.4f;
             _dashCooldown = 3;
@@ -97,7 +97,7 @@ public partial class PlanetFlightController : Node3D
         _dashTimer = Mathf.Max(0, _dashTimer - dt);
         _dashCooldown = Mathf.Max(0, _dashCooldown - dt);
 
-        // Gravity is radial; carpet lift counteracts it and controls surface clearance.
+        // Gravity is radial; ship lift counteracts it and controls surface clearance.
         TargetClearance = Mathf.Clamp(TargetClearance + verticalInput * 11 * dt, 2, 12);
         float lift = 9.8f + (TargetClearance - Clearance) * 16 - _radialSpeed * 8;
         _radialSpeed += (Gravity.Dot(_up) + lift) * dt;

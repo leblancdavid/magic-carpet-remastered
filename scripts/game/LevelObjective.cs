@@ -9,39 +9,39 @@ namespace MagicCarpetRemastered.Scripts.Game;
 public partial class LevelObjective : Node
 {
     public enum LevelState { Playing, Victory, Defeat }
-    [Export] public float WizardRespawnDelaySeconds { get; set; } = 10.0f;
+    [Export] public float PilotRespawnDelaySeconds { get; set; } = 10.0f;
 
     public LevelState State { get; private set; }
-    public bool RivalWizardDefeated { get; private set; }
-    public bool RivalCastleDestroyed => IsInstanceValid(_rivalCastle) && _rivalCastle!.IsDestroyed;
+    public bool RivalPilotDefeated { get; private set; }
+    public bool RivalBaseDestroyed => IsInstanceValid(_rivalBase) && _rivalBase!.IsDestroyed;
     public string ResultMessage { get; private set; } = string.Empty;
     public float PlayerRespawnRemaining { get; private set; }
     public float RivalRespawnRemaining { get; private set; }
     public event Action? Finished;
 
-    private CarpetFlightController? _player;
-    private CastleKeep? _playerCastle;
-    private CastleKeep? _rivalCastle;
-    private EnemyEcosystemEnemy? _rivalWizard;
+    private ShipFlightController? _player;
+    private FactionBase? _playerBase;
+    private FactionBase? _rivalBase;
+    private EnemyEcosystemEnemy? _rivalPilot;
     private bool _playerWaiting;
 
     public override void _Ready() => AddToGroup("level_objective");
 
-    public void Initialize(CarpetFlightController player, CastleKeep playerCastle,
-        CastleKeep rivalCastle, EnemyEcosystemEnemy rivalWizard)
+    public void Initialize(ShipFlightController player, FactionBase playerBase,
+        FactionBase rivalBase, EnemyEcosystemEnemy rivalPilot)
     {
         _player = player;
-        _playerCastle = playerCastle;
-        _rivalCastle = rivalCastle;
-        _rivalWizard = rivalWizard;
-        rivalWizard.Defeated += OnRivalDefeated;
+        _playerBase = playerBase;
+        _rivalBase = rivalBase;
+        _rivalPilot = rivalPilot;
+        rivalPilot.Defeated += OnRivalDefeated;
     }
 
     public override void _ExitTree()
     {
-        if (IsInstanceValid(_rivalWizard))
+        if (IsInstanceValid(_rivalPilot))
         {
-            _rivalWizard!.Defeated -= OnRivalDefeated;
+            _rivalPilot!.Defeated -= OnRivalDefeated;
         }
     }
 
@@ -54,30 +54,30 @@ public partial class LevelObjective : Node
             PlayerRespawnRemaining = Mathf.Max(0, PlayerRespawnRemaining - (float)delta);
             if (PlayerRespawnRemaining <= 0)
             {
-                _player!.RespawnAt(RespawnPosition(_playerCastle!));
+                _player!.RespawnAt(RespawnPosition(_playerBase!));
                 _playerWaiting = false;
             }
         }
-        if (RivalWizardDefeated && !RivalCastleDestroyed)
+        if (RivalPilotDefeated && !RivalBaseDestroyed)
         {
             RivalRespawnRemaining = Mathf.Max(0, RivalRespawnRemaining - (float)delta);
             if (RivalRespawnRemaining <= 0)
             {
-                if (IsInstanceValid(_rivalWizard))
+                if (IsInstanceValid(_rivalPilot))
                 {
-                    _rivalWizard!.Defeated -= OnRivalDefeated;
-                    _rivalWizard.Name = "DefeatedRival";
+                    _rivalPilot!.Defeated -= OnRivalDefeated;
+                    _rivalPilot.Name = "DefeatedRival";
                 }
                 var rival = new EnemyEcosystemEnemy
                 {
-                    Name = "RivalWizard",
-                    Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard,
-                    Position = GetParent<Node3D>().ToLocal(RespawnPosition(_rivalCastle!))
+                    Name = "RivalPilot",
+                    Role = EnemyEcosystemEnemy.EnemyRole.RivalShip,
+                    Position = GetParent<Node3D>().ToLocal(RespawnPosition(_rivalBase!))
                 };
                 GetParent().AddChild(rival);
-                _rivalWizard = rival;
+                _rivalPilot = rival;
                 rival.Defeated += OnRivalDefeated;
-                RivalWizardDefeated = false;
+                RivalPilotDefeated = false;
             }
         }
         Evaluate();
@@ -86,28 +86,28 @@ public partial class LevelObjective : Node
     public void Evaluate()
     {
         if (State != LevelState.Playing || !IsInstanceValid(_player)
-            || !IsInstanceValid(_playerCastle) || !IsInstanceValid(_rivalCastle))
+            || !IsInstanceValid(_playerBase) || !IsInstanceValid(_rivalBase))
         {
             return;
         }
 
         // Resolve simultaneous lethal outcomes consistently in the player's disfavor.
-        if (_playerCastle!.IsDestroyed)
+        if (_playerBase!.IsDestroyed)
         {
             State = LevelState.Defeat;
-            ResultMessage = "Your castle was destroyed.";
+            ResultMessage = "Your base was destroyed.";
         }
-        else if (RivalCastleDestroyed && RivalWizardDefeated)
+        else if (RivalBaseDestroyed && RivalPilotDefeated)
         {
             State = LevelState.Victory;
-            ResultMessage = "The rival castle is destroyed and its wizard defeated.";
+            ResultMessage = "The rival base is destroyed and its pilot defeated.";
         }
         else
         {
             if (_player!.Health <= 0 && !_playerWaiting)
             {
                 _playerWaiting = true;
-                PlayerRespawnRemaining = WizardRespawnDelaySeconds;
+                PlayerRespawnRemaining = PilotRespawnDelaySeconds;
             }
             return;
         }
@@ -117,14 +117,14 @@ public partial class LevelObjective : Node
 
     private void OnRivalDefeated()
     {
-        RivalWizardDefeated = true;
-        RivalRespawnRemaining = WizardRespawnDelaySeconds;
+        RivalPilotDefeated = true;
+        RivalRespawnRemaining = PilotRespawnDelaySeconds;
     }
 
-    private Vector3 RespawnPosition(CastleKeep castle)
+    private Vector3 RespawnPosition(FactionBase hub)
     {
         // Spawn beside the solid keep, never within its collider.
-        Vector3 position = castle.GlobalPosition + castle.GlobalBasis * new Vector3(9, 4, 0);
+        Vector3 position = hub.GlobalPosition + hub.GlobalBasis * new Vector3(9, 4, 0);
         var arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         if (arena != null)
         {

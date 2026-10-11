@@ -4,17 +4,17 @@ using System.Collections.Generic;
 namespace MagicCarpetRemastered.Scripts.World;
 
 // Shared death/spill drop: physical fragments, not extra resource creation.
-public static class ManaScatter
+public static class AntimatterScatter
 {
     public const float DropIntervalSeconds = 0.05f;
     public static void Spawn(Node parent, Vector3 origin, int amount,
-        ManaOwnership ownership = ManaOwnership.Neutral, float minimumRadius = 0,
-        string name = "ScatteredMana")
+        AntimatterOwnership ownership = AntimatterOwnership.Neutral, float minimumRadius = 0,
+        string name = "ScatteredAntimatter")
     {
         if (amount <= 0) return;
         int count = Mathf.Min(128, (amount - 1) / 2 + 1);
         // Random integer cuts partition the reserve exactly, with no zero-sized
-        // fragments or work proportional to a potentially enormous mana total.
+        // fragments or work proportional to a potentially enormous antimatter total.
         var cuts = new HashSet<int>();
         while (cuts.Count < count - 1) cuts.Add(GD.RandRange(1, amount - 1));
         var sortedCuts = new List<int>(cuts);
@@ -28,7 +28,7 @@ public static class ManaScatter
             previousCut = cut;
         }
         // A random equal partition can still occur for small reserves. Ensure
-        // visible variation whenever the amount allows it (two mana cannot).
+        // visible variation whenever the amount allows it (two antimatter cannot).
         if (count > 1 && amount > count && amounts.TrueForAll(value => value == amounts[0]))
         {
             int donor = GD.RandRange(0, count - 1);
@@ -38,17 +38,17 @@ public static class ManaScatter
         }
         var arena = parent.GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         float phase = GD.Randf() * Mathf.Tau;
-        var placed = new List<ManaPickup>();
+        var placed = new List<AntimatterPickup>();
         for (int i = 0; i < count; i++)
         {
-            var orb = new ManaPickup
+            var orb = new AntimatterPickup
             {
                 Name = name,
-                ManaAmount = amounts[i],
+                AntimatterAmount = amounts[i],
                 Ownership = ownership
             };
             // Compact placement needs only enough separation to prevent the
-            // solver explosively pushing overlapping fragments apart. Castle
+            // solver explosively pushing overlapping fragments apart. Base
             // drops retain their explicit minimum distance outside the keep.
             float angle = phase + i * 2.399963f;
             Vector3 up = arena?.UpAt(origin) ?? Vector3.Up;
@@ -64,7 +64,7 @@ public static class ManaScatter
             do
             {
                 overlaps = false;
-                foreach (ManaPickup previous in placed)
+                foreach (AntimatterPickup previous in placed)
                 {
                     if (position.DistanceTo(previous.GlobalPosition) >= orb.Radius + previous.Radius + 0.05f) continue;
                     position += outward * (orb.Radius * 0.5f);

@@ -10,6 +10,12 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - Use this file for reusable lessons, technical decisions, gotchas, and design constraints learned while building.
 - When a lesson changes phase priorities or scope, update both this file and `docs/BUILD_ROADMAP.md`.
 
+## Terminology And Reference Migration
+
+- Godot C# renames span filenames/classes, script UID sidecars, scene paths, dynamic node names, group strings, reflection-based checks, input-action definitions/synthetic inputs and gameplay IDs. Compile success alone misses string-reference failures; run the real resource, objective, discovery, navigation and rendered-scene checks after import.
+- Preserve numeric tuning and UID contents through vocabulary-only work. Distinguish physical resources from rechargeable energy in APIs and HUD without silently changing inherited power formulas. Review display text separately from PascalCase identifiers (for example, `PlasmaBoltDamage` versus "Plasma Bolt II").
+- Keep historical game names, local reference paths and dated measurement reports intact. Document new profiler labels/columns and retain an old CLI alias where practical; update current commands rather than rewriting old evidence.
+
 ## Spherical Flight Lessons
 
 - Ground and seam skirts sharing a material can share one mesh surface to reduce per-tile draws. Preserve independent skirt vertices for flat clockwise normals and keep skirts out of collision faces. Cache only scratch native-input buffers whose setters copy synchronously; published-resource independence must be verified through later builds/edits and actual ray coverage. Measure allocations after batching: a larger combined vertex layout can initially increase managed pressure, even when draw count improves. VSync-limited p95 and variable transient fine sets do not isolate GPU throughput.

@@ -1,6 +1,6 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Player;
-using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.Equipment;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Enemies;
@@ -99,14 +99,14 @@ public partial class EnemyProjectile : Area3D
 
         SpawnImpactBurst();
 
-        if (body is CarpetFlightController player)
+        if (body is ShipFlightController player)
         {
             player.ApplyDamage(Damage);
         }
 
-        if (body is CastleKeep castle)
+        if (body is FactionBase hub)
         {
-            castle.ApplyDamage(Damage);
+            hub.ApplyDamage(Damage);
         }
 
         QueueFree();
@@ -114,7 +114,7 @@ public partial class EnemyProjectile : Area3D
 
     private void SpawnImpactBurst()
     {
-        var burst = new SpellImpactBurst
+        var burst = new EquipmentImpactBurst
         {
             Name = "EnemyImpactBurst",
             BurstColor = new Color(0.48f, 0.18f, 1.0f, 0.85f),

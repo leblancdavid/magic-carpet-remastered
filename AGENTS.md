@@ -3,13 +3,13 @@
 ## Project Context
 
 - Engine target: Godot 4.x with C#
-- Current state: accepted spherical gameplay prototype; next milestones are science-fiction terminology migration and RTS-style base/equipment development
+- Current state: accepted spherical gameplay prototype with completed science-fiction terminology migration; next milestones are explicit base/resource accounting and RTS-style base/equipment development
 - Reference projects: `D:\Dev\Games\rustgrindgalaxy` and `D:\Dev\Games\kbtv`
 - Local original game reference: `D:\Games\MagicCarpet`
 
 ## Product Direction
 
-Build an original futuristic planetary faction-conflict game using the accepted spherical prototype: ship combat, terrain deformation, antimatter logistics, RTS-style home-base development and researched equipment. Magic Carpet is a historical mechanics reference, not the new setting. Follow `docs/BASE_DEVELOPMENT.md` and `docs/SHIP_EQUIPMENT.md` for the approved direction; fantasy terms remain in code until the behavior-preserving migration.
+Build an original futuristic planetary faction-conflict game using the accepted spherical prototype: ship combat, terrain deformation, antimatter logistics, RTS-style home-base development and researched equipment. Magic Carpet is a historical mechanics reference, not the new setting. Follow `docs/BASE_DEVELOPMENT.md` and `docs/SHIP_EQUIPMENT.md` for the approved direction. Active code uses the migrated vocabulary; `docs/TERMINOLOGY_MIGRATION.md` records paths, identifiers and compatibility. Base construction and the new economy remain planned.
 
 Do not copy proprietary game code, data, art, audio, level files, or binary-derived assets into this repository unless the user explicitly confirms they own and can use them. Treat the DOS install as a local reference for observation, behavior study, and personal reverse-engineering experiments only.
 

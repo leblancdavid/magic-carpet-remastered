@@ -14,7 +14,7 @@ Approved design, 2026-10-11; implementation pending. Existing combat/utility abi
 - Unequipped items remain owned for the match and can be re-equipped at the base without paying to build them again.
 - Installation and loadout changes require returning to the player's home base; remote research ordering is allowed.
 
-The legacy five-ability LMB/Tab cycle remains during terminology conversion. A four-slot limit must be implemented with the new inventory/loadout UI rather than silently dropping an existing ability.
+The legacy five-ability LMB/Tab cycle is preserved after the completed terminology conversion. A four-slot limit must be implemented with the new inventory/loadout UI rather than silently dropping an existing ability.
 
 ## Ownership And Death
 

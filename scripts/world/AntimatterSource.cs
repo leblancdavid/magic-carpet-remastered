@@ -2,74 +2,74 @@ using Godot;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
-public partial class ManaWell : StaticBody3D
+public partial class AntimatterSource : StaticBody3D
 {
     [Export] public int StorageCapacity { get; set; } = 160;
-    [Export] public int InitialStoredMana { get; set; } = 60;
+    [Export] public int InitialStoredAntimatter { get; set; } = 60;
     [Export] public float PickupSpawnRadius { get; set; } = 2.2f;
     [Export] public float PickupSpawnHeight { get; set; } = 2.8f;
     [Export] public int SeedOrbCount { get; set; } = 6;
 
-    public int StoredMana { get; private set; }
-    public bool HasSpace => StoredMana < StorageCapacity;
+    public int StoredAntimatter { get; private set; }
+    public bool HasSpace => StoredAntimatter < StorageCapacity;
 
     public override void _Ready()
     {
-        AddToGroup("mana_well");
+        AddToGroup("antimatter_source");
         (GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena)?.Orient(this);
-        StoredMana = 0;
+        StoredAntimatter = 0;
         AddCollisionAndVisuals();
         SeedNeutralField();
     }
 
-    public int DepositMana(int amount)
+    public int DepositAntimatter(int amount)
     {
         if (amount <= 0)
         {
             return 0;
         }
 
-        int accepted = Mathf.Min(amount, StorageCapacity - StoredMana);
+        int accepted = Mathf.Min(amount, StorageCapacity - StoredAntimatter);
         if (accepted <= 0)
         {
             return 0;
         }
 
-        StoredMana += accepted;
+        StoredAntimatter += accepted;
         return accepted;
     }
 
-    public int StealMana(int amount)
+    public int StealAntimatter(int amount)
     {
         if (amount <= 0)
         {
             return 0;
         }
 
-        int stolen = Mathf.Min(amount, StoredMana);
-        StoredMana -= stolen;
+        int stolen = Mathf.Min(amount, StoredAntimatter);
+        StoredAntimatter -= stolen;
         return stolen;
     }
 
-    public int WithdrawMana(int amount)
+    public int WithdrawAntimatter(int amount)
     {
-        return StealMana(amount);
+        return StealAntimatter(amount);
     }
 
     private void SeedNeutralField()
     {
-        int amountPerOrb = Mathf.Max(2, InitialStoredMana / SeedOrbCount);
+        int amountPerOrb = Mathf.Max(2, InitialStoredAntimatter / SeedOrbCount);
         for (int i = 0; i < SeedOrbCount; i++)
         {
             float angle = Mathf.Tau * i / SeedOrbCount + GD.Randf() * 0.5f;
             float radius = 2.0f + GD.Randf() * 2.0f;
             Vector3 offset = new Vector3(Mathf.Cos(angle) * radius, 0.0f, Mathf.Sin(angle) * radius);
 
-            var orb = new ManaPickup
+            var orb = new AntimatterPickup
             {
-                Name = "WellMana",
-                ManaAmount = amountPerOrb,
-                Ownership = ManaOwnership.Neutral
+                Name = "WellAntimatter",
+                AntimatterAmount = amountPerOrb,
+                Ownership = AntimatterOwnership.Neutral
             };
             GetParent().AddChild(orb);
             orb.GlobalPosition = GlobalPosition + GlobalBasis * (offset + Vector3.Up * PickupSpawnHeight);

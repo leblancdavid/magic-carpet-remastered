@@ -26,7 +26,7 @@ public partial class TraversalFrameProfile : Node3D
         long AllocatedBytes, long HeapBytes, int Gen0, int Gen1, int Gen2,
         double GcPauseMs, int Resources, int RetiringCollisions,
         double WaitProcessMs, double RouteMs, double SceneMs, double BeforeDrawMs, double DrawMs,
-        double MainThreadCpuMs, double ProcessCpuMs, int ManaBodies, double ManaLogicMs, double ManaIntegrationMs);
+        double MainThreadCpuMs, double ProcessCpuMs, int AntimatterBodies, double AntimatterLogicMs, double AntimatterIntegrationMs);
     // Tool-only Windows CPU accounting. Unsupported platforms report -1 rather
     // than treating unavailable CPU timing as evidence of an idle main thread.
     private static class ThreadClock
@@ -49,7 +49,7 @@ public partial class TraversalFrameProfile : Node3D
     private Game _game = null!;
     private HeightmapArena _arena = null!;
     private PlanetTerrain _terrain = null!;
-    private CarpetFlightController _player = null!;
+    private ShipFlightController _player = null!;
     private Camera3D _camera = null!;
     private Label _status = null!;
     private Vector3 _startUp;
@@ -58,8 +58,8 @@ public partial class TraversalFrameProfile : Node3D
     private float _speed;
     private bool _unpaced;
     private bool _mixed;
-    private int _mixedEdits, _expectedMana;
-    private WorldManaTracker _tracker = null!;
+    private int _mixedEdits, _expectedAntimatter;
+    private WorldAntimatterTracker _tracker = null!;
     private long _sceneEnd, _preDraw;
     private readonly Process _process = Process.GetCurrentProcess();
 
@@ -128,12 +128,12 @@ public partial class TraversalFrameProfile : Node3D
         _game.SetProcessUnhandledInput(false);
         _arena = (HeightmapArena)GetTree().GetFirstNodeInGroup("heightmap_arena");
         _terrain = _arena.GetChildren().OfType<PlanetTerrain>().Single();
-        _player = (CarpetFlightController)GetTree().GetFirstNodeInGroup("player");
+        _player = (ShipFlightController)GetTree().GetFirstNodeInGroup("player");
         _player.SetPhysicsProcess(false);
         _player.SetProcessUnhandledInput(false);
         foreach (Node node in _game.GetChildren())
             if (node is EnemyEcosystemDirector or LevelObjective) node.SetPhysicsProcess(false);
-        foreach (string group in new[] { "ecosystem_enemy", "balloon", "loose_mana" })
+        foreach (string group in new[] { "ecosystem_enemy", "drone", "loose_antimatter" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
             {
                 node.SetPhysicsProcess(false);
@@ -151,21 +151,21 @@ public partial class TraversalFrameProfile : Node3D
         _mixedEdits = 0;
         if (_mixed)
         {
-            _tracker = (WorldManaTracker)GetTree().GetFirstNodeInGroup("world_mana_tracker");
+            _tracker = (WorldAntimatterTracker)GetTree().GetFirstNodeInGroup("world_antimatter_tracker");
             _tracker.Refresh();
-            _expectedMana = _tracker.TotalMana + 480;
-            await Window("mixed-mana-create", 90, i =>
+            _expectedAntimatter = _tracker.TotalAntimatter + 480;
+            await Window("mixed-antimatter-create", 90, i =>
             {
                 if (i != 0) return;
                 for (int n = 0; n < 192; n++)
-                    _game.AddChild(new ProfiledManaPickup
+                    _game.AddChild(new ProfiledAntimatterPickup
                     {
                         Position = _arena.OnSurface(_player.GlobalPosition + _player.GlobalBasis.X * ((n % 16 - 8) * 1.2f)
                             + _player.GlobalBasis.Z * ((n / 16 - 6) * 1.2f), 3),
-                        ManaAmount = n % 4 + 1, Ownership = (ManaOwnership)(n % 3)
+                        AntimatterAmount = n % 4 + 1, Ownership = (AntimatterOwnership)(n % 3)
                     });
             });
-            CheckMixedMana();
+            CheckMixedAntimatter();
         }
         await Window("home-before", 120);
         (int FineParents, int BuiltTiles, int PublishedMeshes)? returnedHome = null;
@@ -186,9 +186,9 @@ public partial class TraversalFrameProfile : Node3D
             });
             if (_mixed)
             {
-                CheckMixedMana();
-                if (_arena.SurfaceRevision <= revision || !_samples.Any(s => s.Radius == _radius && s.Phase == $"lap-{lap}" && s.ManaLogicMs > 0 && s.ManaIntegrationMs > 0))
-                    throw new InvalidOperationException("Mixed traversal failed to exercise live mana and crater edits.");
+                CheckMixedAntimatter();
+                if (_arena.SurfaceRevision <= revision || !_samples.Any(s => s.Radius == _radius && s.Phase == $"lap-{lap}" && s.AntimatterLogicMs > 0 && s.AntimatterIntegrationMs > 0))
+                    throw new InvalidOperationException("Mixed traversal failed to exercise live antimatter and crater edits.");
             }
             if (!_samples.Any(s => s.Radius == _radius && s.Phase == $"lap-{lap}" && s.Rebuilt > 0))
                 throw new InvalidOperationException("Traversal did not exercise LOD rebuilding.");
@@ -203,17 +203,17 @@ public partial class TraversalFrameProfile : Node3D
                 throw new InvalidOperationException($"Terrain detail grew between identical laps: {returnedHome} -> {after}.");
             returnedHome = after;
         }
-        if (_mixed) GD.Print($"Mixed traversal radius {_radius}: {_mixedEdits} craters, {_expectedMana} conserved world mana.");
+        if (_mixed) GD.Print($"Mixed traversal radius {_radius}: {_mixedEdits} craters, {_expectedAntimatter} conserved world antimatter.");
         _game.QueueFree();
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
     }
 
-    private void CheckMixedMana()
+    private void CheckMixedAntimatter()
     {
         _tracker.Refresh();
-        if (_tracker.TotalMana != _expectedMana)
-            throw new InvalidOperationException($"Mixed traversal mana changed: {_expectedMana} -> {_tracker.TotalMana}.");
+        if (_tracker.TotalAntimatter != _expectedAntimatter)
+            throw new InvalidOperationException($"Mixed traversal antimatter changed: {_expectedAntimatter} -> {_tracker.TotalAntimatter}.");
     }
 
     private void MoveTo(float angle)
@@ -252,7 +252,7 @@ public partial class TraversalFrameProfile : Node3D
         double previousThreadCpu = ThreadClock.Read();
         long start = Stopwatch.GetTimestamp();
         _clock.Restart();
-        ProfiledManaPickup.ResetMeasurements();
+        ProfiledAntimatterPickup.ResetMeasurements();
         for (int i = 0; i < frames; i++)
         {
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
@@ -289,11 +289,11 @@ public partial class TraversalFrameProfile : Node3D
                 Milliseconds(start, processStart), Milliseconds(processStart, routeEnd),
                 Milliseconds(routeEnd, _sceneEnd), Milliseconds(_sceneEnd, _preDraw), Milliseconds(_preDraw, end),
                 threadCpu >= 0 && previousThreadCpu >= 0 ? threadCpu - previousThreadCpu : -1,
-                cpu - previousCpu, GetTree().GetNodesInGroup("loose_mana").Count,
-                ProfiledManaPickup.LogicMilliseconds, ProfiledManaPickup.IntegrationMilliseconds));
+                cpu - previousCpu, GetTree().GetNodesInGroup("loose_antimatter").Count,
+                ProfiledAntimatterPickup.LogicMilliseconds, ProfiledAntimatterPickup.IntegrationMilliseconds));
             if (i % 60 == 0) CheckCollision();
-            if (_mixed && i % 60 == 0) CheckMixedMana();
-            ProfiledManaPickup.ResetMeasurements();
+            if (_mixed && i % 60 == 0) CheckMixedAntimatter();
+            ProfiledAntimatterPickup.ResetMeasurements();
             previous = ManagedSnapshot.Capture();
             previousCpu = _process.TotalProcessorTime.TotalMilliseconds;
             previousThreadCpu = ThreadClock.Read();
@@ -311,8 +311,8 @@ public partial class TraversalFrameProfile : Node3D
         var exclusions = new Godot.Collections.Array<Rid> { _player.GetRid() };
         // The probe verifies terrain coverage, not whichever live globe happens
         // to cross the radial ray above that terrain during mixed stress.
-        foreach (Node actor in GetTree().GetNodesInGroup("loose_mana"))
-            if (actor is ManaPickup orb && IsInstanceValid(orb) && !orb.IsQueuedForDeletion()) exclusions.Add(orb.GetRid());
+        foreach (Node actor in GetTree().GetNodesInGroup("loose_antimatter"))
+            if (actor is AntimatterPickup orb && IsInstanceValid(orb) && !orb.IsQueuedForDeletion()) exclusions.Add(orb.GetRid());
         query.Exclude = exclusions;
         using var hit = GetWorld3D().DirectSpaceState.IntersectRay(query);
         if (hit.Count == 0 || hit["collider"].AsGodotObject() is not Node node || !node.IsInGroup("deformable_terrain"))
@@ -332,15 +332,15 @@ public partial class TraversalFrameProfile : Node3D
         string directory = ProjectSettings.GlobalizePath("user://traversal-profiles");
         Directory.CreateDirectory(directory);
         string stem = Path.Combine(directory, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture));
-        var csv = new StringBuilder("radius,phase,frame,wall_ms,process_ms,physics_ms,rebuild_ms,rebuilt,pending,fine_parents,built_tiles,published_meshes,draw_calls,render_objects,primitives,nodes,static_bytes,render_cpu_ms,render_gpu_ms,allocated_bytes,managed_heap_bytes,gc_gen0,gc_gen1,gc_gen2,gc_pause_ms,resources,retiring_collisions,wait_process_ms,route_ms,scene_ms,before_draw_ms,draw_ms,main_thread_cpu_ms,process_cpu_ms,mana_bodies,mana_logic_ms,mana_integration_ms\n");
+        var csv = new StringBuilder("radius,phase,frame,wall_ms,process_ms,physics_ms,rebuild_ms,rebuilt,pending,fine_parents,built_tiles,published_meshes,draw_calls,render_objects,primitives,nodes,static_bytes,render_cpu_ms,render_gpu_ms,allocated_bytes,managed_heap_bytes,gc_gen0,gc_gen1,gc_gen2,gc_pause_ms,resources,retiring_collisions,wait_process_ms,route_ms,scene_ms,before_draw_ms,draw_ms,main_thread_cpu_ms,process_cpu_ms,antimatter_bodies,antimatter_logic_ms,antimatter_integration_ms\n");
         foreach (Sample s in _samples)
-            csv.AppendLine(FormattableString.Invariant($"{s.Radius},{s.Phase},{s.Frame},{s.WallMs:F4},{s.ProcessMs:F4},{s.PhysicsMs:F4},{s.RebuildMs:F4},{s.Rebuilt},{s.Pending},{s.FineParents},{s.Tiles},{s.Meshes},{s.DrawCalls},{s.Objects},{s.Primitives},{s.Nodes},{s.StaticBytes:F0},{s.RenderCpuMs:F4},{s.RenderGpuMs:F4},{s.AllocatedBytes},{s.HeapBytes},{s.Gen0},{s.Gen1},{s.Gen2},{s.GcPauseMs:F4},{s.Resources},{s.RetiringCollisions},{s.WaitProcessMs:F4},{s.RouteMs:F4},{s.SceneMs:F4},{s.BeforeDrawMs:F4},{s.DrawMs:F4},{s.MainThreadCpuMs:F4},{s.ProcessCpuMs:F4},{s.ManaBodies},{s.ManaLogicMs:F4},{s.ManaIntegrationMs:F4}"));
+            csv.AppendLine(FormattableString.Invariant($"{s.Radius},{s.Phase},{s.Frame},{s.WallMs:F4},{s.ProcessMs:F4},{s.PhysicsMs:F4},{s.RebuildMs:F4},{s.Rebuilt},{s.Pending},{s.FineParents},{s.Tiles},{s.Meshes},{s.DrawCalls},{s.Objects},{s.Primitives},{s.Nodes},{s.StaticBytes:F0},{s.RenderCpuMs:F4},{s.RenderGpuMs:F4},{s.AllocatedBytes},{s.HeapBytes},{s.Gen0},{s.Gen1},{s.Gen2},{s.GcPauseMs:F4},{s.Resources},{s.RetiringCollisions},{s.WaitProcessMs:F4},{s.RouteMs:F4},{s.SceneMs:F4},{s.BeforeDrawMs:F4},{s.DrawMs:F4},{s.MainThreadCpuMs:F4},{s.ProcessCpuMs:F4},{s.AntimatterBodies},{s.AntimatterLogicMs:F4},{s.AntimatterIntegrationMs:F4}"));
         File.WriteAllText(stem + ".csv", csv.ToString());
         string header = $"UTC: {DateTime.UtcNow:O}\nGodot: {Engine.GetVersionInfo()["string"]}\nGPU: {RenderingServer.GetVideoAdapterName()}\nDisplay: {DisplayServer.GetName()}\nRenderer: {ProjectSettings.GetSetting("rendering/renderer/rendering_method")}\nViewport: {GetViewport().GetVisibleRect().Size}\nVSync: {DisplayServer.WindowGetVsyncMode()}\nMax FPS: {Engine.MaxFps}\nPhysics ticks: {Engine.PhysicsTicksPerSecond}\nSeed: 20261010\nRoute: two diagonal great-circle laps, {_speed} units/s at fixed 60 route steps/s. Slower rendering slows wall-clock travel. Actor observers fixed except player.\nWall intervals include pacing; diagnostic accounting excluded. Process/physics/render monitors may lag. Static memory is Godot's monitor. Published meshes count the whole terrain, not just visible draws.\n";
         header += "Attribution: viewport CPU/GPU timing is enabled, may lag and covers only viewport rendering (not pacing/presentation). GC counts/pause/allocation deltas cover the measured interval across managed threads, excluding diagnostic accounting; allocation counters are approximate. Heap is GC.GetTotalMemory(false), not native memory. Coincidence does not establish causality. Top wall frames include adjacent samples to expose lag.\n";
         if (_unpaced) header += "Unpaced diagnostic: VSync disabled, FPS unlimited, observer detail refreshed on every prescribed route step. This adds scan work and changes queue/physics timing; it is not a directly comparable gameplay-speed benchmark.\n";
         header += "Phases: wait_process=previous post-draw accounting end to ProcessFrame (includes pacing/physics/deferred cleanup); route=prescribed motion; scene=route end to last process-priority probe; before_draw=last process probe to FramePreDraw; draw=FramePreDraw to FramePostDraw. Ordering checked every sample. CPU is OS cumulative time, quantized, not wall time: Windows main thread, and all process threads (may exceed wall time); main-thread unavailable=-1. No forced render synchronization is inserted.\n";
-        header += $"Mixed workload: {_mixed}. When enabled, 192 live stress globes (480 mana) at home, direct craters every 60 lap steps, baseline AI/hauling frozen. World mana checked every 60 samples and each lap. Mana timings cover only instrumented stress bodies across physics ticks per draw, exclude native solver work and overlap other phase timings. Stress globes stay at their physical locations while the observer travels.\n";
+        header += $"Mixed workload: {_mixed}. When enabled, 192 live stress globes (480 antimatter) at home, direct craters every 60 lap steps, baseline AI/hauling frozen. World antimatter checked every 60 samples and each lap. Antimatter timings cover only instrumented stress bodies across physics ticks per draw, exclude native solver work and overlap other phase timings. Stress globes stay at their physical locations while the observer travels.\n";
         string outliers = string.Join("\n", _samples.GroupBy(s => s.Radius).SelectMany(g =>
             g.OrderByDescending(s => s.WallMs).Take(12).Select(s =>
             {

@@ -2,9 +2,9 @@
 
 ## Scope
 
-Next implementation milestone after the approved base/equipment documentation. Preserve the accepted playable mechanics while updating gameplay filenames, C# types/namespaces/members, scene paths, node/group identifiers, input actions, player-facing text and verification tools together.
+Completed on 2026-10-11. Gameplay filenames, C# types/namespaces/members, scene references, node/group identifiers, input actions, player-facing text and verification tools now use the science-fiction vocabulary while preserving the accepted playable mechanics.
 
-Do not mix the new construction economy, four-slot restriction or Shift booster into the rename. Those mechanics are specified in `BASE_DEVELOPMENT.md` and `SHIP_EQUIPMENT.md` and follow as separately verified milestones.
+The new construction economy, four-slot restriction and Shift booster follow as separately verified milestones, specified in `BASE_DEVELOPMENT.md` and `SHIP_EQUIPMENT.md`. The inherited starting-power allowance, HP-scaled storage, storage-driven visual stages, discovery ranks and paused survey remain implemented behavior.
 
 ## Working Vocabulary
 
@@ -28,7 +28,29 @@ Do not mix the new construction economy, four-slot restriction or Shift booster 
 
 Provisional display names for the existing abilities: Plasma Bolt, Pulse Burst, Energy Shield, Dash, Guardian Drone and Claim. These are vocabulary choices, not new weapons or revised balance. The existing radar can become Tactical Radar instead of All-Seeing Eye.
 
-Stored antimatter and rechargeable equipment energy should have distinct member names in the eventual economy milestone. The rename must not silently remove the current starting-power allowance, alter damage-scaled capacity or change regeneration formulas before that mechanics work.
+Stored antimatter and rechargeable equipment energy now have distinct member names. The current starting-power allowance, damage-scaled storage capacity and regeneration formulas are preserved; their replacement belongs to the next economy milestone.
+
+## Implemented Paths And Identifiers
+
+- `scripts/player/CarpetFlightController.cs` → `scripts/player/ShipFlightController.cs`.
+- `scripts/spells/` → `scripts/equipment/` and `MagicCarpetRemastered.Scripts.Spells` → `MagicCarpetRemastered.Scripts.Equipment`; the assembly/root namespace remains `MagicCarpetRemastered`.
+- World types in the table remain in `scripts/world/`, with filenames matching their new types. `PossessProjectile` → `ClaimProjectile`; impact/definition types and `GuardianDrone` are in `scripts/equipment/`.
+- All moved scripts retain their original `.cs.uid` bytes. The unrelated `scripts/world/ManaCollectorSpirit.cs.uid` has no matching script or active reference; it is retained unchanged as an orphan sidecar.
+- Verification scene/script/UID triplets: `ManaLoopChecks` → `AntimatterLoopChecks`, `ManaPhysicsChecks` → `AntimatterPhysicsChecks`, `SpellProgressionChecks` → `EquipmentProgressionChecks`, `WizardFlightChecks` → `RivalFlightChecks`. `ProfiledManaPickup` → `ProfiledAntimatterPickup`.
+- Runtime nodes include `PlayerShip`, `PlayerBase`, `EnemyBase`, `PlayerDrone`, `EnemyDrone`, `RivalPilot`, `AntimatterSource` and `WorldAntimatterTracker`. The rival enemy role is `RivalShip`; other roles retain behavior with `BaseAttacker` and `AntimatterThief` names.
+- Groups: `player_castle` / `enemy_castle` → `player_base` / `enemy_base`; `loose_mana` → `loose_antimatter`; `mana_well` → `antimatter_source`; `world_mana_tracker` → `world_antimatter_tracker`; `balloon` → `drone`; `spell_discovery` → `equipment_discovery`.
+- Equipment IDs migrate together across definitions, ranks, landmarks and checks: `firebolt` → `plasma-bolt`, `arcane-burst` → `pulse-burst`, `mana-shield` → `energy-shield`, `wind-dash` → `dash`, `guardian` → `guardian-drone`, `possess` → `claim`. `terrain-shape` remains unchanged. These IDs are match-local; there is no persisted equipment save migration.
+- Input actions: `cast_primary` / `cast_area` / `cast_shield` / `cast_mobility` / `cast_summon` / `cast_possess` → `activate_primary` / `activate_area` / `activate_shield` / `activate_mobility` / `activate_guardian` / `activate_claim`; `cycle_quick_spell` → `cycle_quick_equipment`. Physical mouse/key bindings are preserved.
+- Rechargeable player `Mana` / `ManaCapacity` / `SpendMana` become `Energy` / `EnergyCapacity` / `SpendEnergy`; equipment costs become `EnergyCost`. Physical resources use `AntimatterAmount`, `StoredAntimatter` and antimatter reserve/ownership/tracker APIs. `ClaimedAntimatter` still represents inherited derived power (starting allowance plus storage), **not an additional physical reserve**. Its formulas remain unchanged until the economy milestone.
+
+## Profiling Compatibility
+
+`CombatFrameProfile` and `TraversalFrameProfile` scene paths, output directories, tuning and CLI size/stress/mixed options remain stable. The new `--antimatter-isolation` option accepts `--mana-isolation` as a compatibility alias. Internal types and newly emitted reports use the new vocabulary:
+
+- CSV fields `mana_bodies`, `mana_logic_ms`, `mana_integration_ms` become `antimatter_bodies`, `antimatter_logic_ms`, `antimatter_integration_ms`; field order and units stay the same.
+- Combat phases `possess-first` / `possess-repeat` → `claim-first` / `claim-repeat`; `castle-spill` → `base-spill`; `dense-mana-*` / `mana-*` → `dense-antimatter-*` / `antimatter-*`.
+- Mixed traversal `mixed-mana-create` → `mixed-antimatter-create`.
+- Historical reports, measurements and research retain their original names. Analysis across the migration must map these labels; no historical CSV is rewritten. Current commands are in `README.md`.
 
 ## Reference Integrity
 

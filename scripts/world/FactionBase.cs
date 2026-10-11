@@ -3,25 +3,25 @@ using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
-public partial class CastleKeep : StaticBody3D
+public partial class FactionBase : StaticBody3D
 {
-    [Export] public bool IsPlayerCastle { get; set; } = true;
-    [Export] public int ManaStorageCapacity { get; set; } = 120;
-    [Export] public int InitialStoredMana { get; set; } = 30;
+    [Export] public bool IsPlayerBase { get; set; } = true;
+    [Export] public int AntimatterStorageCapacity { get; set; } = 120;
+    [Export] public int InitialStoredAntimatter { get; set; } = 30;
     [Export] public int MaxHealth { get; set; } = 140;
-    [Export] public float GrowthManaPerStage { get; set; } = 40.0f;
+    [Export] public float GrowthAntimatterPerStage { get; set; } = 40.0f;
     [Export] public float GrowthScalePerStage { get; set; } = 0.18f;
     [Export] public float RepairDelaySeconds { get; set; } = 5.0f;
     [Export] public float RepairHealthPerSecond { get; set; } = 3.0f;
 
-    public int StoredMana { get; private set; }
+    public int StoredAntimatter { get; private set; }
     public int Health { get; private set; }
     public int GrowthStage { get; private set; } = 1;
     // Round up so the last point of health can still retain a small reserve.
     public int EffectiveStorageCapacity => IsDestroyed ? 0
-        : (int)(((long)Mathf.Max(0, ManaStorageCapacity) * Health + MaxHealth - 1) / MaxHealth);
+        : (int)(((long)Mathf.Max(0, AntimatterStorageCapacity) * Health + MaxHealth - 1) / MaxHealth);
     public bool IsDestroyed => Health <= 0;
-    public string CastleLabel => IsPlayerCastle ? "Player Castle" : "Enemy Castle";
+    public string BaseLabel => IsPlayerBase ? "Player Base" : "Enemy Base";
     public bool IsRepairing => !IsDestroyed && Health < MaxHealth && _secondsSinceHit >= RepairDelaySeconds;
     private float _secondsSinceHit;
     private float _repairAccumulator;
@@ -34,12 +34,12 @@ public partial class CastleKeep : StaticBody3D
 
     public override void _Ready()
     {
-        AddToGroup(IsPlayerCastle ? "player_castle" : "enemy_castle");
+        AddToGroup(IsPlayerBase ? "player_base" : "enemy_base");
         (GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena)?.Orient(this);
         MaxHealth = Mathf.Max(1, MaxHealth);
         Health = MaxHealth;
-        StoredMana = Mathf.Clamp(InitialStoredMana, 0, EffectiveStorageCapacity);
-        BuildCastleVisuals();
+        StoredAntimatter = Mathf.Clamp(InitialStoredAntimatter, 0, EffectiveStorageCapacity);
+        BuildBaseVisuals();
         UpdateGrowth();
     }
 
@@ -55,36 +55,36 @@ public partial class CastleKeep : StaticBody3D
         if (restored <= 0) return;
         _repairAccumulator -= restored;
         Health = Mathf.Min(MaxHealth, Health + restored);
-        UpdateGrowth(); // Capacity returns, but spilled mana is never recreated.
+        UpdateGrowth(); // Capacity returns, but spilled antimatter is never recreated.
     }
 
-    public int DepositMana(int amount)
+    public int DepositAntimatter(int amount)
     {
         if (amount <= 0 || IsDestroyed)
         {
             return 0;
         }
 
-        int accepted = Mathf.Min(amount, EffectiveStorageCapacity - StoredMana);
+        int accepted = Mathf.Min(amount, EffectiveStorageCapacity - StoredAntimatter);
         if (accepted <= 0)
         {
             return 0;
         }
 
-        StoredMana += accepted;
+        StoredAntimatter += accepted;
         UpdateGrowth();
         return accepted;
     }
 
-    public int WithdrawMana(int amount)
+    public int WithdrawAntimatter(int amount)
     {
         if (amount <= 0 || IsDestroyed)
         {
             return 0;
         }
 
-        int withdrawn = Mathf.Min(amount, StoredMana);
-        StoredMana -= withdrawn;
+        int withdrawn = Mathf.Min(amount, StoredAntimatter);
+        StoredAntimatter -= withdrawn;
         UpdateGrowth();
         return withdrawn;
     }
@@ -99,42 +99,42 @@ public partial class CastleKeep : StaticBody3D
         Health = Mathf.Max(0, Health - amount);
         _secondsSinceHit = 0;
         _repairAccumulator = 0;
-        int spilled = Mathf.Max(0, StoredMana - EffectiveStorageCapacity);
-        StoredMana -= spilled;
-        SpillMana(spilled);
+        int spilled = Mathf.Max(0, StoredAntimatter - EffectiveStorageCapacity);
+        StoredAntimatter -= spilled;
+        SpillAntimatter(spilled);
         UpdateGrowth();
     }
 
     public string GetStatusText()
     {
         string destruction = IsDestroyed ? "Destroyed" : $"HP {Health}/{MaxHealth}";
-        return $"{CastleLabel}: {destruction}   Mana {StoredMana}/{EffectiveStorageCapacity}   Stage {GrowthStage}";
+        return $"{BaseLabel}: {destruction}   Antimatter {StoredAntimatter}/{EffectiveStorageCapacity}   Stage {GrowthStage}";
     }
 
     private void UpdateGrowth()
     {
         int desiredStage = IsDestroyed ? 0
-            : Mathf.Clamp(1 + Mathf.FloorToInt(StoredMana / Mathf.Max(1.0f, GrowthManaPerStage)), 1, 4);
+            : Mathf.Clamp(1 + Mathf.FloorToInt(StoredAntimatter / Mathf.Max(1.0f, GrowthAntimatterPerStage)), 1, 4);
         if (desiredStage != GrowthStage)
         {
             GrowthStage = desiredStage;
-            UpdateCastleScale();
+            UpdateBaseScale();
         }
 
         UpdateVisualState();
-        if (IsPlayerCastle)
+        if (IsPlayerBase)
         {
-            var player = GetTree().GetFirstNodeInGroup("player") as CarpetFlightController;
-            player?.RefreshCastleManaPower();
+            var player = GetTree().GetFirstNodeInGroup("player") as ShipFlightController;
+            player?.RefreshBaseAntimatterPower();
         }
     }
 
-    private void SpillMana(int amount)
+    private void SpillAntimatter(int amount)
     {
-        ManaScatter.Spawn(GetParent(), GlobalPosition, amount, minimumRadius: 6.0f, name: "CastleManaSpill");
+        AntimatterScatter.Spawn(GetParent(), GlobalPosition, amount, minimumRadius: 6.0f, name: "BaseAntimatterSpill");
     }
 
-    private void UpdateCastleScale()
+    private void UpdateBaseScale()
     {
         float scale = 1.0f + GrowthScalePerStage * (GrowthStage - 1);
         _keep.Scale = new Vector3(scale, 1.0f + 0.1f * (GrowthStage - 1), scale);
@@ -151,10 +151,10 @@ public partial class CastleKeep : StaticBody3D
     private void UpdateVisualState()
     {
         float damageBlend = 1.0f - Mathf.Clamp((float)Health / MaxHealth, 0.0f, 1.0f);
-        Color keepColor = IsPlayerCastle
+        Color keepColor = IsPlayerBase
             ? new Color(0.26f, 0.22f, 0.34f).Lerp(new Color(0.36f, 0.45f, 0.84f), 0.2f + 0.2f * GrowthStage)
             : new Color(0.32f, 0.18f, 0.16f).Lerp(new Color(0.76f, 0.2f, 0.18f), 0.18f + 0.15f * GrowthStage);
-        Color towerColor = IsPlayerCastle
+        Color towerColor = IsPlayerBase
             ? new Color(0.16f, 0.48f, 0.9f)
             : new Color(0.85f, 0.28f, 0.18f);
 
@@ -162,7 +162,7 @@ public partial class CastleKeep : StaticBody3D
         _towerMaterial.AlbedoColor = towerColor.Lerp(new Color(1.0f, 0.35f, 0.25f), damageBlend * 0.35f);
     }
 
-    private void BuildCastleVisuals()
+    private void BuildBaseVisuals()
     {
         var collision = new CollisionShape3D
         {
@@ -200,7 +200,7 @@ public partial class CastleKeep : StaticBody3D
         _roof.Position = new Vector3(0.0f, 8.0f, 0.0f);
         _roof.MaterialOverride = new StandardMaterial3D
         {
-            AlbedoColor = IsPlayerCastle ? new Color(0.68f, 0.82f, 1.0f) : new Color(1.0f, 0.62f, 0.58f),
+            AlbedoColor = IsPlayerBase ? new Color(0.68f, 0.82f, 1.0f) : new Color(1.0f, 0.62f, 0.58f),
             Roughness = 0.8f
         };
         AddChild(_roof);

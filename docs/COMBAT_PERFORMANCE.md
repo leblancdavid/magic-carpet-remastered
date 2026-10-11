@@ -1,5 +1,9 @@
 # Combat Performance
 
+## Current Terminology And Commands (2026-10-11)
+
+Gameplay and verification types now use antimatter, Claim, bases and equipment. Use `AntimatterLoopChecks.tscn` / `AntimatterPhysicsChecks.tscn` in current commands. Profiler scene paths and workloads remain unchanged. `--antimatter-isolation` is the preferred option; `--mana-isolation` remains an alias. New CSV columns use `antimatter_*`, and phases use `claim-*`, `base-spill`, `dense-antimatter-*` and `antimatter-*`. Historical names/measurements below remain unchanged; see `TERMINOLOGY_MIGRATION.md` for the label mapping. This migration did not establish new frame-time improvements.
+
 ## Post-resource-lifetime mixed verification (2026-10-10 session)
 
 After deterministic terrain temporary-resource release, the existing rendered Medium/XL workload completed **4,620 samples / 14 successful possessions** with no runtime errors and **zero frames above 33.333 ms**. Same Godot 4.6.3/Forward+/RTX 4070 setup; local report `20261011-062553`:
@@ -46,8 +50,8 @@ dotnet build MagicCarpetRemastered.sln
 $godot = 'D:\Software\Godot\Godot_v4.6.3-stable_mono_win64\Godot_v4.6.3-stable_mono_win64_console.exe'
 & $godot --headless --path . 'res://tools/CombatPerformanceChecks.tscn'
 & $godot --headless --path . 'res://tools/PlanetGameplayChecks.tscn'
-& $godot --headless --path . 'res://tools/ManaPhysicsChecks.tscn'
-& $godot --headless --path . 'res://tools/ManaLoopChecks.tscn'
+& $godot --headless --path . 'res://tools/AntimatterPhysicsChecks.tscn'
+& $godot --headless --path . 'res://tools/AntimatterLoopChecks.tscn'
 & $godot --headless --path . 'res://tools/PlaytestMechanicsChecks.tscn'
 ```
 

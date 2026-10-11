@@ -3,9 +3,9 @@ using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Player;
 using MagicCarpetRemastered.Scripts.World;
 
-namespace MagicCarpetRemastered.Scripts.Spells;
+namespace MagicCarpetRemastered.Scripts.Equipment;
 
-public partial class SpellProjectile : Area3D
+public partial class WeaponProjectile : Area3D
 {
     [Export] public float Speed { get; set; } = 42.0f;
     [Export] public float LifetimeSeconds { get; set; } = 2.0f;
@@ -14,7 +14,7 @@ public partial class SpellProjectile : Area3D
     [Export] public int Damage { get; set; } = 25;
 
     private Vector3 _direction = Vector3.Forward;
-    private CarpetFlightController? _owner;
+    private ShipFlightController? _owner;
     private float _lifeRemaining;
     private HeightmapArena? _arena;
     private static readonly SphereMesh SharedMesh = new() { Radius = 0.35f, Height = 0.7f, RadialSegments = 12, Rings = 6 };
@@ -76,16 +76,16 @@ public partial class SpellProjectile : Area3D
         }
 
         float stepDistance = GlobalPosition.DistanceTo(previous);
-        foreach (Node node in GetTree().GetNodesInGroup("balloon"))
+        foreach (Node node in GetTree().GetNodesInGroup("drone"))
         {
-            if (node is not ManaBalloon balloon || balloon.UsePlayerMana)
+            if (node is not CollectorDrone drone || drone.UsePlayerAntimatter)
             {
                 continue;
             }
 
-            if (GlobalPosition.DistanceTo(balloon.GlobalPosition) <= stepDistance + 0.6f)
+            if (GlobalPosition.DistanceTo(drone.GlobalPosition) <= stepDistance + 0.6f)
             {
-                balloon.ApplyDamage(Damage);
+                drone.ApplyDamage(Damage);
                 SpawnImpactBurst();
                 QueueFree();
                 return;
@@ -98,7 +98,7 @@ public partial class SpellProjectile : Area3D
         }
     }
 
-    public void Launch(Vector3 direction, CarpetFlightController owner)
+    public void Launch(Vector3 direction, ShipFlightController owner)
     {
         _direction = direction.Normalized();
         _owner = owner;
@@ -128,9 +128,9 @@ public partial class SpellProjectile : Area3D
             ecosystemEnemy.ApplyDamage(Damage);
         }
 
-        if (body is CastleKeep { IsPlayerCastle: false } castle)
+        if (body is FactionBase { IsPlayerBase: false } hub)
         {
-            castle.ApplyDamage(Damage);
+            hub.ApplyDamage(Damage);
         }
 
         if (body.IsInGroup("deformable_terrain") && GetTree().GetFirstNodeInGroup("heightmap_arena") is HeightmapArena arena)
@@ -143,7 +143,7 @@ public partial class SpellProjectile : Area3D
 
     private void SpawnImpactBurst()
     {
-        SpellImpactPool.Prepare(GetTree().CurrentScene).Emit(GlobalPosition,
+        EquipmentImpactPool.Prepare(GetTree().CurrentScene).Emit(GlobalPosition,
             new Color(1, 0.58f, 0.12f, 0.85f), new Color(1, 0.32f, 0.05f), 0.28f, 0.4f, 2.2f);
     }
 }

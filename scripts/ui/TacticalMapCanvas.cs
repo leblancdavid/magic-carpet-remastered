@@ -82,7 +82,7 @@ public partial class TacticalMapCanvas : Control
     private void DrawRadar()
     {
         DrawRect(new Rect2(20, 130, 232, 282), PanelColor);
-        Text(new Vector2(34, 154), "ALL-SEEING EYE", Colors.White, 16);
+        Text(new Vector2(34, 154), "TACTICAL RADAR", Colors.White, 16);
         Text(new Vector2(177, 154), "M map", new Color(0.65f, 0.8f, 0.95f), 13);
         Vector2 center = new(136, 254);
         const float radius = 86;
@@ -98,7 +98,7 @@ public partial class TacticalMapCanvas : Control
             if (!marker.TryGetLiveUp(Navigation.Arena, out Vector3 up)) continue;
             Vector2 offset = MapProjection.LocalOffset(up, playerFrame, Navigation.Arena.PlanetRadius);
             bool outside = offset.Length() > WorldNavigation.RadarRange;
-            if (outside && marker.Kind is not (MapMarkerKind.Home or MapMarkerKind.RivalCastle or MapMarkerKind.Landmark or MapMarkerKind.Upgrade)) continue;
+            if (outside && marker.Kind is not (MapMarkerKind.Home or MapMarkerKind.RivalBase or MapMarkerKind.Landmark or MapMarkerKind.Upgrade)) continue;
             Vector2 point = center + offset.LimitLength(WorldNavigation.RadarRange) / WorldNavigation.RadarRange * radius;
             Glyph(point, marker, outside ? 3 : 4);
         }
@@ -116,7 +116,7 @@ public partial class TacticalMapCanvas : Control
     {
         DrawRect(new Rect2(Vector2.Zero, Size), new Color(0.015f, 0.025f, 0.045f, 0.97f));
         Rect2 rect = SurveyRect;
-        Text(new Vector2(rect.Position.X, 78), "ALL-SEEING EYE / WORLD SURVEY", Colors.White, 26);
+        Text(new Vector2(rect.Position.X, 78), "TACTICAL RADAR / WORLD SURVEY", Colors.White, 26);
         Text(new Vector2(rect.Position.X, 108), "M / Esc close  ·  Left click waypoint  ·  Right click / Delete clear  ·  R restart  ·  MATCH PAUSED", new Color(0.7f, 0.8f, 0.9f), 15);
         DrawTextureRect(Navigation.SurveyTexture, rect, false);
         for (int i = 1; i < 12; i++) DrawLine(rect.Position + new Vector2(rect.Size.X * i / 12, 0), rect.Position + new Vector2(rect.Size.X * i / 12, rect.Size.Y), LineColor.Darkened(0.5f));
@@ -134,22 +134,22 @@ public partial class TacticalMapCanvas : Control
                 Vector2 heading = MapProjection.WrappedDifference(MapProjection.Project(nextUp), MapProjection.Project(marker.Up)) * rect.Size;
                 Arrow(point, heading.LengthSquared() > 0.00001f ? heading.Normalized() : Vector2.Up, marker.Color);
             }
-            else Glyph(point, marker, marker.Kind == MapMarkerKind.Mana ? 3 : 6);
+            else Glyph(point, marker, marker.Kind == MapMarkerKind.Antimatter ? 3 : 6);
             float distance = point.DistanceSquaredTo(mouse);
             if (distance < nearest) { nearest = distance; hover = marker; }
         }
         Cross(rect.Position + MapProjection.Project(Navigation.TargetUp) * rect.Size, Gold);
         float bottom = rect.End.Y + 26;
-        Text(new Vector2(rect.Position.X, bottom), "■ Castle    ◇ Landmark / balloon    ◆ Gold upgrade    ● Mana: gray neutral · cyan yours · red rival    ▲ Threat", new Color(0.8f, 0.87f, 0.95f), 14);
+        Text(new Vector2(rect.Position.X, bottom), "■ Base    ◇ Landmark / drone    ◆ Gold upgrade    ● Antimatter: gray neutral · cyan yours · red rival    ▲ Threat", new Color(0.8f, 0.87f, 0.95f), 14);
         Text(new Vector2(rect.Position.X, bottom + 27), $"Target: {Navigation.TargetName} · {Navigation.TargetDistance:0} m · {Navigation.BearingText()}", Gold, 16);
-        Text(new Vector2(rect.Position.X, bottom + 53), hover?.Title ?? "Uncharted landmarks reveal within 65 m. Neutral mana and threats reveal within 120 m. Survey edges wrap.", Colors.White, 14);
+        Text(new Vector2(rect.Position.X, bottom + 53), hover?.Title ?? "Uncharted landmarks reveal within 65 m. Neutral antimatter and threats reveal within 120 m. Survey edges wrap.", Colors.White, 14);
     }
 
     private void Glyph(Vector2 point, MapMarker marker, float size)
     {
-        if (marker.Kind is MapMarkerKind.Home or MapMarkerKind.RivalCastle)
+        if (marker.Kind is MapMarkerKind.Home or MapMarkerKind.RivalBase)
             DrawRect(new Rect2(point - Vector2.One * size, Vector2.One * size * 2), marker.Color);
-        else if (marker.Kind is MapMarkerKind.Landmark or MapMarkerKind.Upgrade or MapMarkerKind.Balloon)
+        else if (marker.Kind is MapMarkerKind.Landmark or MapMarkerKind.Upgrade or MapMarkerKind.Drone)
         {
             _diamond[0] = point + Vector2.Up * size;
             _diamond[1] = point + Vector2.Right * size;

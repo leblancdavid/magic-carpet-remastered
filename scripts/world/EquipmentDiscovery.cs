@@ -3,10 +3,10 @@ using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
-public partial class SpellDiscovery : Node3D
+public partial class EquipmentDiscovery : Node3D
 {
-    [Export] public string SpellId { get; set; } = "firebolt";
-    [Export] public string SpellName { get; set; } = "Firebolt";
+    [Export] public string EquipmentId { get; set; } = "plasma-bolt";
+    [Export] public string EquipmentName { get; set; } = "Plasma Bolt";
     [Export] public float CollectionRadius { get; set; } = 4;
     public bool IsCollected { get; private set; }
 
@@ -15,7 +15,7 @@ public partial class SpellDiscovery : Node3D
 
     public override void _Ready()
     {
-        AddToGroup("spell_discovery");
+        AddToGroup("equipment_discovery");
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         var material = new StandardMaterial3D
         {
@@ -41,7 +41,7 @@ public partial class SpellDiscovery : Node3D
         AddChild(new Label3D
         {
             Name = "DiscoveryLabel",
-            Text = $"{SpellName.ToUpperInvariant()} II\nFly here to discover",
+            Text = $"{EquipmentName.ToUpperInvariant()} II\nFly here to discover",
             Position = Vector3.Up * 2,
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             FontSize = 32,
@@ -58,11 +58,11 @@ public partial class SpellDiscovery : Node3D
         _rune.RotateY((float)delta);
         foreach (Node node in GetTree().GetNodesInGroup("player"))
         {
-            if (node is CarpetFlightController player && TryCollect(player)) break;
+            if (node is ShipFlightController player && TryCollect(player)) break;
         }
     }
 
-    public bool TryCollect(CarpetFlightController player)
+    public bool TryCollect(ShipFlightController player)
     {
         if (IsCollected || IsQueuedForDeletion() || player.Health <= 0) return false;
         Vector3 offset = player.GlobalPosition - GlobalPosition;
@@ -75,7 +75,7 @@ public partial class SpellDiscovery : Node3D
         }
         if (new Vector2(offset.X, offset.Z).LengthSquared() > CollectionRadius * CollectionRadius
             || Mathf.Abs(offset.Y) > halfHeight) return false;
-        if (!player.DiscoverSpellUpgrade(SpellId)) return false;
+        if (!player.DiscoverEquipmentUpgrade(EquipmentId)) return false;
         IsCollected = true;
         Hide();
         QueueFree();

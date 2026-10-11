@@ -52,8 +52,8 @@ public partial class StrategicNavigationChecks : Node
             {
                 var geometry = new HeightmapArena { IsSpherical = true, PlanetRadius = radius };
                 var sites = PlanetLayout.Sites(geometry);
-                Check(sites.Length == 5 && sites.Select(site => site.SpellId).Distinct().Count() == 5,
-                    "Every approved radius has five distinct sites and spell upgrades");
+                Check(sites.Length == 5 && sites.Select(site => site.EquipmentId).Distinct().Count() == 5,
+                    "Every approved radius has five distinct sites and equipment upgrades");
                 Check(sites.All(site => Mathf.Abs(site.Up.Length() - 1) < 0.00001f), "Site directions remain unit-length");
                 Check(Mathf.Acos(sites[^1].Up.Dot(Vector3.Up)) > 2, "Far-side upgrade is genuinely distributed beyond the starting hemisphere");
                 geometry.Free();
@@ -64,7 +64,7 @@ public partial class StrategicNavigationChecks : Node
             GetTree().Root.AddChild(game);
             GetTree().CurrentScene = game;
             var arena = game.GetNode<HeightmapArena>("HeightmapArena");
-            var player = game.GetNode<CarpetFlightController>("PlayerCarpet");
+            var player = game.GetNode<ShipFlightController>("PlayerShip");
             var director = game.GetNode<EnemyEcosystemDirector>("EnemyEcosystemDirector");
             var navigation = game.GetNode<WorldNavigation>("WorldNavigation");
             var map = game.GetNode<TacticalMap>("TacticalMap");
@@ -72,19 +72,19 @@ public partial class StrategicNavigationChecks : Node
             player.SetPhysicsProcess(false);
             director.SetPhysicsProcess(false);
             var landmarks = game.GetChildren().OfType<WorldLandmark>().ToArray();
-            var discoveries = game.GetChildren().OfType<SpellDiscovery>().ToArray();
+            var discoveries = game.GetChildren().OfType<EquipmentDiscovery>().ToArray();
             Check(landmarks.Length == 5 && discoveries.Length == 5, "Live spherical scene creates all landmarks and one upgrade at each");
-            Check(game.GetChildren().OfType<ManaPickup>().Count() == 18
-                && game.GetChildren().OfType<ManaPickup>().Sum(orb => orb.ManaAmount) == 204,
-                "Three four-globe resource fields plus the six-globe well conserve their authored 204 mana");
+            Check(game.GetChildren().OfType<AntimatterPickup>().Count() == 18
+                && game.GetChildren().OfType<AntimatterPickup>().Sum(orb => orb.AntimatterAmount) == 204,
+                "Three four-globe resource fields plus the six-globe well conserve their authored 204 antimatter");
             foreach (var landmark in landmarks)
                 Check(Mathf.Abs(arena.Clearance(landmark.GlobalPosition)) < 0.001f
                     && landmark.GlobalBasis.Y.Dot(arena.UpAt(landmark.GlobalPosition)) > 0.999f,
                     "Landmark is terrain/water grounded and radially upright");
-            foreach (var balloon in game.GetChildren().OfType<ManaBalloon>())
-                Check(balloon.MaxSeekRadius >= Mathf.Pi * arena.PlanetRadius, "Claimed far-side drops remain reachable by haulers");
+            foreach (var drone in game.GetChildren().OfType<CollectorDrone>())
+                Check(drone.MaxSeekRadius >= Mathf.Pi * arena.PlanetRadius, "Claimed far-side drops remain reachable by haulers");
             Check(navigation.Markers.Count(marker => marker.Kind == MapMarkerKind.Home) == 1
-                && navigation.Markers.Count(marker => marker.Kind == MapMarkerKind.RivalCastle) == 1, "Both castles are known from the start");
+                && navigation.Markers.Count(marker => marker.Kind == MapMarkerKind.RivalBase) == 1, "Both bases are known from the start");
             Check(navigation.Markers.Count(marker => marker.Kind == MapMarkerKind.Landmark && !marker.Charted) == 5,
                 "Unknown sites are chart hints without revealed names");
             navigation.SetWaypoint(Vector3.Down, "Far side");
@@ -92,24 +92,24 @@ public partial class StrategicNavigationChecks : Node
             navigation.SetWaypoint(Vector3.Zero);
             Check(navigation.WaypointName == "Far side", "Invalid waypoint direction cannot corrupt navigation");
             navigation.ClearWaypoint();
-            Check(!navigation.WaypointUp.HasValue && navigation.TargetName == "Home castle", "Clearing a waypoint restores home guidance");
+            Check(!navigation.WaypointUp.HasValue && navigation.TargetName == "Home base", "Clearing a waypoint restores home guidance");
 
             var remoteSite = landmarks.Single(landmark => landmark.SiteId == "observatory");
-            ManaPickup AddOrb(Vector3 position, int amount, ManaOwnership ownership)
+            AntimatterPickup AddOrb(Vector3 position, int amount, AntimatterOwnership ownership)
             {
-                var orb = new ManaPickup { Position = arena.OnSurface(position, 1), ManaAmount = amount, Ownership = ownership };
+                var orb = new AntimatterPickup { Position = arena.OnSurface(position, 1), AntimatterAmount = amount, Ownership = ownership };
                 game.AddChild(orb);
                 orb.SetPhysicsProcess(false); orb.Freeze = true;
                 return orb;
             }
-            var nearby = AddOrb(player.GlobalPosition, 77, ManaOwnership.Neutral);
-            var hidden = AddOrb(remoteSite.GlobalPosition, 98, ManaOwnership.Neutral);
-            var owned = AddOrb(remoteSite.GlobalPosition + remoteSite.GlobalBasis.X * 8, 123, ManaOwnership.Player);
+            var nearby = AddOrb(player.GlobalPosition, 77, AntimatterOwnership.Neutral);
+            var hidden = AddOrb(remoteSite.GlobalPosition, 98, AntimatterOwnership.Neutral);
+            var owned = AddOrb(remoteSite.GlobalPosition + remoteSite.GlobalBasis.X * 8, 123, AntimatterOwnership.Player);
             navigation.Refresh();
-            Check(navigation.Markers.Any(marker => marker.Title == "Neutral mana · 77"), "Nearby neutral mana is revealed");
-            Check(!navigation.Markers.Any(marker => marker.Title == "Neutral mana · 98"), "Remote neutral mana is not globally revealed");
-            Check(navigation.Markers.Any(marker => marker.Title == "Player mana · 123"), "Owned loose mana remains trackable on the far side");
-            MapMarker liveMarker = navigation.Markers.Single(marker => marker.Title == "Neutral mana · 77");
+            Check(navigation.Markers.Any(marker => marker.Title == "Neutral antimatter · 77"), "Nearby neutral antimatter is revealed");
+            Check(!navigation.Markers.Any(marker => marker.Title == "Neutral antimatter · 98"), "Remote neutral antimatter is not globally revealed");
+            Check(navigation.Markers.Any(marker => marker.Title == "Player antimatter · 123"), "Owned loose antimatter remains trackable on the far side");
+            MapMarker liveMarker = navigation.Markers.Single(marker => marker.Title == "Neutral antimatter · 77");
             Vector3 snapshotUp = liveMarker.Up;
             nearby.GlobalPosition = arena.OnSurface(player.GlobalPosition + player.GlobalBasis.X * 12, 1);
             Check(liveMarker.TryGetLiveUp(arena, out Vector3 liveUp)
@@ -118,29 +118,29 @@ public partial class StrategicNavigationChecks : Node
                 "Radar follows moving actors between visibility snapshots without a group refresh");
             Check(Mathf.Abs(navigation.TargetDistance - arena.SurfaceDistance(player.GlobalPosition, navigation.WorldPosition(navigation.TargetUp))) < 0.01f,
                 "Terrain-free guidance retains accurate great-circle target distance");
-            var disposable = AddOrb(player.GlobalPosition, 7, ManaOwnership.Player);
+            var disposable = AddOrb(player.GlobalPosition, 7, AntimatterOwnership.Player);
             navigation.Refresh();
             MapMarker disposedMarker = navigation.Markers.Single(marker => marker.Actor == disposable);
             disposable.Free();
             Check(!disposedMarker.TryGetLiveUp(arena, out _), "Radar safely rejects disposed actor wrappers between snapshots");
-            var hauler = game.GetNode<ManaBalloon>("PlayerBalloon");
+            var hauler = game.GetNode<CollectorDrone>("PlayerDrone");
             hauler.SetPhysicsProcess(false);
             float distanceBefore = arena.SurfaceDistance(hauler.GlobalPosition, owned.GlobalPosition);
             hauler._PhysicsProcess(0.5);
             Check(distanceBefore > 350 && arena.SurfaceDistance(hauler.GlobalPosition, owned.GlobalPosition) < distanceBefore,
-                "Actual hauler starts a curved route to possessed far-side mana rather than stranding it");
-            nearby.ReassignOwnership(ManaOwnership.Enemy);
+                "Actual hauler starts a curved route to claimed far-side antimatter rather than stranding it");
+            nearby.ReassignOwnership(AntimatterOwnership.Enemy);
             navigation.Refresh();
-            Check(navigation.Markers.Any(marker => marker.Title == "Enemy mana · 77"), "Map ownership changes on possession/contesting");
+            Check(navigation.Markers.Any(marker => marker.Title == "Enemy antimatter · 77"), "Map ownership changes on claim/contesting");
             nearby.ScheduleDrop(nearby.GlobalPosition, 1);
             Check(!liveMarker.TryGetLiveUp(arena, out _), "Pending drops disappear from live radar before the next visibility scan");
             navigation.Refresh();
             Check(!navigation.Markers.Any(marker => marker.Title.EndsWith("· 77")), "Hidden pending fragments do not appear as available resources");
-            owned.BeginCarry(game.GetNode<ManaBalloon>("PlayerBalloon"), Vector3.Zero);
+            owned.BeginCarry(game.GetNode<CollectorDrone>("PlayerDrone"), Vector3.Zero);
             Check(!navigation.Markers.Single(marker => marker.Actor == owned).TryGetLiveUp(arena, out _),
-                "Carried mana immediately stops drawing between visibility scans");
+                "Carried antimatter immediately stops drawing between visibility scans");
             navigation.Refresh();
-            Check(!navigation.Markers.Any(marker => marker.Title == "Player mana · 123"), "Carried mana is represented by balloon cargo rather than duplicate loose markers");
+            Check(!navigation.Markers.Any(marker => marker.Title == "Player antimatter · 123"), "Carried antimatter is represented by drone cargo rather than duplicate loose markers");
 
             Vector3 start = player.GlobalPosition;
             player.GlobalPosition = arena.OnSurface(remoteSite.GlobalPosition, 8);
@@ -148,12 +148,12 @@ public partial class StrategicNavigationChecks : Node
             navigation.Refresh();
             Check(remoteSite.IsDiscovered && navigation.Markers.Any(marker => marker.Title.StartsWith("Starfall Observatory")),
                 "Visiting a landmark reveals its name and habitat");
-            Check(navigation.Markers.Any(marker => marker.Title == "Guardian II"), "Discovered landmark exposes its uncollected upgrade");
-            Check(navigation.Markers.Any(marker => marker.Title == "Neutral mana · 98"), "Remote resources reveal when approached on the other hemisphere");
+            Check(navigation.Markers.Any(marker => marker.Title == "Guardian Drone II"), "Discovered landmark exposes its uncollected upgrade");
+            Check(navigation.Markers.Any(marker => marker.Title == "Neutral antimatter · 98"), "Remote resources reveal when approached on the other hemisphere");
             object zone = typeof(EnemyEcosystemDirector).GetMethod("SelectSpawnZone", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(director, null)!;
             var habitat = (WorldLandmark?)typeof(EnemyEcosystemDirector).GetField("_habitat", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(director);
             Check(habitat == remoteSite, "Ecosystem selects the nearest visited habitat");
-            object siegeZone = Activator.CreateInstance(zone.GetType(), new object[] { "Castle Ruins", Vector3.Zero, 0.85f })!;
+            object siegeZone = Activator.CreateInstance(zone.GetType(), new object[] { "Base Ruins", Vector3.Zero, 0.85f })!;
             var roleMethod = typeof(EnemyEcosystemDirector).GetMethod("SelectRole", BindingFlags.NonPublic | BindingFlags.Instance)!;
             GD.Seed(901);
             int favored = 0;
@@ -166,7 +166,7 @@ public partial class StrategicNavigationChecks : Node
                 && Mathf.Abs(arena.Clearance(spawn) - 5.5f) < 0.001f, "Habitat spawning uses its radial local frame on the far side");
             player.GlobalPosition = start;
             navigation.Refresh();
-            Check(navigation.Markers.Any(marker => marker.Title == "Guardian II"), "Discovered upgrade remains charted after leaving the site");
+            Check(navigation.Markers.Any(marker => marker.Title == "Guardian Drone II"), "Discovered upgrade remains charted after leaving the site");
 
             var previousMouse = Input.MouseMode;
             Check(map.SetExpanded(true) && GetTree().Paused && Input.MouseMode == Input.MouseModeEnum.Visible,
@@ -217,14 +217,14 @@ public partial class StrategicNavigationChecks : Node
             Check(!map.IsExpanded && !GetTree().Paused, "Actual Escape input closes only the map and resumes the match");
             GetViewport().PushInput(new InputEventKey { Keycode = Key.Escape, Pressed = false });
             foreach (var orb in new[] { nearby, hidden, owned }) orb.QueueFree();
-            Check(discoveries.Single(discovery => discovery.SpellId == "guardian").TryCollect(TeleportForCollection()),
+            Check(discoveries.Single(discovery => discovery.EquipmentId == "guardian-drone").TryCollect(TeleportForCollection()),
                 "Far-side upgrade remains physically collectible");
-            CarpetFlightController TeleportForCollection()
+            ShipFlightController TeleportForCollection()
             {
-                player.GlobalPosition = discoveries.Single(discovery => discovery.SpellId == "guardian").GlobalPosition;
+                player.GlobalPosition = discoveries.Single(discovery => discovery.EquipmentId == "guardian-drone").GlobalPosition;
                 return player;
             }
-            Check(player.GetSpellRank("guardian") == 2, "Far-side collection grants the existing rank-II effect");
+            Check(player.GetEquipmentRank("guardian-drone") == 2, "Far-side collection grants the existing rank-II effect");
             navigation.SetWaypoint(Vector3.Down);
             map.SetExpanded(true);
             // Scene restart from an open map must not leave the next match paused.
@@ -234,7 +234,7 @@ public partial class StrategicNavigationChecks : Node
             var newNavigation = restarted.GetNode<WorldNavigation>("WorldNavigation");
             Check(!GetTree().Paused && !newNavigation.WaypointUp.HasValue
                 && restarted.GetChildren().OfType<WorldLandmark>().All(landmark => !landmark.IsDiscovered), "Restart clears waypoint/chart knowledge and restores gameplay");
-            Check(restarted.GetNode<CarpetFlightController>("PlayerCarpet").GetSpellRank("guardian") == 1,
+            Check(restarted.GetNode<ShipFlightController>("PlayerShip").GetEquipmentRank("guardian-drone") == 1,
                 "Restart resets upgrades alongside the strategic layout");
             GD.Print($"Strategic navigation checks passed: {_checks} assertions.");
             GetTree().Quit();

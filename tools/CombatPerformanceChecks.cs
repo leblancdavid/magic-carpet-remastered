@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using Godot;
 using MagicCarpetRemastered.Scripts.World;
-using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.Equipment;
 
 namespace MagicCarpetRemastered.Tools;
 
@@ -124,7 +124,7 @@ public partial class CombatPerformanceChecks : Node3D
     {
         try
         {
-            var pool = SpellImpactPool.Prepare(this);
+            var pool = EquipmentImpactPool.Prepare(this);
             var orange = new Color(1, 0.4f, 0.1f);
             var cyan = new Color(0.1f, 0.8f, 1);
             var firstBurst = pool.Emit(Vector3.Zero, orange, orange, 0.28f, 0.4f, 2.2f);
@@ -140,50 +140,50 @@ public partial class CombatPerformanceChecks : Node3D
             reused._Process(0.1);
             Check(reused.Visible && !reused.IsQueuedForDeletion(), "Reuse resets age and duration");
             reused._Process(1); simultaneous._Process(1);
-            var orbs = new List<ManaPickup>();
+            var orbs = new List<AntimatterPickup>();
             for (int i = 0; i < 512; i++)
             {
-                var orb = new ManaPickup { Position = new Vector3((i % 32) * 10 - 160, 2, (i / 32) * 10 - 80), ManaAmount = i % 20 + 1 };
+                var orb = new AntimatterPickup { Position = new Vector3((i % 32) * 10 - 160, 2, (i / 32) * 10 - 80), AntimatterAmount = i % 20 + 1 };
                 AddChild(orb);
                 orb.SetPhysicsProcess(false);
                 orb.Freeze = true;
                 orbs.Add(orb);
             }
-            var candidates = new List<ManaPickup>();
+            var candidates = new List<AntimatterPickup>();
             foreach (var center in new[] { Vector3.Zero, new Vector3(-160, 2, -80), new Vector3(150, 2, 70), new Vector3(-8, 2, -8) })
             {
-                ManaNeighborhood.Query(GetTree(), center, 6, candidates);
+                AntimatterNeighborhood.Query(GetTree(), center, 6, candidates);
                 foreach (var orb in orbs)
                     if (orb.GlobalPosition.DistanceTo(center) <= 6 + orb.Radius)
                         Check(candidates.Contains(orb), "Broad phase must contain every exact sphere hit, including negative cell boundaries");
             }
-            Check(candidates.Count < orbs.Count / 4, "Local query rejects most distant mana spheres");
+            Check(candidates.Count < orbs.Count / 4, "Local query rejects most distant antimatter spheres");
             Check(orbs[0].GetChild<MeshInstance3D>(1).Mesh == orbs[511].GetChild<MeshInstance3D>(1).Mesh,
-                "Mana globes share one immutable visual mesh");
-            var large = new ManaPickup { Position = new Vector3(70, 2, 0), ManaAmount = 100000 };
+                "Antimatter globes share one immutable visual mesh");
+            var large = new AntimatterPickup { Position = new Vector3(70, 2, 0), AntimatterAmount = 100000 };
             AddChild(large); large.Freeze = true; large.SetPhysicsProcess(false);
-            ManaNeighborhood.Query(GetTree(), Vector3.Zero, 6, candidates);
+            AntimatterNeighborhood.Query(GetTree(), Vector3.Zero, 6, candidates);
             Check(candidates.Contains(large), "Huge neighbor radius is included in the broad phase");
             large.QueueFree();
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
-            ManaNeighborhood.Query(GetTree(), Vector3.Zero, 6, candidates);
+            AntimatterNeighborhood.Query(GetTree(), Vector3.Zero, 6, candidates);
             Check(candidates.TrueForAll(GodotObject.IsInstanceValid), "Freed wrappers are removed before queries return candidates");
 
             // CPU broad-phase microbenchmark only; no frame-rate or GPU claim.
             var timer = Stopwatch.StartNew();
             long indexedBytes = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < 1000; i++) ManaNeighborhood.Query(GetTree(), Vector3.Zero, 6, candidates);
+            for (int i = 0; i < 1000; i++) AntimatterNeighborhood.Query(GetTree(), Vector3.Zero, 6, candidates);
             indexedBytes = GC.GetAllocatedBytesForCurrentThread() - indexedBytes;
             double indexedMs = timer.Elapsed.TotalMilliseconds;
             timer.Restart();
             long scanBytes = GC.GetAllocatedBytesForCurrentThread();
             int hits = 0;
             for (int i = 0; i < 1000; i++)
-                foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
-                    if (node is ManaPickup orb && orb.GlobalPosition.DistanceTo(Vector3.Zero) <= 6 + orb.Radius) hits++;
+                foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
+                    if (node is AntimatterPickup orb && orb.GlobalPosition.DistanceTo(Vector3.Zero) <= 6 + orb.Radius) hits++;
             scanBytes = GC.GetAllocatedBytesForCurrentThread() - scanBytes;
-            GD.Print($"Mana lookup CPU sample (512 globes / 1000 queries): indexed {indexedMs:0.00} ms, {indexedBytes} managed bytes; full group scan {timer.Elapsed.TotalMilliseconds:0.00} ms, {scanBytes} managed bytes; hits {hits}.");
+            GD.Print($"Antimatter lookup CPU sample (512 globes / 1000 queries): indexed {indexedMs:0.00} ms, {indexedBytes} managed bytes; full group scan {timer.Elapsed.TotalMilliseconds:0.00} ms, {scanBytes} managed bytes; hits {hits}.");
             foreach (var orb in orbs) orb.QueueFree();
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);

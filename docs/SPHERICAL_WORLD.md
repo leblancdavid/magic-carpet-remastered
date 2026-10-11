@@ -1,5 +1,9 @@
 # Spherical Worlds
 
+## Terminology Update (2026-10-11)
+
+The behavior-preserving migration is complete. Current gameplay uses ships/pilots, bases, physical antimatter, rechargeable energy, collector drones, equipment and Claim. Tactical Radar replaces All-Seeing Eye. Scene paths, geometry, flight, cameras, tuning and controls remain the same. Technical history below retains its original vocabulary; current type/path/ID mappings and verification commands are in `TERMINOLOGY_MIGRATION.md` and `README.md`. Explicit tiers and the new construction economy follow next.
+
 ## Direction
 
 User direction (2026-10-10): 800 radius felt good during flight playtesting. Adopt **Small 500 / Medium 800 / Large 1,000 / XL 1,200**, with Medium as the default, and bring all existing prototype gameplay into the spherical world. More participants on larger planets is a future direction; networked human multiplayer remains undecided.

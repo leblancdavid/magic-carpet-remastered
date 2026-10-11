@@ -2,6 +2,19 @@
 
 ## 2026-10-11
 
+### Science-Fiction Terminology Migration — Completed
+
+- Migrated active gameplay types/files/namespaces, dynamic node/group names, equipment IDs, input actions, HUD/map/settings/feedback text and verification tools to ships/pilots, faction bases, antimatter, collector drones, equipment and Claim. Existing abilities display Plasma Bolt, Pulse Burst, Energy Shield, Dash and Guardian Drone; navigation displays Tactical Radar. C# script filenames match classes; original script UID bytes moved with them. Retained the unreferenced `ManaCollectorSpirit.cs.uid` orphan.
+- Distinguished rechargeable player `Energy` / `EnergyCapacity` / `SpendEnergy` and equipment `EnergyCost` from physical antimatter quantities/storage/reserves. Preserved all numeric C# tuning during the refactor, inherited starting allowance/power/regeneration, HP-scaled capacity, storage-driven visual stages, equipment ranks, five-item cycling, repair/respawn/objectives, pause ownership and restart. Explicit tiers, construction, four-slot ownership and Shift booster remain planned. Placeholder geometry is retained.
+- Preserved project title/assembly/root namespace and original-game references. Documented complete path/ID/action mappings and profiler schema changes. Added `--antimatter-isolation` while retaining `--mana-isolation` as an alias; new report fields/phases use antimatter/claim/base names without rewriting historical reports. Updated current README commands, roadmap, agent guidance and historical-document migration notices. Corrected stale README descriptions of sphere sizes and staggered gravity-only drops against existing implemented defaults.
+
+### Migration Verification And Next Work
+
+- `dotnet build MagicCarpetRemastered.sln`: zero warnings/errors; Godot headless editor import passed. Headless suites passed **1,732 assertions**: antimatter loop **173**, antimatter physics **105**, equipment progression **43**, objectives **35**, rival flight **6**, playtest mechanics **397**, strategic navigation **70**, planet flight **467**, spherical gameplay **238**, combat performance **183**, camera/friendly-fire **15**.
+- Rendered spherical gameplay passed **240**, rendered navigation/captures **72**; inspected gameplay, size-menu, world-survey and radar images for new labels, readable layout and retained terrain presentation. Default rendered startup and flat-reference headless smoke each completed **600 frames** without gameplay errors. Existing exit-time ObjectDB warnings remain in some check/smoke runs. Two initially stale test display expectations (Plasma Bolt rank name and Home base guidance) were corrected; their reruns passed.
+- Active scripts/scenes contain no missed legacy gameplay terms or stale moved-script references. Deliberate exceptions are the working project namespace/title, historical docs, old profiler CLI alias, negative checks for hidden terrain input, and the retained orphan UID. `git diff --check` passed. No new performance benchmark or hands-on balance signoff is claimed by this name-only pass.
+- **Next:** explicit base tiers 1–5 and stored-antimatter/player-energy accounting, then five-slot construction/cancellation/refunds, tier loss and sequential rebuilding, real-time management UI and owned equipment. Remaining policy decisions stay in the approved design docs.
+
 ### Accepted Baseline And New Gameplay Direction
 
 - User accepted the basic spherical gameplay mechanics and smoothness as a good playtest baseline. Gameplay, balance, AI, upgrades and base development remain iterative work; acceptance does not assert universal hitch elimination or final per-size balance.

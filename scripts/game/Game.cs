@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Player;
-using MagicCarpetRemastered.Scripts.Spells;
+using MagicCarpetRemastered.Scripts.Equipment;
 using MagicCarpetRemastered.Scripts.Ui;
 using MagicCarpetRemastered.Scripts.World;
 
@@ -13,9 +13,9 @@ public partial class Game : Node3D
 {
     [Export] public bool UseSphericalWorld { get; set; }
     private HeightmapArena _arena = null!;
-    private CastleKeep _playerCastle = null!;
-    private CastleKeep _enemyCastle = null!;
-    private CarpetFlightController _player = null!;
+    private FactionBase _playerBase = null!;
+    private FactionBase _enemyBase = null!;
+    private ShipFlightController _player = null!;
     private readonly List<WorldLandmark> _landmarks = new();
 
     public override void _UnhandledInput(InputEvent @event)
@@ -36,19 +36,19 @@ public partial class Game : Node3D
     public override void _Ready()
     {
         CreateLighting();
-        SpellImpactPool.Prepare(this);
+        EquipmentImpactPool.Prepare(this);
         AddChild(new GameAudio { Name = "GameAudio" });
         CreateArena();
         if (UseSphericalWorld) CreateLandmarks();
-        CreateManaWell();
-        CreateCastles();
+        CreateAntimatterSource();
+        CreateBases();
         CreatePlayer();
-        CreateBalloons();
-        CreateManaPickups();
-        CreateSpellDiscoveries();
+        CreateDrones();
+        CreateAntimatterPickups();
+        CreateEquipmentDiscoveries();
         CreateEnemyEcosystem();
         CreateLevelObjective();
-        AddChild(new WorldManaTracker { Name = "WorldManaTracker" });
+        AddChild(new WorldAntimatterTracker { Name = "WorldAntimatterTracker" });
         AddChild(new Hud { Name = "Hud" });
         if (UseSphericalWorld) AddChild(new PlanetSettings { Name = "PlanetSettings" });
         if (UseSphericalWorld)
@@ -104,64 +104,64 @@ public partial class Game : Node3D
 
     private void CreatePlayer()
     {
-        _player = new CarpetFlightController
+        _player = new ShipFlightController
         {
-            Name = "PlayerCarpet",
+            Name = "PlayerShip",
             Position = AboveTerrain(UseSphericalWorld ? -130 : 0, 14, 9)
         };
         AddChild(_player);
     }
 
-    private void CreateManaWell()
+    private void CreateAntimatterSource()
     {
-        var well = new ManaWell
+        var well = new AntimatterSource
         {
-            Name = "ManaWell",
+            Name = "AntimatterSource",
             Position = AboveTerrain(3.0f, 3.0f, 1.5f)
         };
         AddChild(well);
     }
 
-    private void CreateCastles()
+    private void CreateBases()
     {
-        _playerCastle = new CastleKeep
+        _playerBase = new FactionBase
         {
-            Name = "PlayerCastle",
-            IsPlayerCastle = true,
+            Name = "PlayerBase",
+            IsPlayerBase = true,
             Position = AboveTerrain(UseSphericalWorld ? -145 : -22, 8, 2)
         };
-        AddChild(_playerCastle);
+        AddChild(_playerBase);
 
-        _enemyCastle = new CastleKeep
+        _enemyBase = new FactionBase
         {
-            Name = "EnemyCastle",
-            IsPlayerCastle = false,
+            Name = "EnemyBase",
+            IsPlayerBase = false,
             Position = AboveTerrain(UseSphericalWorld ? 145 : 22, -12, 2),
-            InitialStoredMana = 48
+            InitialStoredAntimatter = 48
         };
-        AddChild(_enemyCastle);
+        AddChild(_enemyBase);
     }
 
-    private void CreateBalloons()
+    private void CreateDrones()
     {
-        AddChild(new ManaBalloon
+        AddChild(new CollectorDrone
         {
-            Name = "PlayerBalloon",
-            UsePlayerMana = true,
+            Name = "PlayerDrone",
+            UsePlayerAntimatter = true,
             Position = AboveTerrain(UseSphericalWorld ? -130 : -16, 4, 5),
             MaxSeekRadius = UseSphericalWorld ? Mathf.Pi * _arena.PlanetRadius : 46
         });
 
-        AddChild(new ManaBalloon
+        AddChild(new CollectorDrone
         {
-            Name = "EnemyBalloon",
-            UsePlayerMana = false,
+            Name = "EnemyDrone",
+            UsePlayerAntimatter = false,
             Position = AboveTerrain(UseSphericalWorld ? 130 : 16, -8, 5),
             MaxSeekRadius = UseSphericalWorld ? Mathf.Pi * _arena.PlanetRadius : 46
         });
     }
 
-    private void CreateManaPickups()
+    private void CreateAntimatterPickups()
     {
         if (UseSphericalWorld)
         {
@@ -172,7 +172,7 @@ public partial class Game : Node3D
                 {
                     float angle = Mathf.Tau * i / 4;
                     Vector3 position = landmark.GlobalPosition + landmark.GlobalBasis * new Vector3(Mathf.Cos(angle) * 12, 0, Mathf.Sin(angle) * 12);
-                    var orb = new ManaPickup { Name = "SiteMana", ManaAmount = 12, Ownership = ManaOwnership.Neutral };
+                    var orb = new AntimatterPickup { Name = "SiteAntimatter", AntimatterAmount = 12, Ownership = AntimatterOwnership.Neutral };
                     orb.Position = _arena.OnSurface(position, orb.Radius);
                     AddChild(orb);
                 }
@@ -197,31 +197,31 @@ public partial class Game : Node3D
                 Vector3 up = _arena.UpAt(wellClusters[cluster]);
                 Basis frame = PlanetGeometry.Frame(up, Vector3.Forward);
                 Vector3 offset = frame * new Vector3(Mathf.Cos(angle) * radius, GD.Randf() * 2.0f, Mathf.Sin(angle) * radius);
-                AddChild(new ManaPickup
+                AddChild(new AntimatterPickup
                 {
-                    Name = "LooseMana",
-                    ManaAmount = 8,
-                    Ownership = ManaOwnership.Neutral,
+                    Name = "LooseAntimatter",
+                    AntimatterAmount = 8,
+                    Ownership = AntimatterOwnership.Neutral,
                     Position = wellClusters[cluster] + offset
                 });
             }
         }
 
-        AddChild(new ManaPickup
+        AddChild(new AntimatterPickup
         {
             Name = "NeutralBeacon",
-            ManaAmount = 30,
-            Ownership = ManaOwnership.Neutral,
+            AntimatterAmount = 30,
+            Ownership = AntimatterOwnership.Neutral,
             Position = AboveTerrain(2.0f, 10.0f, 7.0f)
         });
     }
 
     private void CreateEnemyEcosystem()
     {
-        AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector", SpawnEnemyWizards = false });
+        AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector", SpawnRivalShips = false });
     }
 
-    private void CreateSpellDiscoveries()
+    private void CreateEquipmentDiscoveries()
     {
         if (UseSphericalWorld)
         {
@@ -229,10 +229,10 @@ public partial class Game : Node3D
             for (int i = 0; i < sites.Length; i++)
             {
                 WorldLandmark landmark = _landmarks[i];
-                AddChild(new SpellDiscovery
+                AddChild(new EquipmentDiscovery
                 {
-                    Name = $"SpellDiscovery{sites[i].SpellName.Replace(" ", "")}",
-                    SpellId = sites[i].SpellId, SpellName = sites[i].SpellName,
+                    Name = $"EquipmentDiscovery{sites[i].EquipmentName.Replace(" ", "")}",
+                    EquipmentId = sites[i].EquipmentId, EquipmentName = sites[i].EquipmentName,
                     Position = _arena.OnSurface(landmark.GlobalPosition + landmark.GlobalBasis * Vector3.Right * 15, 6)
                 });
             }
@@ -240,19 +240,19 @@ public partial class Game : Node3D
         }
         (string Id, string Title, float X, float Z)[] discoveries =
         {
-            ("firebolt", "Firebolt", -42, -20),
-            ("arcane-burst", "Arcane Burst", 0, -45),
-            ("mana-shield", "Mana Shield", -40, 32),
-            ("wind-dash", "Wind Dash", 34, 34),
-            ("guardian", "Guardian", 45, -30)
+            ("plasma-bolt", "Plasma Bolt", -42, -20),
+            ("pulse-burst", "Pulse Burst", 0, -45),
+            ("energy-shield", "Energy Shield", -40, 32),
+            ("dash", "Dash", 34, 34),
+            ("guardian-drone", "Guardian Drone", 45, -30)
         };
         foreach (var discovery in discoveries)
         {
-            AddChild(new SpellDiscovery
+            AddChild(new EquipmentDiscovery
             {
-                Name = $"SpellDiscovery{discovery.Title.Replace(" ", "")}",
-                SpellId = discovery.Id,
-                SpellName = discovery.Title,
+                Name = $"EquipmentDiscovery{discovery.Title.Replace(" ", "")}",
+                EquipmentId = discovery.Id,
+                EquipmentName = discovery.Title,
                 Position = AboveTerrain(discovery.X * (UseSphericalWorld ? 3 : 1), discovery.Z * (UseSphericalWorld ? 3 : 1), 6)
             });
         }
@@ -262,13 +262,13 @@ public partial class Game : Node3D
     {
         var rival = new EnemyEcosystemEnemy
         {
-            Name = "RivalWizard",
-            Role = EnemyEcosystemEnemy.EnemyRole.EnemyWizard,
+            Name = "RivalPilot",
+            Role = EnemyEcosystemEnemy.EnemyRole.RivalShip,
             Position = AboveTerrain(UseSphericalWorld ? 130 : 17, -17, 7)
         };
         AddChild(rival);
         var objective = new LevelObjective { Name = "LevelObjective" };
-        objective.Initialize(_player, _playerCastle, _enemyCastle, rival);
+        objective.Initialize(_player, _playerBase, _enemyBase, rival);
         objective.Finished += () =>
         {
             Input.MouseMode = Input.MouseModeEnum.Visible;
