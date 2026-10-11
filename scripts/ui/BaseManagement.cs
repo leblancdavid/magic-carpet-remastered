@@ -106,7 +106,7 @@ public partial class BaseManagement : CanvasLayer
             foreach (var definition in _base.Construction.Catalog)
             {
                 if (definition.Slot != slot) continue;
-                projects.AddChild(Text($"{definition.Name}\n{definition.Description}\n{definition.Cost} antimatter · {definition.DurationSeconds:0}s · tier {definition.RequiredTier}"));
+                projects.AddChild(Text($"{definition.Name}\n{definition.Description}\n{definition.Cost} antimatter + {definition.MatterCost} matter · {definition.DurationSeconds:0}s · tier {definition.RequiredTier}"));
                 var row = new HBoxContainer(); projects.AddChild(row);
                 var button = new Button { Name = $"Order_{definition.Id}", Text = "Start research", FocusMode = Control.FocusModeEnum.None };
                 row.AddChild(button);
@@ -115,9 +115,9 @@ public partial class BaseManagement : CanvasLayer
                 button.Pressed += () => OrderProject(definition.Id);
             }
             if (slot == ConstructionSlot.Ship)
-                projects.AddChild(Text("RMB Claim is built in and uses no equipment slot. Shift booster is planned next."));
+                projects.AddChild(Text($"RMB Claim and Shift booster are built in and use no equipment slots.\nBoost: {_player.BoosterEnergyCost} energy · {_player.BoosterSpeed:0.#} speed · {_player.BoosterDurationSeconds:0.##}s · {_player.BoosterCooldownSeconds:0.#}s cooldown. Dash adds stronger aimed speed and lift."));
         }
-        column.AddChild(Text("Remote orders · five independent slots · payments lower your energy limit immediately.\nCancellation refunds the payment; overflow stays owned. Losing a tier destroys every active project."));
+        column.AddChild(Text("Remote orders · five independent slots · antimatter payments lower your energy limit; matter is separate.\nCancellation refunds both payments; overflow stays owned. Losing a tier destroys every active project."));
         Refresh();
     }
 
@@ -166,6 +166,7 @@ public partial class BaseManagement : CanvasLayer
         if (open && (GetTree().Paused || _base.IsDestroyed)) return false;
         if (open)
         {
+            (GetTree().GetFirstNodeInGroup("boon_choices") as BoonChoices)?.SetOpen(false);
             (GetTree().GetFirstNodeInGroup("tactical_map_ui") as TacticalMap)?.SetExpanded(false);
             _previousMouse = Input.MouseMode;
             _player.GameplayInputBlocked = true;
@@ -226,7 +227,8 @@ public partial class BaseManagement : CanvasLayer
         }
         _summary.Text = $"Surviving tier {_base.Tier} / purchased {_base.HighestPurchasedTier} · HP {_base.Health}/{_base.MaxHealth} · "
             + $"{(_base.IsRepairing ? "Repairing" : "Repair waiting / intact")}\nAntimatter {_base.StoredAntimatter}/{_base.EffectiveStorageCapacity} "
-            + $"(intact {_base.AntimatterStorageCapacity}) · Energy {_player.Energy}/{_player.EnergyCapacity} · Recharge {_player.EnergyRechargePerSecond:0.0}/s";
+            + $"· Matter {_base.StoredMatter}/{_base.EffectiveMatterCapacity} · Energy {_player.Energy}/{_player.EnergyCapacity} · Recharge {_player.EnergyRechargePerSecond:0.0}/s\n"
+            + StrategicPoint.Summary(_base);
         _alert.Text = _base.IsDestroyed ? "HOME BASE DESTROYED"
             : _base.Tier < _base.HighestPurchasedTier ? $"SIEGE: lost tiers require rebuilding. {_base.Construction.LastStatus}"
             : _base.Health < _base.MaxHealth ? $"UNDER ATTACK / DAMAGED: {_base.Construction.LastStatus}" : _actionFeedback.Length > 0 ? _actionFeedback : _base.Construction.LastStatus;
@@ -235,14 +237,14 @@ public partial class BaseManagement : CanvasLayer
         {
             var project = _base.Construction.GetActive((ConstructionSlot)i);
             _slotLabels[i].Text = project == null ? $"{(ConstructionSlot)i}\nIdle"
-                : $"{(ConstructionSlot)i}\n{project.Definition.Name}\n{project.Progress:P0} · paid {project.PaidAntimatter}";
+                : $"{(ConstructionSlot)i}\n{project.Definition.Name}\n{project.Progress:P0} · paid {project.PaidAntimatter} A + {project.PaidMatter} M";
             _progress[i].Value = project?.Progress ?? 0;
             _cancel[i].Disabled = project == null;
             _cancelInstanceIds[i] = project?.InstanceId ?? 0;
         }
         var next = _base.Construction.NextTierDefinition();
-        _tierDescription.Text = next == null ? "No next tier available" : $"{next.Name} · {next.Cost} antimatter · {next.DurationSeconds:0}s\n"
-            + $"Capacity {_base.AntimatterStorageCapacity} → {_base.StorageCapacityForTier(_base.Tier + 1)}. Adds one HP layer; spent antimatter stays spent.";
+        _tierDescription.Text = next == null ? "No next tier available" : $"{next.Name} · {next.Cost} antimatter + {next.MatterCost} matter · {next.DurationSeconds:0}s\n"
+            + $"Antimatter capacity {_base.AntimatterStorageCapacity} → {_base.StorageCapacityForTier(_base.Tier + 1)}; matter {_base.MatterStorageCapacity} → {_base.MatterCapacityForTier(_base.Tier + 1)}. Adds one HP layer; spent resources stay spent.";
         string tierReason = _base.Construction.GetNextTierStartReason();
         _tierOrder.Text = tierReason.Length == 0 ? "Start tier project" : tierReason;
         _tierOrder.Disabled = tierReason.Length > 0;
@@ -260,6 +262,7 @@ public partial class BaseManagement : CanvasLayer
     {
         if (IsOpen && (GetTree().Paused || _base.IsDestroyed)) SetOpen(false);
         _hint.Visible = !IsOpen && !GetTree().Paused
+            && (GetTree().GetFirstNodeInGroup("boon_choices") as BoonChoices)?.IsOpen != true
             && (GetTree().GetFirstNodeInGroup("tactical_map_ui") as TacticalMap)?.IsExpanded != true;
         _refresh -= (float)delta;
         if (_refresh > 0) return;
@@ -272,7 +275,7 @@ public partial class BaseManagement : CanvasLayer
         if (key.Keycode == Key.B || (IsOpen && key.Keycode == Key.Escape))
         { SetOpen(!IsOpen); GetViewport().SetInputAsHandled(); return; }
         if (!IsOpen) return;
-        if (key.Keycode is Key.F2 or Key.F6 or Key.M) { SetOpen(false); return; }
+        if (key.Keycode is Key.F2 or Key.F6 or Key.M or Key.H) { SetOpen(false); return; }
         if (key.Keycode == Key.R)
         {
             SetOpen(false);

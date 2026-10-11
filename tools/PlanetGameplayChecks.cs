@@ -359,7 +359,8 @@ public partial class PlanetGameplayChecks : Node3D
             Check(game.UseSphericalWorld, "Default playable scene must enable spherical terrain");
             var arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
             Check(arena != null && arena.IsSpherical && arena.PlanetRadius == 800, "Medium world is the default");
-            Check(GetTree().GetNodesInGroup("equipment_discovery").Count == 5, "All five discovery beacons present");
+            Check(GetTree().GetNodesInGroup("equipment_discovery").Count == 0
+                && GetTree().GetNodesInGroup("exploration_wreck").Count == 12, "Random wrecks replace legacy discovery beacons");
             Check(GetTree().GetNodesInGroup("drone").Count == 2, "Both hub drones present");
             Check(GetTree().GetNodesInGroup("ecosystem_enemy").Count == 5, "Initial creatures and one designated rival present");
             Check(GetTree().GetNodesInGroup("level_objective").Count == 1 && GetTree().GetNodesInGroup("world_antimatter_tracker").Count == 1, "Objective and accounting present");
@@ -387,7 +388,7 @@ public partial class PlanetGameplayChecks : Node3D
                 arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
                 Check(arena?.PlanetRadius == PlanetSizes.Radii[preset], "Full gameplay scene respects selected size");
                 Check(GetTree().GetNodesInGroup("player_base").Count == 1 && GetTree().GetNodesInGroup("enemy_base").Count == 1
-                    && GetTree().GetNodesInGroup("drone").Count == 2 && GetTree().GetNodesInGroup("equipment_discovery").Count == 5,
+                    && GetTree().GetNodesInGroup("drone").Count == 2 && GetTree().GetNodesInGroup("exploration_wreck").Count == 12,
                     "Every planet preset includes bases, drones, and upgrades");
                 await Frames(2);
             }

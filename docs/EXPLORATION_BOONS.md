@@ -2,7 +2,30 @@
 
 ## Status And Purpose
 
-Approved design, 2026-10-11; implementation pending. Exploration rewards are permanent, stacking boons that influence play style. They do not grant weapons, equipment or equipment ranks; those come from base research. This supersedes the current exploration rank-II beacon reward model, which remains implemented until the boon milestone replaces it.
+Implemented first pass, 2026-10-11. Exploration rewards are permanent, stacking match boons, separate from base-researched equipment/ranks. Random destructible wrecks replace the legacy world signals in both gameplay scenes. Hands-on pacing, fairness and balance remain provisional.
+
+## Implemented Rules And Provisional Tuning
+
+- Spherical worlds start with **12 wrecks**, bounded to **20 active intact/revealed actors**. Arrivals attempt every **60 seconds**; failed/full attempts retry after **5 seconds**. Collected pending choices are secured inventory, not world actors, and do not expire. Intact/uncollected actors persist until collected/new match.
+- Uniform sphere candidates (uniform latitude sine and longitude) exclude **180 surface units from every base**, including ruins, and **100 units from every active wreck/reward**. Up to **64 candidates** per spawn; choose a candidate in the least-served nearest-base region. Cumulative initial/arrival counts balance these regions where valid candidates exist. This reduces regional bias but does not guarantee equal travel costs. Sharp ledges (>4 height units over 2 surface units) reject; water supports floating wrecks/rewards. Flat-reference defaults: five initial/eight active, 30 base exclusion, 18 spacing.
+- Wrecks have **50 HP**. Plasma Bolt, Pulse Burst and enemy projectiles can destroy them. Destruction reveals one gold salvage; the attacker receives no reward. Fly within **4 surface units / 6 elevation units** to collect. Serialized first valid collection wins; dead pilots cannot collect. The current autonomous rival can collect revealed salvage and always chooses the skip outcome; deeper rival exploration/boon AI is future work.
+- Orbital arrivals descend radially for **3 seconds** from 60 units above the landing height, with no collision/damage while descending; they become solid/damageable at landing. Placeholder procedural hulls and gold salvage are original geometry.
+- Offers store **three distinct equal-weight catalog options**, generated once at collection. **H** opens pending rewards/summary; auto-opens on a new reward if another interface is not active. Escape/H defers. Multiple rewards remain independent and can be cycled; no reroll. H/B/M transfer interface ownership. Setup/results still pause, choices never do; death closes the panel and retains offers. Complete base loss ends the match, leaving unresolved offers unusable until reset.
+- Skip awards **30 antimatter** directly through base deposit, with owned overflow outside the base. It increases capacity through stored antimatter without healing/refilling current energy. Choose/skip consume the offer exactly once. Capped choices remain displayed but disabled; another choice or skip remains available.
+- Each family stacks additively up to **10**. Percentage factor is `1 + 0.1 × stacks`; independent families multiply. Integer damage rounds once after all factors. Rank effects are calculated first; no equipment/rank/base tier mutations.
+
+| Boon | Implemented effect per stack |
+| --- | --- |
+| Vector drive | +10% normal surface flight, built-in booster and ranked Dash speed; no vertical/control/ceiling change |
+| Flux recovery | +10% energy recharge, multiplied by active Energy grid; no stored resource income |
+| Rapid cycling | +10% Plasma Bolt fire rate (`base cooldown / factor`); other abilities unchanged |
+| Accelerated plasma | +10% Plasma Bolt speed, starting at 42; existing lifetime remains 2 seconds |
+| Energy focus | +10% Plasma Bolt / summoned Guardian energy damage |
+| Blast focus | +10% Pulse Burst explosive damage |
+| Drone coordination | +10% summoned Guardian output as a deployable source tag, multiplying Energy focus; base strike research unchanged |
+| Reinforced hull | +20 maximum ship HP; acquisition never heals current HP; respawn restores the enlarged maximum |
+
+Damage attribution is scoped to this catalog: Plasma Bolt/Guardian are energy, Pulse Burst is explosive; deployable is an overlapping source tag. No kinetic weapon is currently offered. Base maximum-HP boons remain deferred so acquisition cannot silently restore lost layers; base HP/layer formulas are unchanged. H shows stack counts and live effective stats. Radar/survey reveals wrecks within 120 surface units and retains charted positions; intact wrecks and gold revealed salvage have distinct markers. Random wrecks are not globally exposed via landmark hints.
 
 See `SHIP_EQUIPMENT.md` for researched progression, `BASE_DEVELOPMENT.md` for resource accounting and `STRATEGIC_POINTS.md` for ownership-dependent economic sites.
 
@@ -22,7 +45,7 @@ See `SHIP_EQUIPMENT.md` for researched progression, `BASE_DEVELOPMENT.md` for re
 - Use bounded placement attempts and active-wreck/reward counts; if no valid location exists, defer the arrival instead of accepting an unfair fallback.
 - On all four planet sizes, distance checks must work across seams, poles and the far hemisphere.
 
-Wreck visuals, entry effects, hitpoints, fall behavior and collision/impact damage are not yet specified. Do not assume orbital arrivals are damaging bombardments.
+The first-pass visuals, durability and harmless arrival policy are specified above; richer entry effects remain presentation work.
 
 ## Reward Choice
 
@@ -34,14 +57,14 @@ Each collected reward presents three boon options plus a skip option:
 
 Selection runs in real time. The player may defer choosing after collection; the reward and its choice remain secured to that player. Use UI input ownership so selecting or dismissing a panel does not also fire equipment or Claim. No pause or slow-motion advantage is granted by the choice panel.
 
-Represent multiple pending choices independently. Offer generation, duplicate options within an offer, rarity and eligibility rules remain implementation decisions; deferring/reopening must not inadvertently reroll an offer.
+Pending choices are independent immutable offers: three distinct equal-weight options, fixed at collection. Deferring/reopening never rerolls. Capped options are disabled and skip remains available.
 
 ### Skip Bonus
 
 - Deposit the bonus directly into the collector's base antimatter storage; no delivery drone is required.
 - Respect the current effective capacity, update the player's energy limit through the normal storage path, and do not automatically refill current combat energy.
 - Spill any excess outside the base as player-owned antimatter, preserving the full bonus amount.
-- Bonus amount is tunable. Handling an unresolved reward after complete base destruction remains to be specified alongside match termination.
+- Bonus amount is tunable. Complete base destruction ends the match and blocks unresolved choices/bonuses; reset clears them.
 
 ## Persistence And Stacking
 
@@ -49,8 +72,8 @@ Represent multiple pending choices independently. Offer generation, duplicate op
 - Starting a new match clears boons and pending choices.
 - Keep boon modifiers distinct from equipment ownership, purchased ranks, base tiers and stored antimatter.
 - Expose collected boons, stack counts and effective bonuses so players can make informed equipment choices.
-- Exact percentage values, additive versus multiplicative stacking, caps and interactions with researched upgrades remain tunable. Define each explicitly before implementing formulas.
-- HP boons must distinguish maximum HP from current HP; whether acquisition also heals is undecided. Base HP boons must not silently rebuild a destroyed tier.
+- Percentage values, additive stacking/caps and independent multiplicative interactions are explicit above and remain playtest tuning.
+- Ship hull acquisition increases only maximum HP; respawn heals to it. Base HP boons remain deferred until their tier-layer policy is explicit.
 
 ## Initial Boon Families
 
@@ -65,7 +88,7 @@ These are candidate effects, not a final balanced catalog:
 | Ship survivability | Increased ship maximum HP. |
 | Base survivability | Increased base maximum HP. |
 
-Damage taxonomy is not approved yet. A proposed starting point is kinetic, explosive and energy damage types, with deployable as an equipment/source tag rather than an exclusive damage type. Final categories, overlapping bonuses and damage attribution must be defined consistently with the equipment catalog.
+The first-pass attribution/formulas above use energy/explosive damage and an overlapping deployable source tag. Kinetic content and broader taxonomy remain future equipment work.
 
 ## Navigation And UI
 
@@ -88,7 +111,7 @@ Damage taxonomy is not approved yet. A proposed starting point is kinetic, explo
 
 ## Remaining Decisions
 
-- Boon values, stacking formulas/caps, offer selection/rarity and damage taxonomy.
-- Wreck durability, arrival pacing, landing effects and uncollected reward lifetime.
-- Reveal distances, map information and placement fairness metrics beyond minimum distance.
-- HP acquisition/healing behavior and effects of base damage on boon-derived stats.
+- Hands-on boon values/caps, equal-weight offer selection, wreck durability and arrival/travel pacing.
+- Richer wreck/landing art and effects; current uncollected rewards have no expiry.
+- Travel-cost fairness beyond nearest-base regional count balancing, and radar/map readability.
+- Base-HP boon tier-layer/healing policy and deeper rival exploration/boon selection AI.

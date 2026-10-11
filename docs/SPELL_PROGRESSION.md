@@ -2,7 +2,7 @@
 
 ## Status Update (2026-10-11)
 
-This document records the **superseded** legacy rank-II beacon pass. As of 2026-10-11, new matches start with Plasma Bolt only; owned equipment and ranks I–III come from base research and explicit home installation. Legacy beacons are non-reward signals awaiting wreck/boon conversion. `tools/EquipmentProgressionChecks.tscn` now verifies the research/inventory/loadout implementation. See `SHIP_EQUIPMENT.md` for current mechanics and `EXPLORATION_BOONS.md` for future exploration rewards. The historical filename/vocabulary and behavior below remain for context.
+This document records the **superseded** legacy rank-II beacon pass. As of 2026-10-11, new matches start with Plasma Bolt only; owned equipment and ranks I–III come from base research and explicit home installation. Random destructible wrecks now replace legacy beacons with independent match-boon choices. `tools/EquipmentProgressionChecks.tscn` verifies research/inventory/loadout; `tools/ExplorationBoonChecks.tscn` verifies wreck/reward behavior. See `SHIP_EQUIPMENT.md` and `EXPLORATION_BOONS.md` for current mechanics. The historical filename/vocabulary and behavior below remain for context.
 
 ## Arena rules
 

@@ -45,10 +45,13 @@ public partial class Game : Node3D
         CreatePlayer();
         CreateDrones();
         CreateAntimatterPickups();
-        CreateEquipmentDiscoveries();
+        CreateMatterFields();
+        AddChild(new ExplorationDirector { Name = "ExplorationDirector" });
         CreateEnemyEcosystem();
         CreateLevelObjective();
+        CreateStrategicPoints();
         AddChild(new WorldAntimatterTracker { Name = "WorldAntimatterTracker" });
+        AddChild(new WorldMatterTracker { Name = "WorldMatterTracker" });
         AddChild(new Hud { Name = "Hud" });
         if (UseSphericalWorld) AddChild(new PlanetSettings { Name = "PlanetSettings" });
         if (UseSphericalWorld)
@@ -58,11 +61,12 @@ public partial class Game : Node3D
             AddChild(new TacticalMap { Name = "TacticalMap", Navigation = navigation });
         }
         AddChild(new BaseManagement { Name = "BaseManagement" });
+        AddChild(new BoonChoices { Name = "BoonChoices" });
         _arena.RefreshPlanetDetail();
         ProcessMode = ProcessModeEnum.Pausable;
         foreach (Node child in GetChildren())
         {
-            child.ProcessMode = child is Hud or PlanetSettings or TacticalMap or BaseManagement ? ProcessModeEnum.Always : ProcessModeEnum.Pausable;
+            child.ProcessMode = child is Hud or PlanetSettings or TacticalMap or BaseManagement or BoonChoices ? ProcessModeEnum.Always : ProcessModeEnum.Pausable;
         }
     }
 
@@ -222,43 +226,6 @@ public partial class Game : Node3D
         AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector", SpawnRivalShips = false });
     }
 
-    private void CreateEquipmentDiscoveries()
-    {
-        if (UseSphericalWorld)
-        {
-            var sites = PlanetLayout.Sites(_arena);
-            for (int i = 0; i < sites.Length; i++)
-            {
-                WorldLandmark landmark = _landmarks[i];
-                AddChild(new EquipmentDiscovery
-                {
-                    Name = $"EquipmentDiscovery{sites[i].EquipmentName.Replace(" ", "")}",
-                    EquipmentId = sites[i].EquipmentId, EquipmentName = sites[i].EquipmentName,
-                    Position = _arena.OnSurface(landmark.GlobalPosition + landmark.GlobalBasis * Vector3.Right * 15, 6)
-                });
-            }
-            return;
-        }
-        (string Id, string Title, float X, float Z)[] discoveries =
-        {
-            ("plasma-bolt", "Plasma Bolt", -42, -20),
-            ("pulse-burst", "Pulse Burst", 0, -45),
-            ("energy-shield", "Energy Shield", -40, 32),
-            ("dash", "Dash", 34, 34),
-            ("guardian-drone", "Guardian Drone", 45, -30)
-        };
-        foreach (var discovery in discoveries)
-        {
-            AddChild(new EquipmentDiscovery
-            {
-                Name = $"EquipmentDiscovery{discovery.Title.Replace(" ", "")}",
-                EquipmentId = discovery.Id,
-                EquipmentName = discovery.Title,
-                Position = AboveTerrain(discovery.X * (UseSphericalWorld ? 3 : 1), discovery.Z * (UseSphericalWorld ? 3 : 1), 6)
-            });
-        }
-    }
-
     private void CreateLevelObjective()
     {
         var rival = new EnemyEcosystemEnemy
@@ -293,6 +260,20 @@ public partial class Game : Node3D
         }
     }
 
+    private void CreateStrategicPoints()
+    {
+        // Mirrored surface directions keep opening opportunities comparable for both bases.
+        for (int side = -1; side <= 1; side += 2)
+        for (int role = 0; role < 4; role++)
+        {
+            Vector3 position = UseSphericalWorld
+                ? _arena.PlanetCenter + new Vector3(side * 0.32f, 1, role == 3 ? -0.95f : role == 0 ? -0.45f : role * 0.45f).Normalized() * _arena.PlanetRadius
+                : _arena.FromMap(side * 48, role == 3 ? -65 : (role - 1) * 40, 0);
+            AddChild(new StrategicPoint { Name = $"StrategicPoint{side}_{role}", Role = (StrategicPointRole)role,
+                Position = position, CaptureRadius = UseSphericalWorld ? 18 : 12 });
+        }
+    }
+
     private void AddPillar(Vector3 position)
     {
         var pillar = new StaticBody3D
@@ -318,6 +299,20 @@ public partial class Game : Node3D
             Roughness = 1.0f
         };
         pillar.AddChild(mesh);
+    }
+
+    private void CreateMatterFields()
+    {
+        for (int side = -1; side <= 1; side += 2)
+        {
+            Vector3 home = side < 0 ? _playerBase.GlobalPosition : _enemyBase.GlobalPosition;
+            Vector3 near = home + PlanetGeometry.Frame(_arena.UpAt(home), Vector3.Forward) * new Vector3(side * 26, 0, -22);
+            MatterPickup.Spawn(this, near, 60);
+            Vector3 remote = UseSphericalWorld
+                ? _arena.PlanetCenter + new Vector3(side * 0.7f, 1, -0.65f).Normalized() * _arena.PlanetRadius
+                : _arena.FromMap(side * 60, 55, 0);
+            MatterPickup.Spawn(this, remote, 60);
+        }
     }
 
     private Vector3 AboveTerrain(float x, float z, float clearance)

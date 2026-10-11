@@ -56,6 +56,10 @@ public partial class ShipFlightController : CharacterBody3D
     [Export] public float MobilityEquipmentCooldownSeconds { get; set; } = 3.0f;
     [Export] public float MobilityDashSpeed { get; set; } = 46.0f;
     [Export] public float MobilityDashLift { get; set; } = 5.0f;
+    [Export] public int BoosterEnergyCost { get; set; } = 4;
+    [Export] public float BoosterSpeed { get; set; } = 36.0f;
+    [Export] public float BoosterDurationSeconds { get; set; } = 0.65f;
+    [Export] public float BoosterCooldownSeconds { get; set; } = 2.0f;
 [Export] public int SummonEquipmentEnergyCost { get; set; } = 24;
     [Export] public float SummonEquipmentCooldownSeconds { get; set; } = 8.0f;
     [Export] public float SummonDistance { get; set; } = 5.0f;
@@ -113,15 +117,23 @@ public partial class ShipFlightController : CharacterBody3D
         if (first >= 0) _selectedEquipmentSlot = first;
     }
 
+    public ExplorationBoons Boons { get; } = new();
+    public int MaximumHealth => 100 + 20 * Boons.Stacks("ship-hp");
+    public float EffectiveMoveSpeed => MoveSpeed * Boons.Multiplier("speed");
+    public float EffectiveBoosterSpeed => BoosterSpeed * Boons.Multiplier("speed");
+    public float EffectiveFireCooldown => FireCooldownSeconds / Boons.Multiplier("fire-rate");
+    public float EffectiveProjectileSpeed => 42 * Boons.Multiplier("projectile-speed");
+    public int EffectiveGuardianDamage => Mathf.RoundToInt((12 + 4 * Mathf.Max(0, GetEquipmentRank("guardian-drone") - 1))
+        * Boons.Multiplier("energy-damage") * Boons.Multiplier("deployable-damage"));
     public int Energy { get; private set; }
     public int EnergyCapacity { get; private set; }
     public bool GameplayInputBlocked
     {
         get => _gameplayInputBlocked;
-        set { _gameplayInputBlocked = value; if (value) _waitForEquipmentRelease = true; }
+        set { _gameplayInputBlocked = value; if (value) { _waitForEquipmentRelease = true; _boosterTimer = 0; } }
     }
     public float EnergyRechargePerSecond => EnergyCapacity * EnergyRegenFractionPerSecond
-        * (IsInstanceValid(_homeBase) ? _homeBase!.EnergyRechargeMultiplier : 1);
+        * (IsInstanceValid(_homeBase) ? _homeBase!.EnergyRechargeMultiplier : 1) * Boons.Multiplier("recharge");
     public float EffectiveClaimRange => IsInstanceValid(_homeBase) && _homeBase!.Construction.IsEffectActive("claim-range") ? 150 : 120;
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
@@ -136,22 +148,27 @@ public partial class ShipFlightController : CharacterBody3D
 public string SummonEquipmentName => _summonEquipment?.RankedName ?? "Guardian Drone";
     public string ClaimEquipmentName => _claimEquipment?.DisplayName ?? "Claim";
     public bool IsShielded => _shieldTimer > 0.0f;
+    public bool IsBoosting => _boosterTimer > 0;
+    public float BoosterCooldownRemaining => _boosterCooldown;
+    public string BoosterStatusText => IsBoosting ? $"Boost {_boosterTimer:0.0}s"
+        : _boosterCooldown > 0 ? $"Boost ready in {_boosterCooldown:0.0}s"
+        : Energy < BoosterEnergyCost ? $"Boost needs {BoosterEnergyCost} energy" : $"Boost ready · {BoosterEnergyCost} energy";
     public string ShieldStatusText => IsShielded ? $"Shield {_shieldTimer:0.0}s" : "Shield ready";
     public string EquipmentLoadoutText => _primaryEquipment == null || _terrainEquipment == null || _areaEquipment == null || _shieldEquipment == null || _mobilityEquipment == null || _summonEquipment == null || _claimEquipment == null
         ? "Equipment: loading"
         : $"LMB: {PrimaryEquipmentName} · 1–4 select slot · Tab cycles installed\n"
             + string.Join(" · ", _equipmentSlots.Select((id, i) => $"{i + 1}: {(id == null ? "Empty" : FindEquipment(id)!.RankedName)}"))
-            + "\nRMB Claim · B research/install at home";
-    public string StatusMessage { get; private set; } = "Claim antimatter for your collector drone and defend your base.";
+            + "\nRMB Claim · Shift boost · B research/install at home";
+    public string StatusMessage { get; private set; } = "Claim antimatter and matter for your collector drone and defend your base.";
     public string ActiveFeedbackMessage => _feedbackTimer > 0.0f ? StatusMessage : string.Empty;
     public string DiscoveryFeedbackMessage => _discoveryFeedbackTimer > 0 ? _discoveryFeedback : string.Empty;
     public string EquipmentProgressionText => string.Join("\n", new[] { _primaryEquipment, _areaEquipment, _shieldEquipment, _mobilityEquipment, _summonEquipment }
         .Select(equipment => $"{equipment.DisplayName} — owned {GetOwnedEquipmentRank(equipment.Id)}/3 · installed {(IsEquipmentInstalled(equipment.Id) ? equipment.Rank : 0)}"));
-    public int PlasmaBoltDamage => 25 + 10 * Mathf.Max(0, GetEquipmentRank("plasma-bolt") - 1);
-    public int EffectiveAreaDamage => Mathf.RoundToInt(AreaEquipmentDamage * (1 + 0.25f * Mathf.Max(0, GetEquipmentRank("pulse-burst") - 1)));
+    public int PlasmaBoltDamage => Mathf.RoundToInt((25 + 10 * Mathf.Max(0, GetEquipmentRank("plasma-bolt") - 1)) * Boons.Multiplier("energy-damage"));
+    public int EffectiveAreaDamage => Mathf.RoundToInt(AreaEquipmentDamage * (1 + 0.25f * Mathf.Max(0, GetEquipmentRank("pulse-burst") - 1)) * Boons.Multiplier("explosive-damage"));
     public float EffectiveAreaRadius => AreaEquipmentRadius * (1 + 0.25f * Mathf.Max(0, GetEquipmentRank("pulse-burst") - 1));
     public float EffectiveShieldDuration => ShieldDurationSeconds + 2 * Mathf.Max(0, GetEquipmentRank("energy-shield") - 1);
-    public float EffectiveDashSpeed => MobilityDashSpeed * (1 + 0.2f * Mathf.Max(0, GetEquipmentRank("dash") - 1));
+    public float EffectiveDashSpeed => MobilityDashSpeed * (1 + 0.2f * Mathf.Max(0, GetEquipmentRank("dash") - 1)) * Boons.Multiplier("speed");
     public string TerrainDebugText => _arena == null
         ? "Terrain: unavailable"
         : $"Terrain edit: {_arena.LastEditedVertexCount} verts   Chunks: {_arena.LastRebuiltChunkCount}   Rebuild: {_arena.LastRebuildMilliseconds:0.00} ms";
@@ -180,6 +197,8 @@ public string SummonEquipmentName => _summonEquipment?.RankedName ?? "Guardian D
     private float _areaEquipmentCooldown;
     private float _shieldEquipmentCooldown;
     private float _mobilityEquipmentCooldown;
+    private float _boosterTimer;
+    private float _boosterCooldown;
     private float _summonEquipmentCooldown;
     private float _shieldTimer;
     private float _terrainEquipmentCooldown;
@@ -237,7 +256,7 @@ private EquipmentDefinition _summonEquipment = null!;
         _mobilityEquipment = new EquipmentDefinition("dash", "Dash", EquipmentKind.Mobility, MobilityEquipmentEnergyCost, MobilityEquipmentCooldownSeconds, "Dash quickly in the aimed direction.");
 _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", EquipmentKind.Summoning, SummonEquipmentEnergyCost, SummonEquipmentCooldownSeconds, "Summon a temporary ally that attacks nearby enemies.");
         _terrainEquipment = new EquipmentDefinition("terrain-shape", "Terrain Shape", EquipmentKind.Terrain, TerrainEquipmentEnergyCost, TerrainEquipmentCooldownSeconds, "Shape terrain using the selected terrain mode.");
-        _claimEquipment = new EquipmentDefinition("claim", "Claim", EquipmentKind.Economy, ClaimEquipmentEnergyCost, ClaimEquipmentCooldownSeconds, "Fire a terrain-following bolt to claim neutral or rival loose antimatter.");
+        _claimEquipment = new EquipmentDefinition("claim", "Claim", EquipmentKind.Economy, ClaimEquipmentEnergyCost, ClaimEquipmentCooldownSeconds, "Fire a terrain-following bolt to claim neutral or rival antimatter/material crates.");
 
         _cameraPivot = new Node3D { Name = "CameraPivot" };
         AddChild(_cameraPivot);
@@ -264,6 +283,12 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
     public override void _UnhandledInput(InputEvent @event)
     {
         if (GameplayInputBlocked) return;
+        if (@event.IsActionPressed("activate_booster") && !@event.IsEcho())
+        {
+            TryActivateBooster();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         for (int i = 0; i < EquipmentSelectionActions.Length; i++)
         {
             if (!@event.IsActionPressed(EquipmentSelectionActions[i]) || @event.IsEcho()) continue;
@@ -312,6 +337,8 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
         _areaEquipmentCooldown = Mathf.Max(0.0f, _areaEquipmentCooldown - deltaF);
         _shieldEquipmentCooldown = Mathf.Max(0.0f, _shieldEquipmentCooldown - deltaF);
         _mobilityEquipmentCooldown = Mathf.Max(0.0f, _mobilityEquipmentCooldown - deltaF);
+        _boosterCooldown = Mathf.Max(0, _boosterCooldown - deltaF);
+        _boosterTimer = Mathf.Max(0, _boosterTimer - deltaF);
         _summonEquipmentCooldown = Mathf.Max(0.0f, _summonEquipmentCooldown - deltaF);
         _shieldTimer = Mathf.Max(0.0f, _shieldTimer - deltaF);
 _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
@@ -345,7 +372,14 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
             horizontalInput = horizontalInput.Normalized();
         }
 
-        Vector3 horizontal = (GlobalBasis * horizontalInput) * MoveSpeed;
+        Vector3 horizontal = (GlobalBasis * horizontalInput) * EffectiveMoveSpeed;
+        if (IsBoosting && !GameplayInputBlocked)
+        {
+            // Forward surface-relative thrust; no camera-pitch lift or diagonal speed stacking.
+            horizontal = -GlobalBasis.Z * EffectiveBoosterSpeed;
+            Vector3 up = LocalUp;
+            Velocity = horizontal + up * Velocity.Dot(up);
+        }
         Vector3 desiredVelocity = horizontal + LocalUp * localInput.Y * VerticalSpeed;
         ApplyTerrainFollow(ref desiredVelocity);
         bool isAccelerating = horizontalInput.LengthSquared() > 0.001f || Mathf.Abs(localInput.Y) > 0.001f;
@@ -446,6 +480,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         {
             Velocity = Vector3.Zero;
             _shieldTimer = 0;
+            _boosterTimer = 0;
             CollisionLayer = 0;
             CollisionMask = 0;
             _shipVisual.Visible = false;
@@ -455,11 +490,12 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
     public void RespawnAt(Vector3 position)
     {
         GlobalPosition = position;
-        Health = 100;
+        Health = MaximumHealth;
         RefreshBaseEnergyLimit();
         Energy = EnergyCapacity;
         Velocity = Vector3.Zero;
         _shieldTimer = 0;
+        _boosterTimer = _boosterCooldown = 0;
         _energyRegenAccumulator = 0;
         _fireCooldown = _areaEquipmentCooldown = _shieldEquipmentCooldown = _mobilityEquipmentCooldown = _summonEquipmentCooldown = _claimCooldown = 0;
         _damageInvulnerabilityTimer = 2.0f;
@@ -500,7 +536,7 @@ private void CycleQuickEquipment()
                     return;
                 }
 
-                _fireCooldown = _primaryEquipment.CooldownSeconds;
+                _fireCooldown = EffectiveFireCooldown;
                 CastPrimaryEquipment();
                 break;
             case "pulse-burst":
@@ -557,7 +593,7 @@ private void CycleQuickEquipment()
         _feedbackTimer = 0.35f;
         GameAudio.Instance?.PlayEquipmentCast();
 
-        var projectile = new WeaponProjectile { Damage = PlasmaBoltDamage };
+        var projectile = new WeaponProjectile { Damage = PlasmaBoltDamage, Speed = EffectiveProjectileSpeed };
         GetTree().CurrentScene.AddChild(projectile);
 
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
@@ -610,6 +646,24 @@ private void CycleQuickEquipment()
         GameAudio.Instance?.PlayEquipmentCast();
     }
 
+    public bool TryActivateBooster()
+    {
+        if (Health <= 0 || GameplayInputBlocked || GetTree().Paused || _boosterCooldown > 0 || IsBoosting) return false;
+        if (Energy < BoosterEnergyCost)
+        {
+            StatusMessage = $"Not enough energy for boost ({BoosterEnergyCost}).";
+            _feedbackTimer = 0.8f;
+            return false;
+        }
+        SpendEnergy(BoosterEnergyCost);
+        _boosterTimer = BoosterDurationSeconds;
+        _boosterCooldown = BoosterCooldownSeconds;
+        StatusMessage = "Booster active";
+        _feedbackTimer = BoosterDurationSeconds;
+        GameAudio.Instance?.PlayEquipmentCast();
+        return true;
+    }
+
     private void CastMobilityEquipment()
     {
         if (!CanActivateEquipment(_mobilityEquipment)) return;
@@ -621,6 +675,7 @@ private void CycleQuickEquipment()
         }
 
         SpendEnergy(_mobilityEquipment.EnergyCost);
+        _boosterTimer = 0; // Dash supersedes thrust instead of stacking speeds or being pulled back to boost speed.
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
         Vector3 up = LocalUp;
         Velocity = (direction - up * direction.Dot(up)) * EffectiveDashSpeed
@@ -646,7 +701,7 @@ private void CycleQuickEquipment()
         var guardian = new GuardianDrone
         {
             Name = "GuardianDrone",
-            Damage = 12 + 4 * Mathf.Max(0, GetEquipmentRank("guardian-drone") - 1),
+            Damage = EffectiveGuardianDamage,
             LifetimeSeconds = 12 + 6 * Mathf.Max(0, GetEquipmentRank("guardian-drone") - 1)
         };
         GetTree().CurrentScene.AddChild(guardian);
@@ -674,6 +729,12 @@ GameAudio.Instance?.PlayEquipmentCast();
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
         var projectile = new ClaimProjectile { Name = "ClaimProjectile", MaxRange = EffectiveClaimRange };
         projectile.AntimatterClaimed += OnAntimatterClaimed;
+        projectile.MatterClaimed += amount =>
+        {
+            if (!IsInstanceValid(this) || IsQueuedForDeletion()) return;
+            StatusMessage = $"Claimed {amount} matter";
+            _feedbackTimer = 0.8f;
+        };
         GetTree().CurrentScene.AddChild(projectile);
         projectile.GlobalPosition = _camera.GlobalPosition + direction * 1.5f;
         projectile.Launch(direction);
@@ -879,6 +940,9 @@ GameAudio.Instance?.PlayEquipmentCast();
     private int DamageEnemiesInRadius(Vector3 center, float radius, int damage)
     {
         int hits = 0;
+        foreach (Node node in GetTree().GetNodesInGroup("exploration_wreck"))
+            if (node is ExplorationWreck wreck && !wreck.IsRevealed && wreck.GlobalPosition.DistanceTo(center) <= radius)
+            { wreck.ApplyDamage(damage); hits++; }
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
         {
             if (node is not EnemyEcosystemEnemy enemy || enemy.Health <= 0)

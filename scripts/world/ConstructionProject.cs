@@ -8,13 +8,14 @@ public enum ConstructionState { Active, Completed, Cancelled, Destroyed }
 // Immutable catalog data; content-specific benefits are integrated by later milestones.
 public sealed record ConstructionDefinition(string Id, string Name, ConstructionSlot Slot,
     int Cost, double DurationSeconds, int RequiredTier = 1, string? RequiredProject = null,
-    string Description = "Research project", bool Repeatable = false);
+    string Description = "Research project", bool Repeatable = false, int MatterCost = 0);
 
 public sealed class ConstructionProject
 {
     public long InstanceId { get; }
     public ConstructionDefinition Definition { get; }
     public int PaidAntimatter { get; }
+    public int PaidMatter { get; }
     public int TargetTier { get; }
     public bool IsRebuild { get; }
     public double ElapsedSeconds { get; private set; }
@@ -26,6 +27,7 @@ public sealed class ConstructionProject
         InstanceId = instanceId;
         Definition = definition;
         PaidAntimatter = definition.Cost;
+        PaidMatter = definition.MatterCost;
         TargetTier = targetTier;
         IsRebuild = rebuild;
     }

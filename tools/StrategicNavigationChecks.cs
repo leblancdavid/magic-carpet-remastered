@@ -72,8 +72,8 @@ public partial class StrategicNavigationChecks : Node
             player.SetPhysicsProcess(false);
             director.SetPhysicsProcess(false);
             var landmarks = game.GetChildren().OfType<WorldLandmark>().ToArray();
-            var discoveries = game.GetChildren().OfType<EquipmentDiscovery>().ToArray();
-            Check(landmarks.Length == 5 && discoveries.Length == 5, "Live spherical scene creates all landmarks and one upgrade at each");
+            var wrecks = game.GetChildren().OfType<ExplorationWreck>().ToArray();
+            Check(landmarks.Length == 5 && wrecks.Length == 12, "Live spherical scene creates landmarks and random exploration wrecks");
             Check(game.GetChildren().OfType<AntimatterPickup>().Count() == 18
                 && game.GetChildren().OfType<AntimatterPickup>().Sum(orb => orb.AntimatterAmount) == 204,
                 "Three four-globe resource fields plus the six-globe well conserve their authored 204 antimatter");
@@ -148,7 +148,10 @@ public partial class StrategicNavigationChecks : Node
             navigation.Refresh();
             Check(remoteSite.IsDiscovered && navigation.Markers.Any(marker => marker.Title.StartsWith("Starfall Observatory")),
                 "Visiting a landmark reveals its name and habitat");
-            Check(navigation.Markers.Any(marker => marker.Title == "Guardian Drone signal"), "Discovered landmark exposes its signal");
+            var chartedWreck = wrecks[0];
+            chartedWreck.GlobalPosition = arena.OnSurface(remoteSite.GlobalPosition + remoteSite.GlobalBasis.X * 20, 1);
+            navigation.Refresh();
+            Check(navigation.Markers.Any(marker => marker.Actor == chartedWreck && marker.Kind == MapMarkerKind.Wreck), "Nearby wreck becomes charted");
             Check(navigation.Markers.Any(marker => marker.Title == "Neutral antimatter · 98"), "Remote resources reveal when approached on the other hemisphere");
             object zone = typeof(EnemyEcosystemDirector).GetMethod("SelectSpawnZone", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(director, null)!;
             var habitat = (WorldLandmark?)typeof(EnemyEcosystemDirector).GetField("_habitat", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(director);
@@ -166,7 +169,10 @@ public partial class StrategicNavigationChecks : Node
                 && Mathf.Abs(arena.Clearance(spawn) - 5.5f) < 0.001f, "Habitat spawning uses its radial local frame on the far side");
             player.GlobalPosition = start;
             navigation.Refresh();
-            Check(navigation.Markers.Any(marker => marker.Title == "Guardian Drone signal"), "Discovered signal remains charted after leaving the site");
+            Check(navigation.Markers.Any(marker => marker.Actor == chartedWreck), "Discovered wreck remains charted after leaving the site");
+            chartedWreck.ApplyDamage(50); navigation.Refresh();
+            Check(navigation.Markers.Any(marker => marker.Actor == chartedWreck && marker.Kind == MapMarkerKind.Reward),
+                "Charted intact wreck changes to a distinct revealed salvage marker");
 
             var previousMouse = Input.MouseMode;
             Check(map.SetExpanded(true) && !GetTree().Paused && player.GameplayInputBlocked && Input.MouseMode == Input.MouseModeEnum.Visible,
@@ -217,15 +223,14 @@ public partial class StrategicNavigationChecks : Node
             Check(!map.IsExpanded && !GetTree().Paused, "Actual Escape input closes only the map and resumes the match");
             GetViewport().PushInput(new InputEventKey { Keycode = Key.Escape, Pressed = false });
             foreach (var orb in new[] { nearby, hidden, owned }) orb.QueueFree();
-            Check(!discoveries.Single(discovery => discovery.EquipmentId == "guardian-drone").TryCollect(TeleportForCollection()),
-                "Legacy signal cannot grant purchased equipment ranks");
-            ShipFlightController TeleportForCollection()
-            {
-                player.GlobalPosition = discoveries.Single(discovery => discovery.EquipmentId == "guardian-drone").GlobalPosition;
-                return player;
-            }
-            Check(player.GetEquipmentRank("guardian-drone") == 0, "Far-side signal does not install equipment");
+            Check(!chartedWreck.TryCollect(player), "Remote revealed salvage requires actual proximity");
+            Check(player.GetEquipmentRank("guardian-drone") == 0, "Exploration does not install equipment");
             navigation.SetWaypoint(Vector3.Down);
+            using var boonRandom = new RandomNumberGenerator { Seed = 37 };
+            var firstOffer = player.Boons.SecureOffer(boonRandom, 30);
+            player.Boons.Choose(firstOffer.Id, firstOffer.Choices[0].Id);
+            player.Boons.SecureOffer(boonRandom, 30);
+            game.GetNode<BoonChoices>("BoonChoices").SetProcess(false);
             map.SetExpanded(true);
             // Scene restart from an open map must not leave the next match paused.
             map._Input(new InputEventKey { Keycode = Key.R, Pressed = true });
@@ -236,6 +241,9 @@ public partial class StrategicNavigationChecks : Node
                 && restarted.GetChildren().OfType<WorldLandmark>().All(landmark => !landmark.IsDiscovered), "Restart clears waypoint/chart knowledge and restores gameplay");
             Check(restarted.GetNode<ShipFlightController>("PlayerShip").GetEquipmentRank("guardian-drone") == 0,
                 "Restart resets upgrades alongside the strategic layout");
+            Check(restarted.GetNode<ShipFlightController>("PlayerShip").Boons.Pending.Count == 0
+                && restarted.GetNode<ShipFlightController>("PlayerShip").Boons.Summary.Length == 0,
+                "Actual scene restart clears pending offers and acquired boon stacks");
             Check(!restarted.GetNode<BaseManagement>("BaseManagement").IsOpen
                 && !restarted.GetNode<ShipFlightController>("PlayerShip").GameplayInputBlocked
                 && restarted.GetNode<FactionBase>("PlayerBase").Construction.ActiveInvestment == 0,

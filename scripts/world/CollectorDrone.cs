@@ -25,10 +25,35 @@ public partial class CollectorDrone : Node3D
     [Export] public float HoverHeight { get; set; } = 4.5f;
 
     public int Health { get; private set; }
-    public int CarriedCount => _carried.Count;
+    public int CarriedCount => _carried.Count + _carriedMatter.Count;
+    public int CarriedMatterAmount
+    {
+        get { int total = 0; foreach (var crate in _carriedMatter) total += crate.MatterAmount; return total; }
+    }
+
+    public bool TransferTo(FactionBase destination)
+    {
+        if (!IsInstanceValid(destination) || destination.IsDestroyed || Health <= 0 || IsQueuedForDeletion()) return false;
+        RemoveFromGroup(UsePlayerAntimatter ? "player_drone" : "enemy_drone");
+        UsePlayerAntimatter = destination.IsPlayerBase;
+        AddToGroup(UsePlayerAntimatter ? "player_drone" : "enemy_drone");
+        _base = destination;
+        foreach (var pickup in _carried)
+            pickup.ReassignOwnership(UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy);
+        foreach (var pickup in _carriedMatter)
+            pickup.ReassignOwnership(UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy);
+        _homeAnchor = destination.GlobalPosition;
+        _homeAnchorSet = true;
+        _dockTimer = 0;
+        _state = CarriedCount > 0 ? DroneState.Returning : DroneState.Seeking;
+        UpdateHealthColor();
+        _material.Emission = UsePlayerAntimatter ? new Color(0.1f, 0.55f, 0.95f) : new Color(0.85f, 0.15f, 0.3f);
+        return true;
+    }
 
     private DroneState _state = DroneState.Seeking;
     private readonly List<AntimatterPickup> _carried = new();
+    private readonly List<MatterPickup> _carriedMatter = new();
     private FactionBase? _base;
     private StandardMaterial3D _material = null!;
     private float _dockTimer;
@@ -85,7 +110,7 @@ public partial class CollectorDrone : Node3D
                 _dockTimer = Mathf.Max(0.0f, _dockTimer - deltaF);
                 if (_dockTimer <= 0.0f)
                 {
-                    _state = _carried.Count > 0 ? DroneState.Returning : DroneState.Seeking;
+                    _state = CarriedCount > 0 ? DroneState.Returning : DroneState.Seeking;
                 }
 
                 break;
@@ -111,9 +136,9 @@ public partial class CollectorDrone : Node3D
 
     private void HandleSeeking(float delta)
     {
-        if (_base == null || _base.AvailableStorage == 0)
+        if (_base == null || (_base.AvailableStorage == 0 && _base.AvailableMatterStorage == 0))
         {
-            if (_carried.Count > 0) _state = DroneState.Returning;
+            if (CarriedCount > 0) _state = DroneState.Returning;
             else ReturnToAnchor(delta);
             return;
         }
@@ -121,7 +146,7 @@ public partial class CollectorDrone : Node3D
         float bestDistance = float.MaxValue;
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {
-            if (node is not AntimatterPickup pickup || pickup.Ownership != (UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy) || !pickup.IsAvailable)
+            if (_base.AvailableStorage == 0 || node is not AntimatterPickup pickup || pickup.Ownership != (UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy) || !pickup.IsAvailable)
             {
                 continue;
             }
@@ -139,6 +164,23 @@ public partial class CollectorDrone : Node3D
             }
         }
 
+        MatterPickup? material = null;
+        if (_base.AvailableMatterStorage > 0)
+            foreach (Node node in GetTree().GetNodesInGroup("matter_pickup"))
+            {
+                if (node is not MatterPickup pickup || !pickup.IsAvailable
+                    || pickup.Ownership != (UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy)) continue;
+                float distance = _arena?.IsSpherical == true ? _arena.SurfaceDistance(GlobalPosition, pickup.GlobalPosition) : GlobalPosition.DistanceTo(pickup.GlobalPosition);
+                if (distance > MaxSeekRadius || distance >= bestDistance) continue;
+                bestDistance = distance; material = pickup;
+            }
+        if (material != null)
+        {
+            Vector3 scoopPosition = material.GlobalPosition + (_arena?.UpAt(material.GlobalPosition) ?? Vector3.Up) * HoverHeight;
+            MoveToward(scoopPosition, delta);
+            if (GlobalPosition.DistanceTo(scoopPosition) <= ScoopRadius) ScoopMatter(material);
+            return;
+        }
         if (best != null)
         {
             Vector3 scoopPosition = best.GlobalPosition + (_arena?.UpAt(best.GlobalPosition) ?? Vector3.Up) * HoverHeight;
@@ -151,7 +193,7 @@ public partial class CollectorDrone : Node3D
             return;
         }
 
-        if (_carried.Count > 0)
+        if (CarriedCount > 0)
         {
             _state = DroneState.Returning;
         }
@@ -164,16 +206,17 @@ public partial class CollectorDrone : Node3D
     private void Scoop(AntimatterPickup pickup)
     {
         if (_base == null || _base.IsDestroyed || _base.AvailableStorage == 0
-            || _carried.Count >= CarryCapacity || !pickup.IsAvailable)
+            || CarriedCount >= CarryCapacity || !pickup.IsAvailable
+            || pickup.Ownership != (UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy))
         {
             return;
         }
 
-        Vector3 offset = new Vector3((_carried.Count - 1) * 1.0f, -1.7f, 0.0f);
+        Vector3 offset = new Vector3((CarriedCount - 1) * 1.0f, -1.7f, 0.0f);
         pickup.BeginCarry(this, offset);
         _carried.Add(pickup);
 
-        if (_carried.Count >= CarryCapacity)
+        if (CarriedCount >= CarryCapacity)
         {
             _state = DroneState.Returning;
         }
@@ -181,7 +224,7 @@ public partial class CollectorDrone : Node3D
 
     private void HandleReturning(float delta)
     {
-        if (_base == null || _carried.Count == 0)
+        if (_base == null || CarriedCount == 0)
         {
             _state = DroneState.Seeking;
             return;
@@ -199,9 +242,16 @@ public partial class CollectorDrone : Node3D
 
     private void DepositAll()
     {
-        if (_base == null)
+        if (_base == null || _base.IsDestroyed || _base.IsPlayerBase != UsePlayerAntimatter)
         {
             return;
+        }
+        for (int i = _carriedMatter.Count - 1; i >= 0; i--)
+        {
+            var pickup = _carriedMatter[i];
+            int accepted = _base.DepositMatter(pickup.MatterAmount);
+            pickup.TakeMatter(accepted);
+            if (pickup.MatterAmount == 0) _carriedMatter.RemoveAt(i);
         }
         for (int i = _carried.Count - 1; i >= 0; i--)
         {
@@ -216,6 +266,10 @@ public partial class CollectorDrone : Node3D
 
     private void Pop()
     {
+        int matter = CarriedMatterAmount;
+        foreach (var pickup in _carriedMatter) pickup.TakeMatter(pickup.MatterAmount);
+        _carriedMatter.Clear();
+        MatterPickup.Spawn(GetParent(), GlobalPosition, matter);
         int amount = 0;
         foreach (AntimatterPickup pickup in _carried)
         {
@@ -242,6 +296,15 @@ public partial class CollectorDrone : Node3D
         burst.GlobalPosition = GlobalPosition;
 
         QueueFree();
+    }
+
+    private void ScoopMatter(MatterPickup pickup)
+    {
+        if (_base == null || _base.IsDestroyed || _base.AvailableMatterStorage == 0 || CarriedCount >= CarryCapacity
+            || pickup.Ownership != (UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy)) return;
+        if (!pickup.BeginCarry(this, new Vector3((CarriedCount - 1) * 1.0f, -1.7f, 0))) return;
+        _carriedMatter.Add(pickup);
+        if (CarriedCount >= CarryCapacity) _state = DroneState.Returning;
     }
 
     private void ReturnToAnchor(float delta)

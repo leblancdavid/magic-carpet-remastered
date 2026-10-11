@@ -43,6 +43,7 @@ public partial class BaseManagementChecks : Node3D
             await Frames(3);
             Check(!panel.IsOpen && hub.Construction.Catalog.Count() == 19, "Fresh match has starter/equipment catalog and closed management");
             hub.DepositAntimatter(90);
+            hub.DepositMatter(90); // Fund the scripted infrastructure sequence independently of hauling.
             player.RespawnAt(player.GlobalPosition);
             Key(Godot.Key.B); await Frames(2);
             Check(panel.IsOpen && !GetTree().Paused && player.GameplayInputBlocked, "Actual B opens real-time management and owns input");
@@ -135,6 +136,7 @@ public partial class BaseManagementChecks : Node3D
             if (capture != null)
             {
                 hub.DepositAntimatter(200);
+                hub.DepositMatter(200); // Refill both resources for the concurrent-project layout capture.
                 Check(panel.OrderNextTier(), "Capture has active base construction");
                 hub.DepositAntimatter(200);
                 Check(panel.OrderProject("strike-drone"), "Capture has concurrent offense construction");

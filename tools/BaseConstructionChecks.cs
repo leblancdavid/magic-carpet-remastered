@@ -112,7 +112,7 @@ public partial class BaseConstructionChecks : Node3D
 
     private void CheckSiegeAndRebuilding()
     {
-        var hub = Add(new FactionBase { InitialStoredAntimatter = 120, Tier3UpgradeCost = 101, Tier3UpgradeSeconds = 1,
+        var hub = Add(new FactionBase { InitialStoredAntimatter = 120, InitialStoredMatter = 120, Tier3UpgradeCost = 101, Tier3UpgradeSeconds = 1,
             Tier4UpgradeCost = 101, Tier4UpgradeSeconds = 1 });
         hub.TryCompleteTierUpgrade(2);
         hub.TryCompleteTierUpgrade(3);

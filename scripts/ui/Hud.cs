@@ -22,6 +22,7 @@ public partial class Hud : CanvasLayer
     private FactionBase? _enemyBase;
     private EnemyEcosystemDirector? _enemyEcosystem;
     private WorldAntimatterTracker? _antimatterTracker;
+    private WorldMatterTracker? _matterTracker;
     private LevelObjective? _levelObjective;
     private PanelContainer _resultPanel = null!;
     private Label _result = null!;
@@ -33,7 +34,7 @@ public partial class Hud : CanvasLayer
         root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
         AddLabelPanel(root, "Vitals", Control.LayoutPreset.TopLeft,
-            new Vector2(20, 20), new Vector2(310, 86), out _vitals);
+            new Vector2(20, 20), new Vector2(310, 132), out _vitals);
         AddLabelPanel(root, "Objective", Control.LayoutPreset.TopRight,
             new Vector2(-300, 20), new Vector2(280, 86), out _objective);
         AddLabelPanel(root, "Loadout", Control.LayoutPreset.BottomLeft,
@@ -122,16 +123,17 @@ public partial class Hud : CanvasLayer
         _enemyBase ??= GetTree().GetFirstNodeInGroup("enemy_base") as FactionBase;
         _enemyEcosystem ??= GetTree().GetFirstNodeInGroup("enemy_ecosystem_director") as EnemyEcosystemDirector;
         _antimatterTracker ??= GetTree().GetFirstNodeInGroup("world_antimatter_tracker") as WorldAntimatterTracker;
+        _matterTracker ??= GetTree().GetFirstNodeInGroup("world_matter_tracker") as WorldMatterTracker;
         _levelObjective ??= GetTree().GetFirstNodeInGroup("level_objective") as LevelObjective;
         if (_player == null)
         {
             return;
         }
 
-        _vitals.Text = $"Health  {_player.Health}     Energy  {_player.Energy} / {_player.EnergyCapacity}\n"
+        _vitals.Text = $"HP {_player.Health}/{_player.MaximumHealth}   Energy {_player.Energy}/{_player.EnergyCapacity}\n"
             + (_player.Health <= 0 ? $"Respawn in {_levelObjective?.PlayerRespawnRemaining:0.0}s"
                 : _player.IsShielded ? _player.ShieldStatusText : _player.IsInvulnerable ? "Protected after hit" : "Ship ready")
-            + (_playerBase == null ? "" : $"\nBase T{_playerBase.Tier}   Antimatter {_playerBase.StoredAntimatter}/{_playerBase.EffectiveStorageCapacity}");
+            + (_playerBase == null ? "" : $"\nBase T{_playerBase.Tier}   Antimatter {_playerBase.StoredAntimatter}/{_playerBase.EffectiveStorageCapacity}\nMatter {_playerBase.StoredMatter}/{_playerBase.EffectiveMatterCapacity}");
         _objective.Text = _levelObjective == null ? "Eliminate the rival\nDestroy base and pilot"
             : $"Rival base: {(_levelObjective.RivalBaseDestroyed ? "Destroyed" : $"{_enemyBase?.Health} HP")}\n"
                 + $"Rival pilot: {(_levelObjective.RivalPilotDefeated ? _levelObjective.RivalBaseDestroyed ? "Defeated" : $"Respawn {_levelObjective.RivalRespawnRemaining:0}s" : "Alive")}";
@@ -141,7 +143,7 @@ public partial class Hud : CanvasLayer
             _result.Text = $"{(_levelObjective!.State == LevelObjective.LevelState.Victory ? "VICTORY" : "DEFEAT")}\n"
                 + $"{_levelObjective.ResultMessage}\n\nPress R to restart";
         }
-        _loadout.Text = $"Slot {_player.SelectedEquipmentSlot + 1}: {_player.PrimaryEquipmentName}   ·   LMB activate\n1–4 select   ·   Tab cycle   ·   RMB Claim\nB → Ship: research / install at home";
+        _loadout.Text = $"Slot {_player.SelectedEquipmentSlot + 1}: {_player.PrimaryEquipmentName}   ·   LMB activate\n1–4 select   ·   Tab cycle   ·   RMB Claim\nShift: {_player.BoosterStatusText}";
         _feedback.Text = _player.Health <= 0 ? "Pilot down — your base will respawn you"
             : !string.IsNullOrEmpty(_player.DiscoveryFeedbackMessage) ? _player.DiscoveryFeedbackMessage : _player.ActiveFeedbackMessage;
         _feedbackPanel.Visible = !_resultPanel.Visible && !string.IsNullOrEmpty(_feedback.Text);
@@ -154,20 +156,26 @@ public partial class Hud : CanvasLayer
         string details = Section("FLIGHT / PLAYER")
             + $"Camera: {_player.CameraMode}\nSpeed: {_player.Speed:0.0}\nTerrain clearance: {_player.AltitudeAboveTerrain:0.0}\n"
             + $"Storage-backed energy limit: {_player.EnergyCapacity}\nRecharge: {_player.EnergyRechargePerSecond:0.0}/s\nAntimatter collection: collector drone delivery\n{_player.ShieldStatusText}\n\n"
-            + Section("EQUIPMENT DISCOVERIES")
-            + _player.EquipmentProgressionText + "\nGold beacons grant rank II: fly within 4 units.\nUpgrades survive respawn; R resets them.\n\n"
+            + Section("EQUIPMENT / MATCH BOONS")
+            + _player.EquipmentProgressionText + "\nB researches ranks; install explicitly at home.\n"
+            + $"H choices / summary · {_player.Boons.Pending.Count} secured rewards\n{_player.Boons.Summary}\n"
+            + "Destroy wrecks; fly within 4 surface units to secure gold salvage.\nBoons survive respawn/tier loss; R resets them.\n\n"
             + Section("ANTIMATTER ECONOMY")
             + (_antimatterTracker == null ? "Tracker unavailable\n" : $"World total: {_antimatterTracker.TotalAntimatter}\nNeutral loose: {_antimatterTracker.NeutralLooseAntimatter}\nNeutral creatures: {_antimatterTracker.NeutralCreatureAntimatter}\nPlayer: {_antimatterTracker.PlayerControlledAntimatter}\nRival: {_antimatterTracker.EnemyControlledAntimatter}\n")
+            + $"Extractor supply accepted: {_antimatterTracker?.SiteGeneratedAntimatter ?? 0}\n"
             + (_well == null ? "Source: unavailable\n\n" : "Source: finite neutral landmark\n\n")
+            + Section("MATTER ECONOMY")
+            + (_matterTracker == null ? "Tracker unavailable\n" : $"Physical: {_matterTracker.PhysicalMatter} · committed: {_matterTracker.NetCommittedMatter}\nExtractor supply accepted: {_matterTracker.SiteGeneratedMatter}\nActive: {_matterTracker.ActiveInvestment} · permanent siege loss: {_matterTracker.DestroyedInvestmentLoss}\n")
+            + "Orange crates: Claim then drone hauling. Matter does not power equipment.\n\n"
             + Section("BASES / ENEMIES")
             + BaseDetails(_playerBase, "Player") + BaseDetails(_enemyBase, "Rival")
             + (_enemyEcosystem?.StatusText.Replace("   Intensity", "\nIntensity") ?? "Ecosystem unavailable") + "\n\n"
             + Section("TERRAIN") + _player.TerrainDebugText.Replace("   ", "\n")
             + "\n\n"
             + Section("CONTROLS")
-            + "WASD — fly\nSpace / C — ascend / descend\nMouse — look\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nR — restart arena\n\n"
+            + "WASD — fly\nSpace / C — ascend / descend\nShift — built-in forward boost (fresh press)\nMouse — look\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nR — restart arena\n\n"
             + $"1–4 — select equipped slot (no activation)\nLMB — activate {_player.PrimaryEquipmentName}\nTab — cycle installed slots\n"
-            + $"RMB — Claim ({_player.ClaimEquipmentEnergyCost} energy): aim at a globe or the ground before it; the bolt follows terrain after landing.\n\n"
+            + $"RMB — Claim ({_player.ClaimEquipmentEnergyCost} energy): aim at a globe/material crate or the ground before it; the bolt follows terrain after landing.\n\n"
             + Section("OWNERSHIP / ROLE GUIDE")
             + "Antimatter: gray neutral · cyan yours · red rival\nDrones haul owned antimatter to bases. Base damage reduces storage; excess spills neutral. Stored antimatter supports equipment power. Pop rivals to spill their cargo.\n\n"
             + "Orange — swarm\nGreen — beast\nBlue — caster\nRed — sieger\nYellow — thief\nPurple — pilot";
@@ -187,8 +195,9 @@ public partial class Hud : CanvasLayer
         : $"{side} base: {(hub.IsDestroyed ? "Destroyed" : $"HP {hub.Health}/{hub.MaxHealth}")}\n"
             + $"Storage: {hub.StoredAntimatter}/{hub.EffectiveStorageCapacity} (intact {hub.AntimatterStorageCapacity})  ·  Tier {hub.Tier} / purchased {hub.HighestPurchasedTier}\n"
             + $"Payments: {hub.SpentAntimatter} · Refunds: {hub.RefundedAntimatter} · Investment spill: {hub.InvestmentSpilledAntimatter}\n"
+            + $"Matter: {hub.StoredMatter}/{hub.EffectiveMatterCapacity} · Paid: {hub.SpentMatter} · Refunded: {hub.RefundedMatter} · Investment spill: {hub.InvestmentSpilledMatter}\n"
             + $"Construction: {hub.Construction.ActiveInvestment} invested · Siege loss: {hub.Construction.DestroyedInvestmentLoss}\n{hub.Construction.LastStatus}\n"
-            + ConstructionDetails(hub)
+            + ConstructionDetails(hub) + StrategicPoint.Summary(hub) + "\n"
             + $"Repair: {(hub.IsDestroyed ? "Ruined" : hub.IsRepairing ? "Repairing" : hub.Health < hub.MaxHealth ? "Waiting for quiet" : "Intact")}\n\n";
 
     private static string ConstructionDetails(FactionBase hub)
@@ -199,7 +208,7 @@ public partial class Hud : CanvasLayer
             var slot = (ConstructionSlot)i;
             var project = hub.Construction.GetActive(slot);
             text += project == null ? $"{slot}: idle\n"
-                : $"{slot}: {project.Definition.Name} {project.Progress:P0} · paid {project.PaidAntimatter}\n";
+                : $"{slot}: {project.Definition.Name} {project.Progress:P0} · paid {project.PaidAntimatter} A + {project.PaidMatter} M\n";
         }
         return text;
     }

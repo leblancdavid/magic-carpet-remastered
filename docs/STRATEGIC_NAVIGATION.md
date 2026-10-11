@@ -6,14 +6,15 @@ Terminology/UI update (2026-10-11): the implemented radar is now Tactical Radar.
 
 The sections below describe the implemented legacy navigation/landmark milestone, not the new reward/capture systems. Basic spherical gameplay is now accepted as a smooth playtest baseline; detailed route and balance tuning continues.
 
-- Exploration rewards will be wreck-hidden, permanent stacking boons rather than equipment/rank upgrades. Destroy a wreck to reveal a reward; first collector secures three choices or a skip-for-antimatter option. Choice is real time and deferrable. See `EXPLORATION_BOONS.md`.
+- Exploration rewards now use random destructible wrecks and permanent stacking match boons. First collector secures three choices or a skip-for-antimatter option. H choice/summary is real time and deferrable. See `EXPLORATION_BOONS.md`.
 - Random initial wrecks and ongoing orbital arrivals exclude all faction bases using spherical surface distance. Reward placement must remain reachable and bounded across all planet sizes.
 - Capturable economic sites provide direct base resource income, faster research or an associated collector drone. Capture is timed; opposing player presence halts progress; benefits remain with the previous owner until completion. See `STRATEGIC_POINTS.md`.
 - Logistics capture transfers the drone and its cargo immediately, including stolen resources, and reroutes it to the new owner's base.
-- Planned navigation markers distinguish wrecks, revealed rewards and economic-site roles/ownership; capture feedback shows progress and contest. Exact reveal rules remain undecided.
-- Equipment unlocks/ranks now use base research and home installation. Landmark beacons are non-reward signal markers pending wreck/boon conversion; they cannot grant purchased ranks. The original layout/history below retains the earlier exploration context.
+- Wrecks reveal within 120 surface units and remain charted; outlined gray-square wrecks turn into gold-diamond salvage markers on destruction and disappear on collection. Charted distant wreck/salvage markers also appear at the radar rim. Eight economic sites are globally charted ring/cross markers (gray neutral, cyan yours, red rival, orange contested), including two matter extractors; hover shows role, ownership, benefit and capture state. Local world text appears within 65 units. B/F3 summarizes owned sites and rates. See `STRATEGIC_POINTS.md` for current policies.
+- Matter crates use outlined-square-with-center-dot markers, orange neutral/cyan owned/red rival. Owned material is charted globally; neutral/rival material reveals within 120 units. Attached/consumed crates disappear immediately; drone details report mixed cargo and material amount. Radar now leaves room below the four-line vitals/material HUD.
+- Equipment unlocks/ranks use base research and home installation. Random wrecks replace authored landmark beacons; boons cannot grant purchased ranks. The original layout/history below retains the earlier exploration context.
 
-New reward/capture interfaces will run in real time. The M survey and B management now follow that policy: neither pauses simulation, they block ship controls and restore prior mouse mode on close, and they cannot open over setup/terminal pause. Only one live interface is expanded at a time.
+M survey, B management and H boon choices run in real time: they block ship controls, restore prior mouse mode on close and cannot open over setup/terminal pause. H/B/M transfer ownership with one expanded live interface at a time. The historical notes below describe the former reward layout; current playtests should find/destroy random wrecks instead of collecting named rank-II beacons.
 
 ## First playable milestone (2026-10-10)
 

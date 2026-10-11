@@ -2,7 +2,7 @@
 
 ## Status And Direction
 
-Approved design, 2026-10-11. Terminology, explicit-tier/storage-backed-energy accounting, five-slot construction, cancellation/refunds, tier destruction/rebuilding, real-time management, starter projects and owned equipment research/home installation/four-slot loadouts are implemented. Shift booster, boons and economic sites follow. The existing spherical mechanics are accepted as a smooth playtest baseline. Costs, timing, balance, AI, equipment progression and base development remain iterative work.
+Approved design, 2026-10-11. Terminology, explicit-tier/storage-backed-energy accounting, five-slot construction, cancellation/refunds, tier destruction/rebuilding, real-time management, starter projects, owned equipment/four-slot home installation, Shift booster, boons, economic sites and matter logistics/material costs are implemented for their first pass. The existing spherical mechanics are accepted as a smooth playtest baseline. Costs, timing, balance, AI, equipment progression and base development remain iterative work.
 
 The game is moving to futuristic faction conflict over planetary resources. A base is the player's home and an RTS-style development hub. Players choose investments rather than obtaining base tiers automatically from stored resources.
 
@@ -18,7 +18,7 @@ Keep these quantities separate in gameplay code and UI:
 | Stored antimatter | Collected antimatter currently retained at the base, available for construction expenditure and supporting the player's energy limit. |
 | Player energy limit | Maximum rechargeable antimatter energy available for equipment use; equals stored antimatter in the new design. |
 | Current energy | Rechargeable combat/movement energy, bounded by the player energy limit. |
-| Matter | Planned material resource for selected building projects; acquisition, storage and costs are not yet specified. |
+| Matter | Independent construction material; never contributes to combat energy. |
 
 Equipment use and boosting spend current energy, not stored antimatter. Construction spends stored antimatter permanently, immediately lowering the player energy limit and clamping current energy if necessary. Current energy still regenerates within that limit. Collecting and delivering new antimatter increases stored antimatter and the energy limit; it does not grant an automatic full energy refill.
 
@@ -50,7 +50,14 @@ These are provisional implementation defaults selected with user approval to pro
 
 Claim remains usable on loose antimatter even when the base is full, subject to its normal current-energy cost. Collector drones stop gathering when storage is full; owned resources remain in the world until room becomes available. Implemented policy: an empty drone waits at its home anchor; a loaded drone returns home, deposits only available room and retains undeposited owned cargo. Dock-delay retries resume delivery when room opens. Partial deposits never neutralize or delete cargo; destroying a loaded drone still releases its exact remaining cargo through the normal neutral-drop path.
 
-Matter is a later milestone. Do not invent material costs or collection behavior during the terminology-only conversion.
+### Matter Foundation — Provisional Defaults (2026-10-11)
+
+- Matter is one generic material, stored separately from antimatter, starting at **30**. Intact capacities are **120/200/300/400/500**, independently configurable, using the same incremental health-layer damage rule. Repair reopens room without recreating material.
+- Loose matter uses orange material crates, grounded/floating on authoritative terrain (not rolling antimatter spheres). RMB Claim marks neutral/rival crates; ships never absorb them. Existing collectors haul both resources, sharing their three-object cargo limit and choosing the nearest eligible resource with room at home. Full storage for one resource does not block gathering the other. Partial deliveries retain cargo; station capture transfers both cargo kinds; drone destruction spills exact remaining neutral material.
+- Each base starts with a nearby **60-matter neutral field**; two additional mirrored **60-matter fields** support exploration. Two neutral matter extractors use existing timed/contested capture and deposit **2 matter/s**, stopping at capacity without backlog or overflow.
+- Tier 2–5 material costs are **20/30/40/50**. Repair matrix, energy grid, collector drive and strike drone cost **5/10/5/15 matter** respectively. Ship/Claim research remains antimatter-only for this pass. Costs are snapshotted and both resources pay atomically; insufficiency in either changes neither reserve.
+- Cancellation fully refunds both actual payments with owned overflow crates/spheres. Tier loss destroys all active projects: independently for each resource, floor-half spills neutral and the remainder is lost. Rebuilds round up half of each normal resource cost. Ordinary capacity spills remain separate. No tier-zero recovery is added.
+- Separate material supply/physical/investment ledgers reconcile loose plus carried plus stored matter plus net committed matter against initial and extractor supply. Current energy is unaffected by material transfers, payments or refunds. These defaults require hands-on balance tuning.
 
 ### Economic Sites And Reward Bonuses
 
@@ -93,8 +100,8 @@ Multiple categories can run concurrently, with up to five active projects. Each 
 
 ### Implemented Lifecycle And Integration Surface
 
-- Every base owns `BaseConstruction`, advanced by its physics tick. Immutable catalog definitions specify ID/name, slot, positive cost/duration, required surviving tier and optional completed-project prerequisite. Unknown, unaffordable, occupied, duplicate, completed or prerequisite-blocked requests reject without payment. Existing global pause freezes timers; active gameplay advances them in real time.
-- Base projects use `TryStartNextTier`; provisional tier 2/3/4/5 prices are **100/150/200/250** and times **20/30/40/50 seconds**, independently configurable. Rebuilds use the same duration and half-price rounding below.
+- Every base owns `BaseConstruction`, advanced by its physics tick. Immutable catalog definitions specify ID/name, slot, nonnegative antimatter/material costs (at least one positive), positive duration, required surviving tier and optional completed-project prerequisite. Unknown, unaffordable, occupied, duplicate, completed or prerequisite-blocked requests reject without either payment. Existing global pause freezes timers; active gameplay advances them in real time.
+- Base projects use `TryStartNextTier`; provisional tier 2/3/4/5 prices are **100/150/200/250 antimatter + 20/30/40/50 matter** and times **20/30/40/50 seconds**, independently configurable. Rebuilds use the same duration and half-price rounding independently for each resource.
 - Defense/resources/offense/ship slots accept registered content definitions. Non-repeatable completion records finished research once; repeatable projects can be ordered again after completion. The starter catalog below applies live repair/recharge/collector/Claim effects and launches offensive units. The Ship catalog also researches owned equipment and sequential ranks I–III; completion awaits explicit home installation. Completed research survives tier loss; starter non-ship effects suspend below prerequisites, while equipment ownership and installed ranks persist independently.
 - Projects expose immutable payment/definition snapshots, progress, target tier/rebuild flag, and a unique instance ID. `Cancel(slot, instanceId)` cannot accidentally cancel a replacement project from a stale UI action. Active/completed/cancelled/destroyed outcomes are exclusive; terminal projects clear their slots, with no queue or replayed completion/refund.
 - Cancellation deposits the exact payment and spills owned overflow through the existing grounded/radial fragment path. Tier loss destroys all categories synchronously before later timer completion, including the base/rebuild slot; investment neutral drops are separate from storage drops.
@@ -104,11 +111,11 @@ Multiple categories can run concurrently, with up to five active projects. Each 
 
 | Project | Slot / required tier | Cost / time | Implemented effect |
 | --- | --- | --- | --- |
-| Repair matrix | Defense / 1 | 20 / 8s | Passive base repair ×1.5; never restores lost tiers. |
-| Energy grid | Defense / 2 | 40 / 12s | Ship recharge ×1.25; completed research suspends below tier 2. |
-| Collector drive | Resources / 1 | 25 / 10s | Home-base collector movement speed ×1.25, including existing collectors. |
-| Strike drone | Offense / 2 | 60 / 15s | Repeatable one-shot unit flies from home to the opposing base, dealing 45 damage once. |
-| Claim range calibration | Ship / 1 | 15 / 8s | Built-in RMB Claim range 120→150; no equipment slot or installation. |
+| Repair matrix | Defense / 1 | 20 antimatter + 5 matter / 8s | Passive base repair ×1.5; never restores lost tiers. |
+| Energy grid | Defense / 2 | 40 antimatter + 10 matter / 12s | Ship recharge ×1.25; completed research suspends below tier 2. |
+| Collector drive | Resources / 1 | 25 antimatter + 5 matter / 10s | Home-base collector movement speed ×1.25, including existing collectors. |
+| Strike drone | Offense / 2 | 60 antimatter + 15 matter / 15s | Repeatable one-shot unit flies from home to the opposing base, dealing 45 damage once. |
+| Claim range calibration | Ship / 1 | 15 antimatter / 8s | Built-in RMB Claim range 120→150; no equipment slot or installation. |
 
 Provisional definitions live in `BaseProjectCatalog.cs`. Effects are derived from completed research and surviving prerequisites rather than repeatedly mutating exported tuning; no double application occurs. Ship energy, collector movement, base repair and newly cast Claim projectiles use these live modifiers. The energy-grid suspension policy is provisional for this initial non-ship catalog; installed equipment retention remains governed separately by `SHIP_EQUIPMENT.md`.
 
@@ -118,16 +125,16 @@ Strike drones use original primitive visuals and spherical/flat routes, speed 18
 
 `SpentAntimatter` is cumulative gross payment, **not** an additional physical reserve. `RefundedAntimatter` includes both refund deposits and owned overflow; `InvestmentSpilledAntimatter` records the investment fraction returned as neutral physical drops. `NetCommittedAntimatter = spent - refunded - investment spilled` includes active investment, completed expenditure and permanent losses. `WorldAntimatterTracker` aggregates these, active investment and `DestroyedInvestmentLoss` separately from loose/carried/storage/creature resources.
 
-With no new supply or withdrawals into untracked destinations, `physical world total + net committed = supplied antimatter`. Transfers and ordinary storage spills leave that sum unchanged. Refunds and investment spills return only the actual payment fractions to physical supply. Future income/boon supply and material ledgers must extend this model explicitly.
+With no new supply or withdrawals into untracked destinations, `physical world total + net committed = supplied antimatter`. Transfers and ordinary storage spills leave that sum unchanged. Refunds and investment spills return only the actual payment fractions to physical supply. `WorldMatterTracker` independently applies the same identity to material crates (including attached cargo) and base matter; its accepted extractor supply, active investment and destroyed loss are separate diagnostics. Material has no creature reserves or energy-limit contribution.
 
 Remote ordering is allowed. Research and construction run in real time, including while the management UI is open. Ship equipment installation/loadout changes require returning home.
 
 ## Cancellation
 
-- Cancelling an active project refunds its full paid antimatter investment, without a fee.
+- Cancelling an active project refunds its full paid antimatter and matter investment, without a fee.
 - Refund only what that project actually paid; a rebuild refunds its reduced rebuild price, not the normal tier price.
 - Deposit the refund up to currently available storage space.
-- Spill the remainder outside the base as player-owned antimatter, available to collectors.
+- Spill the remainder outside the base as faction-owned antimatter spheres and matter crates, available to collectors.
 - Completing, cancelling and destroying a project are mutually exclusive outcomes; repeated callbacks cannot refund or spill it twice.
 
 Construction frees storage space at purchase time. Collectors may refill that space before cancellation, making refund overflow a normal case to support.
@@ -136,9 +143,9 @@ Construction frees storage space at purchase time. Collectors may refill that sp
 
 When the base loses a tier, all projects currently under construction are destroyed, including projects in other categories and the base slot. Individual project structures/HP are not required for this initial rule.
 
-For each destroyed project's paid antimatter:
+For each destroyed project's paid resource, independently for antimatter and matter:
 
-- 50% spills outside the base as unclaimed/neutral antimatter, allowing rivals to claim it.
+- 50% spills outside the base as unclaimed/neutral spheres or material crates, allowing rivals to claim it.
 - The other 50% is permanently lost; it is not refunded to storage.
 - A project is destroyed once even if one attack removes multiple tiers.
 
@@ -217,5 +224,5 @@ Management and the **M world survey both run in real time**. Only one owns ship 
 - Starter non-ship research effects use provisional suspension below prerequisites; future completed unit/defense upgrades need their own effect-retention policies. Installed ship equipment retention is already decided.
 - Balance tuning of the implemented health-layer thresholds, rebuild times and repair rates; complete loss remains terminal.
 - Pending completed ship research if the base is damaged or the player dies before installation.
-- Matter acquisition/storage/refunds and overflow handling.
+- Matter costs, capacity, crate readability and nearest-resource/shared-cargo logistics balance from playtesting; richer material types/mining are later content.
 - Rival research behavior, faction differences and eventual participant/networking scope.

@@ -13,6 +13,7 @@ public partial class WorldAntimatterTracker : Node
     public int PlayerControlledAntimatter { get; private set; }
     public int EnemyControlledAntimatter { get; private set; }
     public long SpentAntimatter { get; private set; }
+    public long SiteGeneratedAntimatter { get; private set; }
     public long RefundedAntimatter { get; private set; }
     public long InvestmentSpilledAntimatter { get; private set; }
     public long ActiveConstructionInvestment { get; private set; }
@@ -53,6 +54,9 @@ public partial class WorldAntimatterTracker : Node
         PlayerControlledAntimatter = 0;
         EnemyControlledAntimatter = 0;
         SpentAntimatter = 0;
+        SiteGeneratedAntimatter = 0;
+        foreach (Node node in GetTree().GetNodesInGroup("strategic_point"))
+            if (node is StrategicPoint point && !point.IsQueuedForDeletion()) SiteGeneratedAntimatter += point.GeneratedAntimatter;
         RefundedAntimatter = InvestmentSpilledAntimatter = ActiveConstructionInvestment = DestroyedInvestmentLoss = 0;
 
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))

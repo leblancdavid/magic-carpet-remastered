@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented 2026-10-11: owned equipment research, sequential ranks I–III, four-slot management UI and home installation. A new match owns/installs Plasma Bolt I only. Claim remains built in. Shift booster and wreck/boon progression are later milestones. See `BASE_DEVELOPMENT.md` for construction costs, tier access and the ship research slot.
+Implemented 2026-10-11: owned equipment research, sequential ranks I–III, four-slot management UI, home installation, built-in Shift booster and independent exploration boon modifiers. A new match owns/installs Plasma Bolt I only. Claim and booster remain built in. See `BASE_DEVELOPMENT.md` for construction and `EXPLORATION_BOONS.md` for match bonuses; economic capture points are next.
 
 ## Four-Slot Loadout
 
@@ -37,7 +37,7 @@ Keep researched/built ownership separate from the equipped loadout and base rese
 - Research pays stored antimatter through the ship construction slot, reducing the player's energy limit.
 - Completion makes the equipment/upgrade ready for home-base collection/installation; it does not auto-install remotely.
 
-Equipment unlocks and ranks now come exclusively from base research. Legacy gold beacons remain as non-reward signal landmarks pending wreck/boon conversion; they cannot unlock items or grant purchased ranks. Future random exploration rewards grant permanent stacking boons; see `EXPLORATION_BOONS.md`.
+Equipment unlocks and ranks come exclusively from base research. Random destructible wrecks now replace legacy gold beacons, granting secured permanent stacking match boons; they cannot unlock items or purchase ranks. See `EXPLORATION_BOONS.md`.
 
 ### Provisional Catalog And Installation Rules
 
@@ -59,7 +59,7 @@ Installation is allowed while alive, in unpaused live gameplay, within **18 surf
 
 Boons can influence equipment selection through speed, recharge, fire rate, projectile speed, specialized damage and HP modifiers. They stack, persist through death and last for the match, independently of the owned equipment inventory and four-slot loadout. Unequipping equipment does not consume its applicable boons. Display purchased rank and boon-derived effective modifiers separately.
 
-Damage types/source tags and modifier stacking formulas are not finalized. Define them with the initial equipment catalog before implementing damage-specialization boons.
+Initial boon attribution: Plasma Bolt and summoned Guardian use energy damage, Pulse Burst uses explosive damage, and Guardian additionally has a deployable source tag. Ten capped additive +10% stacks per family multiply independent factors after researched rank, rounding integer damage once. Mobility affects normal/boost/ranked Dash speeds; recharge multiplies Energy grid; fire-rate/projectile-speed apply to Plasma Bolt. H exposes current stacks/effective stats. Broader kinetic/new-item taxonomy and base-HP boons remain deferred.
 
 ## Built-In Claim
 
@@ -73,16 +73,18 @@ The live-management starter catalog now includes **Claim range calibration**: 15
 
 ## Built-In Booster
 
-- Shift activates a temporary short burst of speed.
+- A fresh Shift press activates a temporary short burst of forward, surface-relative thrust; holding Shift/key echo cannot repeat it automatically.
 - The booster is built into every ship and does not occupy an equipment slot.
 - It costs a small amount of current antimatter energy, competing with attacks and other equipment use.
 - Boosting does not consume stored construction resources or permanently lower the energy limit.
-- Speed, duration, cost, cooldown/retrigger rules and interaction with other mobility equipment are tunable.
-- This is a new mechanic, not part of the behavior-preserving terminology conversion.
+- Provisional defaults: **36 units/second**, **0.65 seconds** of thrust, **4 current energy**, **2-second cooldown from activation**. Tuning is exported on `ShipFlightController`. Recharge follows the normal storage-backed rules during/after boost; no resource refill occurs.
+- Thrust follows ship heading, ignores camera pitch and does not add diagonal input speed or special lift. Space/C and normal terrain follow/flight ceiling remain active. After thrust ends, normal acceleration/drag governs momentum.
+- Pause freezes thrust/cooldown. Management/survey input ownership ends active thrust and blocks activation; closing UI with Shift held does not retrigger. Death ends thrust; respawn clears booster timers. Insufficient energy rejects atomically without starting cooldown.
+- HUD shows active time, cooldown or energy requirement. The Ship tab lists the built-in mobility tuning outside the equipment slots.
 
 ## Dash Equipment
 
-Dash remains a stronger mobility option than the built-in booster and occupies an equipment slot. It has its own energy cost and upgrade ranks. Preserve its existing behavior through the rename; tune its distinction from the booster when implementing Shift boost.
+Dash occupies a slot and costs **10 energy** with its existing **3-second cooldown**. It delivers an immediate camera-aimed impulse with **5 units/second lift** at rank speeds **46 / 55.2 / 64.4**; normal drag/acceleration follows. This contrasts with the cheaper short forward thrust, which provides no special lift. Activating Dash ends active boost so speeds cannot stack and booster thrust cannot overwrite the Dash impulse on the next frame. Research choices remain sequential ranks, with speed improving 20% of rank-I speed each rank; branching upgrades are deferred. Initial prices/effects remain provisional pending hands-on balance feedback.
 
 ## Ship UI
 
@@ -114,6 +116,6 @@ Bindings use 1–4 selection, LMB activation and Tab cycling. Management remains
 
 ## Remaining Decisions
 
-- Damage types/source tags and researched-stat interactions with boon stacking.
+- Damage/source taxonomy for future equipment and base-HP layer policy; current boon interactions are explicit in `EXPLORATION_BOONS.md`.
 - Hands-on catalog, installation-distance, UI scrolling and rank/cost balance.
-- Booster/Dash balance and wreck/boon conversion.
+- Hands-on booster/Dash cost, duration, cooldown and movement balance; wreck/boon pacing and modifier balance.

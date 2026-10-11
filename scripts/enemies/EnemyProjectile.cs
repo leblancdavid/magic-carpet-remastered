@@ -99,6 +99,8 @@ public partial class EnemyProjectile : Area3D
 
         SpawnImpactBurst();
 
+        if (body is ExplorationWreck wreck) wreck.ApplyDamage(Damage);
+
         if (body is ShipFlightController player)
         {
             player.ApplyDamage(Damage);

@@ -118,6 +118,8 @@ public partial class WeaponProjectile : Area3D
 
         SpawnImpactBurst();
 
+        if (body is ExplorationWreck wreck) wreck.ApplyDamage(Damage);
+
         if (body is SimpleMonster monster)
         {
             monster.ApplyDamage(Damage);

@@ -5,7 +5,7 @@ using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
-public enum MapMarkerKind { Player, Home, RivalBase, Landmark, Upgrade, Antimatter, Drone, Enemy }
+public enum MapMarkerKind { Player, Home, RivalBase, Landmark, Upgrade, Antimatter, Drone, Enemy, Wreck, Reward, StrategicPoint, Matter }
 public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Color Color, bool Charted = true)
 {
     public Node3D? Actor { get; init; }
@@ -17,9 +17,11 @@ public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Col
         if (Actor == null) return true;
         if (!GodotObject.IsInstanceValid(Actor) || Actor.IsQueuedForDeletion() || !Actor.IsInsideTree()) return false;
         if (Actor is AntimatterPickup orb && !orb.IsAvailable) return false;
+        if (Actor is MatterPickup material && !material.IsAvailable) return false;
         if (Actor is EnemyEcosystemEnemy enemy && enemy.Health <= 0) return false;
         if (Actor is CollectorDrone drone && drone.Health <= 0) return false;
         if (Actor is EquipmentDiscovery discovery && discovery.IsCollected) return false;
+        if (Actor is ExplorationWreck wreck && wreck.IsCollected) return false;
         up = arena.UpAt(Actor.GlobalPosition);
         return true;
     }
@@ -97,8 +99,13 @@ public partial class WorldNavigation : Node
                 Add(hub, hub.IsPlayerBase ? "Home" : "Rival base",
                     hub.IsPlayerBase ? MapMarkerKind.Home : MapMarkerKind.RivalBase,
                     hub.IsPlayerBase ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.25f, 0.3f),
-                    hub.IsDestroyed ? "Ruins" : $"{hub.Health} HP · {hub.StoredAntimatter} antimatter");
+                    hub.IsDestroyed ? "Ruins" : $"{hub.Health} HP · {hub.StoredAntimatter} antimatter · {hub.StoredMatter} matter");
             }
+        foreach (Node node in GetTree().GetNodesInGroup("strategic_point"))
+            if (node is StrategicPoint point && !point.IsQueuedForDeletion())
+                Add(point, point.StatusText.Replace('\n', ' '), MapMarkerKind.StrategicPoint,
+                    point.IsContested ? Colors.Orange : point.Ownership == AntimatterOwnership.Player ? new Color(0.15f, 0.85f, 1)
+                    : point.Ownership == AntimatterOwnership.Enemy ? new Color(1, 0.25f, 0.3f) : Colors.LightGray);
         foreach (Node node in GetTree().GetNodesInGroup("world_landmark"))
         {
             if (node is not WorldLandmark landmark || landmark.IsQueuedForDeletion()) continue;
@@ -115,6 +122,15 @@ public partial class WorldNavigation : Node
                 if (landmark.IsDiscovered && Arena.SurfaceDistance(landmark.GlobalPosition, discovery.GlobalPosition) < 30) revealed = true;
             if (revealed) Add(discovery, $"{discovery.EquipmentName} signal", MapMarkerKind.Upgrade, new Color(1, 0.8f, 0.2f));
         }
+        foreach (Node node in GetTree().GetNodesInGroup("exploration_wreck"))
+        {
+            if (node is not ExplorationWreck wreck || wreck.IsQueuedForDeletion() || wreck.IsCollected) continue;
+            if (Nearby(wreck)) wreck.IsCharted = true;
+            if (!wreck.IsCharted) continue;
+            Add(wreck, wreck.IsRevealed ? "Boon salvage · fly close to secure" : $"Wreck · {wreck.Health} HP",
+                wreck.IsRevealed ? MapMarkerKind.Reward : MapMarkerKind.Wreck,
+                wreck.IsRevealed ? new Color(1, 0.8f, 0.2f) : new Color(0.65f, 0.72f, 0.8f));
+        }
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {
             if (node is not AntimatterPickup orb || !orb.IsAvailable || (orb.Ownership != AntimatterOwnership.Player && !Nearby(orb))) continue;
@@ -126,11 +142,17 @@ public partial class WorldNavigation : Node
             };
             Add(orb, $"{orb.Ownership} antimatter · {orb.AntimatterAmount}", MapMarkerKind.Antimatter, color);
         }
+        foreach (Node node in GetTree().GetNodesInGroup("matter_pickup"))
+            if (node is MatterPickup material && material.IsAvailable
+                && (material.Ownership == AntimatterOwnership.Player || Nearby(material)))
+                Add(material, $"{material.Ownership} matter · {material.MatterAmount}", MapMarkerKind.Matter,
+                    material.Ownership == AntimatterOwnership.Player ? new Color(0.15f, 0.85f, 1)
+                    : material.Ownership == AntimatterOwnership.Enemy ? new Color(1, 0.25f, 0.3f) : new Color(1, 0.65f, 0.18f));
         foreach (Node node in GetTree().GetNodesInGroup("drone"))
         {
             if (node is not CollectorDrone drone || drone.IsQueuedForDeletion() || drone.Health <= 0 || (!drone.UsePlayerAntimatter && !Nearby(drone))) continue;
             Add(drone, drone.UsePlayerAntimatter ? "Your drone" : "Rival drone", MapMarkerKind.Drone,
-                drone.UsePlayerAntimatter ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.3f, 0.4f), $"{drone.CarriedCount} cargo globes");
+                drone.UsePlayerAntimatter ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.3f, 0.4f), $"{drone.CarriedCount} cargo objects · {drone.CarriedMatterAmount} matter");
         }
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
             if (node is EnemyEcosystemEnemy enemy && !enemy.IsQueuedForDeletion() && enemy.Health > 0 && Nearby(enemy))

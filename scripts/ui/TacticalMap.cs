@@ -31,6 +31,7 @@ public partial class TacticalMap : CanvasLayer
         _canvas.MouseFilter = expanded ? Control.MouseFilterEnum.Stop : Control.MouseFilterEnum.Ignore;
         if (expanded)
         {
+            (GetTree().GetFirstNodeInGroup("boon_choices") as BoonChoices)?.SetOpen(false);
             (GetTree().GetFirstNodeInGroup("base_management") as BaseManagement)?.SetOpen(false);
             Navigation.Refresh();
             _previousMouse = Input.MouseMode;
@@ -54,6 +55,7 @@ public partial class TacticalMap : CanvasLayer
             if (key.Pressed && !key.Echo)
             {
                 if (key.Keycode is Key.M or Key.Escape) SetExpanded(false);
+                else if (key.Keycode is Key.H or Key.B) { SetExpanded(false); return; }
                 else if (key.Keycode == Key.Delete) Navigation.ClearWaypoint();
                 else if (key.Keycode == Key.R)
                 {
