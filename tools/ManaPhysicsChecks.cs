@@ -360,8 +360,9 @@ public partial class ManaPhysicsChecks : Node3D
         Check(first.IsGrowing && first.Radius > initialRadius && first.Radius < first.TargetRadius,
             "Merge radius interpolates through intermediate sizes");
         var shape = (SphereShape3D)first.GetChild<CollisionShape3D>(0).Shape;
-        var mesh = (SphereMesh)first.GetChild<MeshInstance3D>(1).Mesh;
-        Check(Mathf.IsEqualApprox(shape.Radius, mesh.Radius) && Mathf.IsEqualApprox(shape.Radius, first.Radius),
+        var visual = first.GetChild<MeshInstance3D>(1);
+        var mesh = (SphereMesh)visual.Mesh;
+        Check(Mathf.IsEqualApprox(shape.Radius, mesh.Radius * visual.Scale.X) && Mathf.IsEqualApprox(shape.Radius, first.Radius),
             "Visible sphere and collider grow together");
         Check(Mathf.Abs(first.GlobalPosition.Y - first.Radius) < 0.06f,
             "Growing globe remains grounded instead of lifting suddenly or sinking");

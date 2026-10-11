@@ -20,6 +20,8 @@ Playable conversion implemented: default `scenes/PlanetGame.tscn` includes patch
 
 Active next priorities: integrated spherical playtest across the four sizes → longer-session deformation/LOD/collision profiling → distributed strategic content and participant-count decisions → remaining spell/campaign/presentation work. The original phase statuses below retain their historical prototype scope and tuning backlog; their shared systems now also run on the globe.
 
+Combat hitch follow-up (2026-10-10): first optimization pass adds pooled impact/death/possession effects, shared low-poly mana/combat resources, spatial mana/deformation lookups, localized vertex resampling, and frame-budgeted terrain rebuilds. Next priority is rendered Medium/XL combat spike profiling and user acceptance; atomic collision rebuilds and immediate fragment-body creation remain candidates if hitches persist. See `docs/COMBAT_PERFORMANCE.md`.
+
 Startup: F5 launches full spherical gameplay. In-game F6 switches to the flight lab and back to a fresh spherical match. The flat island remains `Game.tscn` for regression/reference; it is not the default world.
 
 Keep work separated into three tracks:

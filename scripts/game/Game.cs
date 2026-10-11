@@ -2,6 +2,7 @@ using Godot;
 using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.Player;
+using MagicCarpetRemastered.Scripts.Spells;
 using MagicCarpetRemastered.Scripts.Ui;
 using MagicCarpetRemastered.Scripts.World;
 
@@ -33,6 +34,7 @@ public partial class Game : Node3D
     public override void _Ready()
     {
         CreateLighting();
+        SpellImpactPool.Prepare(this);
         AddChild(new GameAudio { Name = "GameAudio" });
         CreateArena();
         CreateManaWell();

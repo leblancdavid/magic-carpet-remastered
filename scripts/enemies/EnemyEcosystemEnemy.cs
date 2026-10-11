@@ -879,17 +879,8 @@ private void TryAbsorbLooseMana()
 
     private void SpawnDeathBurst()
     {
-        var burst = new SpellImpactBurst
-        {
-            Name = $"{RoleText}DeathBurst",
-            BurstColor = new Color(1.0f, 0.45f, 0.1f, 0.9f),
-            EmissionColor = new Color(1.0f, 0.2f, 0.05f),
-            DurationSeconds = 0.45f,
-            StartScale = 0.8f,
-            EndScale = 3.5f
-        };
-        GetTree().CurrentScene.AddChild(burst);
-        burst.GlobalPosition = GlobalPosition;
+        SpellImpactPool.Prepare(GetTree().CurrentScene).Emit(GlobalPosition,
+            new Color(1, 0.45f, 0.1f, 0.9f), new Color(1, 0.2f, 0.05f), 0.45f, 0.8f, 3.5f);
     }
 
     private void DropMana()

@@ -1,0 +1,114 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using Godot;
+using MagicCarpetRemastered.Scripts.World;
+using MagicCarpetRemastered.Scripts.Spells;
+
+namespace MagicCarpetRemastered.Tools;
+
+public partial class CombatPerformanceChecks : Node3D
+{
+    private int _assertions;
+    private void Check(bool condition, string message)
+    {
+        _assertions++;
+        if (!condition) throw new InvalidOperationException(message);
+    }
+
+    public override async void _Ready()
+    {
+        try
+        {
+            var pool = SpellImpactPool.Prepare(this);
+            var orange = new Color(1, 0.4f, 0.1f);
+            var cyan = new Color(0.1f, 0.8f, 1);
+            var firstBurst = pool.Emit(Vector3.Zero, orange, orange, 0.28f, 0.4f, 2.2f);
+            var simultaneous = pool.Emit(Vector3.One, cyan, cyan, 0.28f, 0.4f, 2.2f);
+            firstBurst._Process(0.14);
+            var otherMaterial = (StandardMaterial3D)simultaneous.GetChild<MeshInstance3D>(0).MaterialOverride;
+            Check(otherMaterial.AlbedoColor == cyan, "Simultaneous pooled effects retain independent colors and fade state");
+            firstBurst._Process(1);
+            Check(!firstBurst.Visible && !firstBurst.IsProcessing() && !firstBurst.IsQueuedForDeletion(), "Finished pooled effect sleeps instead of being freed");
+            var reused = pool.Emit(new Vector3(3, 4, 5), cyan, cyan, 0.45f, 0.8f, 3.5f);
+            Check(reused == firstBurst && reused.Visible && reused.Scale == Vector3.One * 0.8f
+                && reused.GlobalPosition == new Vector3(3, 4, 5), "Reuse resets pose, scale and visibility");
+            reused._Process(0.1);
+            Check(reused.Visible && !reused.IsQueuedForDeletion(), "Reuse resets age and duration");
+            reused._Process(1); simultaneous._Process(1);
+            var orbs = new List<ManaPickup>();
+            for (int i = 0; i < 512; i++)
+            {
+                var orb = new ManaPickup { Position = new Vector3((i % 32) * 10 - 160, 2, (i / 32) * 10 - 80), ManaAmount = i % 20 + 1 };
+                AddChild(orb);
+                orb.SetPhysicsProcess(false);
+                orb.Freeze = true;
+                orbs.Add(orb);
+            }
+            var candidates = new List<ManaPickup>();
+            foreach (var center in new[] { Vector3.Zero, new Vector3(-160, 2, -80), new Vector3(150, 2, 70), new Vector3(-8, 2, -8) })
+            {
+                ManaNeighborhood.Query(GetTree(), center, 6, candidates);
+                foreach (var orb in orbs)
+                    if (orb.GlobalPosition.DistanceTo(center) <= 6 + orb.Radius)
+                        Check(candidates.Contains(orb), "Broad phase must contain every exact sphere hit, including negative cell boundaries");
+            }
+            Check(candidates.Count < orbs.Count / 4, "Local query rejects most distant mana spheres");
+            Check(orbs[0].GetChild<MeshInstance3D>(1).Mesh == orbs[511].GetChild<MeshInstance3D>(1).Mesh,
+                "Mana globes share one immutable visual mesh");
+            var large = new ManaPickup { Position = new Vector3(70, 2, 0), ManaAmount = 100000 };
+            AddChild(large); large.Freeze = true; large.SetPhysicsProcess(false);
+            ManaNeighborhood.Query(GetTree(), Vector3.Zero, 6, candidates);
+            Check(candidates.Contains(large), "Huge neighbor radius is included in the broad phase");
+            large.QueueFree();
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            ManaNeighborhood.Query(GetTree(), Vector3.Zero, 6, candidates);
+            Check(candidates.TrueForAll(GodotObject.IsInstanceValid), "Freed wrappers are removed before queries return candidates");
+
+            // CPU broad-phase microbenchmark only; no frame-rate or GPU claim.
+            var timer = Stopwatch.StartNew();
+            long indexedBytes = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 1000; i++) ManaNeighborhood.Query(GetTree(), Vector3.Zero, 6, candidates);
+            indexedBytes = GC.GetAllocatedBytesForCurrentThread() - indexedBytes;
+            double indexedMs = timer.Elapsed.TotalMilliseconds;
+            timer.Restart();
+            long scanBytes = GC.GetAllocatedBytesForCurrentThread();
+            int hits = 0;
+            for (int i = 0; i < 1000; i++)
+                foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+                    if (node is ManaPickup orb && orb.GlobalPosition.DistanceTo(Vector3.Zero) <= 6 + orb.Radius) hits++;
+            scanBytes = GC.GetAllocatedBytesForCurrentThread() - scanBytes;
+            GD.Print($"Mana lookup CPU sample (512 globes / 1000 queries): indexed {indexedMs:0.00} ms, {indexedBytes} managed bytes; full group scan {timer.Elapsed.TotalMilliseconds:0.00} ms, {scanBytes} managed bytes; hits {hits}.");
+            foreach (var orb in orbs) orb.QueueFree();
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+
+            var arena = new HeightmapArena { IsSpherical = true, PlanetRadius = 500 };
+            AddChild(arena);
+            var terrain = arena.GetChildren().OfType<PlanetTerrain>().Single();
+            Vector3 point = arena.PlanetCenter + Vector3.Up * 500;
+            float before = arena.HeightAt(point);
+            timer.Restart();
+            arena.ApplyCrater(point, 4.5f, 2);
+            GD.Print($"Crater registration CPU sample: {timer.Elapsed.TotalMilliseconds:0.00} ms; pending patches {terrain.PendingPatchCount}.");
+            Check(Mathf.IsEqualApprox(arena.HeightAt(point), before - 2), "Crater height becomes authoritative immediately");
+            int pending = terrain.PendingPatchCount;
+            Check(pending > 1, "Seam crater queues multiple affected patches");
+            terrain.RebuildBudgetMilliseconds = 0;
+            terrain._Process(0);
+            Check(terrain.PendingPatchCount == pending - 1, "Exhausted frame budget processes one patch rather than draining the queue");
+            Check(Mathf.IsEqualApprox(arena.HeightAt(point), before - 2), "Queued collision does not delay live deformation height");
+            while (terrain.PendingPatchCount > 0) terrain._Process(0);
+            Check(terrain.PendingPatchCount == 0, "Deferred patch queue eventually drains");
+            GD.Print($"Combat performance checks passed: {_assertions} assertions.");
+            GetTree().Quit();
+        }
+        catch (Exception exception)
+        {
+            GD.PushError(exception.ToString());
+            GetTree().Quit(1);
+        }
+    }
+}

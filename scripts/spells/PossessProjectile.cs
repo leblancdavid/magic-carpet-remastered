@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Godot;
 using MagicCarpetRemastered.Scripts.World;
 
@@ -20,13 +21,15 @@ public partial class PossessProjectile : Node3D
     private Vector3 _heading = Vector3.Forward;
     private float _age;
     private float _travelled;
+    private readonly List<ManaPickup> _candidates = new();
+    private static readonly SphereMesh SharedMesh = new() { Radius = 0.18f, Height = 0.36f, RadialSegments = 12, Rings = 6 };
 
     public override void _Ready()
     {
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         AddChild(new MeshInstance3D
         {
-            Mesh = new SphereMesh { Radius = 0.18f, Height = 0.36f },
+            Mesh = SharedMesh,
             Scale = new Vector3(1, 1, 3.5f),
             MaterialOverride = new StandardMaterial3D
             {
@@ -91,13 +94,8 @@ public partial class PossessProjectile : Node3D
             {
                 int amount = hit.ManaAmount;
                 hit.ReassignOwnership(ManaOwnership.Player);
-                var burst = new SpellImpactBurst
-                {
-                    BurstColor = new Color(0.2f, 0.9f, 1, 0.85f),
-                    EmissionColor = new Color(0.05f, 0.7f, 1)
-                };
-                GetParent().AddChild(burst);
-                burst.GlobalPosition = hit.GlobalPosition;
+                SpellImpactPool.Prepare(GetTree().CurrentScene).Emit(hit.GlobalPosition,
+                    new Color(0.2f, 0.9f, 1, 0.85f), new Color(0.05f, 0.7f, 1), 0.28f, 0.4f, 2.2f);
                 QueueFree();
                 ManaPossessed?.Invoke(amount);
                 return;
@@ -125,9 +123,10 @@ public partial class PossessProjectile : Node3D
         float firstEntry = float.PositiveInfinity;
         Vector3 segment = to - from;
         float lengthSquared = segment.LengthSquared();
-        foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+        ManaNeighborhood.Query(GetTree(), (from + to) * 0.5f, HitRadius + segment.Length() * 0.5f, _candidates);
+        foreach (ManaPickup pickup in _candidates)
         {
-            if (node is not ManaPickup pickup || !pickup.IsAvailable || pickup.Ownership == ManaOwnership.Player)
+            if (!pickup.IsAvailable || pickup.Ownership == ManaOwnership.Player)
             {
                 continue;
             }

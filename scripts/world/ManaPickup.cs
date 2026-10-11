@@ -43,13 +43,20 @@ public partial class ManaPickup : RigidBody3D
 
     private HeightmapArena? _arena;
     private MeshInstance3D _mesh = null!;
-    private StandardMaterial3D _material = null!;
+    private static readonly StandardMaterial3D[] OwnershipMaterials =
+    {
+        CreateOwnershipMaterial(ManaOwnership.Neutral),
+        CreateOwnershipMaterial(ManaOwnership.Player),
+        CreateOwnershipMaterial(ManaOwnership.Enemy)
+    };
     private Vector3 _carryOffset;
     private SphereShape3D _sphere = null!;
-    private SphereMesh _sphereMesh = null!;
+    private static readonly SphereMesh SharedMesh = new() { Radius = 1, Height = 2, RadialSegments = 16, Rings = 8 };
     private bool _surfaceInitialized;
     private float _mergeGraceRemaining;
     private Dictionary<ulong, float> _contactSeconds = new();
+    private Dictionary<ulong, float> _nextContactSeconds = new();
+    private readonly List<ManaPickup> _neighbors = new();
     private Vector3 _attractionAcceleration;
     private float _growthStartRadius;
     private float _growthElapsed;
@@ -58,6 +65,7 @@ public partial class ManaPickup : RigidBody3D
     public override void _Ready()
     {
         AddToGroup("loose_mana");
+        ManaNeighborhood.Invalidate(GetTree());
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         if (_arena?.IsSpherical == true) GravityScale = 0;
         ContactMonitor = true;
@@ -76,16 +84,11 @@ public partial class ManaPickup : RigidBody3D
         };
         AddChild(collision);
 
-        _sphereMesh = new SphereMesh { Radius = Radius, Height = Radius * 2 };
         _mesh = new MeshInstance3D
         {
-            Mesh = _sphereMesh
+            Mesh = SharedMesh,
+            Scale = Vector3.One * Radius
         };
-        _material = new StandardMaterial3D
-        {
-            Roughness = 0.3f
-        };
-        _mesh.MaterialOverride = _material;
         AddChild(_mesh);
 
         ApplyOwnershipVisual();
@@ -126,15 +129,17 @@ public partial class ManaPickup : RigidBody3D
 
         _attractionAcceleration = Vector3.Zero;
         bool grounded = IsGrounded();
-        var contacts = new Dictionary<ulong, float>();
+        var contacts = _nextContactSeconds;
+        contacts.Clear();
         if (grounded)
         {
             Vector3 up = _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
             float nearestGap = float.MaxValue;
             Vector3 attractionDirection = Vector3.Zero;
-            foreach (Node node in GetTree().GetNodesInGroup("loose_mana"))
+            ManaNeighborhood.Query(GetTree(), GlobalPosition, Radius + AttractionGap, _neighbors);
+            foreach (ManaPickup other in _neighbors)
             {
-                if (node is not ManaPickup other || other == this || !other.IsAvailable
+                if (other == this || !other.IsAvailable
                     || other.Ownership != Ownership) continue;
                 Vector3 offset = other.GlobalPosition - GlobalPosition;
                 float gap = offset.Length() - Radius - other.Radius;
@@ -167,6 +172,7 @@ public partial class ManaPickup : RigidBody3D
 
         // Only the stable survivor tracks each pair. Losing contact, changing
         // ownership, or fast relative motion/falling resets the contact dwell.
+        _nextContactSeconds = _contactSeconds;
         _contactSeconds = contacts;
     }
 
@@ -265,8 +271,7 @@ public partial class ManaPickup : RigidBody3D
     private void SetRadius(float radius)
     {
         _sphere.Radius = radius;
-        _sphereMesh.Radius = radius;
-        _sphereMesh.Height = radius * 2;
+        _mesh.Scale = Vector3.One * radius;
         Inertia = Vector3.Zero;
     }
 
@@ -424,12 +429,14 @@ public partial class ManaPickup : RigidBody3D
 
     private void ApplyOwnershipVisual()
     {
-        if (_material == null)
-        {
-            return;
-        }
+        if (_mesh == null) return;
+        int index = (int)Ownership;
+        _mesh.MaterialOverride = OwnershipMaterials[index >= 0 && index < OwnershipMaterials.Length ? index : 0];
+    }
 
-        (Color albedo, Color emission) palette = Ownership switch
+    private static StandardMaterial3D CreateOwnershipMaterial(ManaOwnership ownership)
+    {
+        (Color albedo, Color emission) palette = ownership switch
         {
             ManaOwnership.Neutral => (new Color(0.85f, 0.85f, 0.9f), new Color(0.55f, 0.55f, 0.65f)),
             ManaOwnership.Player => (new Color(0.15f, 0.8f, 1.0f), new Color(0.05f, 0.6f, 1.0f)),
@@ -437,9 +444,13 @@ public partial class ManaPickup : RigidBody3D
             _ => (new Color(0.85f, 0.85f, 0.9f), new Color(0.55f, 0.55f, 0.65f))
         };
 
-        _material.AlbedoColor = palette.albedo;
-        _material.EmissionEnabled = true;
-        _material.Emission = palette.emission;
-        _material.EmissionEnergyMultiplier = 1.5f;
+        return new StandardMaterial3D
+        {
+            Roughness = 0.3f,
+            AlbedoColor = palette.albedo,
+            EmissionEnabled = true,
+            Emission = palette.emission,
+            EmissionEnergyMultiplier = 1.5f
+        };
     }
 }

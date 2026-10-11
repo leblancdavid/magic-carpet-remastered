@@ -13,6 +13,8 @@ public partial class SpellImpactBurst : Node3D
     private MeshInstance3D _mesh = null!;
     private StandardMaterial3D _material = null!;
     private float _age;
+    internal SpellImpactPool? Pool { get; set; }
+    private static readonly SphereMesh SharedMesh = new() { Radius = 0.6f, Height = 1.2f, RadialSegments = 16, Rings = 8 };
 
     public override void _Ready()
     {
@@ -27,10 +29,32 @@ public partial class SpellImpactBurst : Node3D
 
         _mesh = new MeshInstance3D
         {
-            Mesh = new SphereMesh { Radius = 0.6f, Height = 1.2f },
+            Mesh = SharedMesh,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             MaterialOverride = _material
         };
         AddChild(_mesh);
+        if (Pool != null)
+        {
+            Visible = false;
+            SetProcess(false);
+        }
+    }
+
+    internal void Activate(Vector3 position, Color color, Color emission, float duration, float startScale, float endScale)
+    {
+        GlobalPosition = position;
+        BurstColor = color;
+        EmissionColor = emission;
+        DurationSeconds = duration;
+        StartScale = startScale;
+        EndScale = endScale;
+        _age = 0;
+        Scale = Vector3.One * StartScale;
+        _material.AlbedoColor = BurstColor;
+        _material.Emission = EmissionColor;
+        Visible = true;
+        SetProcess(true);
     }
 
     public override void _Process(double delta)
@@ -42,7 +66,8 @@ public partial class SpellImpactBurst : Node3D
 
         if (t >= 1.0f)
         {
-            QueueFree();
+            if (Pool != null) Pool.Recycle(this);
+            else QueueFree();
         }
     }
 }

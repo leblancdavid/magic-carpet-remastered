@@ -28,7 +28,9 @@ The starting strategic area remains compact rather than filling the entire globe
 
 `PlanetTerrain` splits six projected cube faces into eight-by-eight patches per face. Coarse globe meshes use four subdivisions per patch; nearby actors receive approximately two-unit world-space sampling and matching collision. Nearby detection includes patch bounds and is refreshed every half-second. Visual skirts cover mixed-detail mesh gaps. Both face boundaries evaluate the same direction-based procedural heights and persistent deformation stamps, so edits remain continuous and rebuild every affected patch. Sphere oceans use the shared sea elevation. Live surface queries protect placement/physics between deferred collision rebuilds.
 
-Current limitations: all patches retain a collider (coarse or fine); patch selection scans active actors, and deformation height queries evaluate stored stamps. This is a first playable implementation. More aggressive collision streaming, visibility/LOD budgeting, and baking/indexing edit history remain performance follow-ups.
+Combat performance update: crater/LOD rebuilds use a coalesced soft frame budget, detail retention has hysteresis, deformation queries use spatially indexed stamps, and unchanged-resolution patches resample only edited vertex regions. Live height changes remain immediate. See `docs/COMBAT_PERFORMANCE.md` for implementation, measurements and profiling steps.
+
+Current limitations: all patches retain a collider (coarse or fine); patch selection still scans active actors, and individual mesh/collider uploads are atomic and can exceed the frame budget. More aggressive collision streaming, smaller rebuild units, and rendered long-session profiling remain performance follow-ups.
 
 ## Flight Lab
 

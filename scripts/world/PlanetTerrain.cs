@@ -12,19 +12,25 @@ public partial class PlanetTerrain : Node3D
     private sealed record Edit(Vector3 Up, float Radius, float Amount, bool Flatten);
     private sealed class Patch
     {
-        public int Face, X, Y, Resolution;
+        public int Face, X, Y, Resolution, DesiredResolution;
         public Vector3 Up;
         public float Bound;
         public MeshInstance3D Mesh = null!;
         public CollisionShape3D Collision = null!;
+        public Vector3[] Vertices = System.Array.Empty<Vector3>();
+        public Vector3[] Normals = System.Array.Empty<Vector3>();
+        public Color[] Colors = System.Array.Empty<Color>();
+        public readonly List<Edit> PendingEdits = new();
     }
     private readonly List<Patch> _patches = new();
-    private readonly List<Edit> _edits = new();
+    private const float EditCellSize = 32;
+    private readonly Dictionary<Vector3I, List<Edit>> _editCells = new();
     private readonly HashSet<Patch> _dirty = new();
     private readonly FastNoiseLite _noise = new() { Seed = 27031, Frequency = 0.004f, FractalOctaves = 3 };
     private readonly StandardMaterial3D _material = new() { AlbedoColor = new Color(0.65f, 0.65f, 0.65f), VertexColorUseAsAlbedo = true, Roughness = 1 };
     private float _refreshTimer;
-    private bool _rebuildQueued;
+    public int PendingPatchCount => _dirty.Count;
+    public double RebuildBudgetMilliseconds { get; set; } = 2;
 
     public override void _Ready()
     {
@@ -53,6 +59,9 @@ public partial class PlanetTerrain : Node3D
             MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.03f, 0.15f, 0.3f), Roughness = 0.35f }
         });
         RefreshDetail();
+        // Loading establishes actor collision before gameplay starts. Runtime
+        // detail changes and craters use the bounded queue instead.
+        while (_dirty.Count > 0) RebuildDirty();
     }
 
     public float HeightAt(Vector3 up)
@@ -63,7 +72,8 @@ public partial class PlanetTerrain : Node3D
         float homeDistance = Arena.PlanetRadius * Mathf.Acos(Mathf.Clamp(up.Dot(Vector3.Up), -1, 1));
         height = Mathf.Lerp(height, 7 + Mathf.Sin(point.X * 0.028f) * 2 + Mathf.Cos(point.Z * 0.022f) * 2,
             Mathf.Clamp(1 - (homeDistance - 90) / 120, 0, 1));
-        foreach (Edit edit in _edits)
+        if (!_editCells.TryGetValue(EditCell(point), out var edits)) return height;
+        foreach (Edit edit in edits)
         {
             float chord = up.DistanceTo(edit.Up) * Arena.PlanetRadius;
             if (chord >= edit.Radius) continue;
@@ -78,9 +88,16 @@ public partial class PlanetTerrain : Node3D
     public override void _PhysicsProcess(double delta)
     {
         _refreshTimer -= (float)delta;
-        if (_refreshTimer > 0) return;
-        _refreshTimer = 0.5f;
-        RefreshDetail();
+        if (_refreshTimer <= 0)
+        {
+            _refreshTimer = 0.5f;
+            RefreshDetail();
+        }
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_dirty.Count > 0) RebuildDirty();
     }
 
     public void RefreshDetail()
@@ -88,42 +105,46 @@ public partial class PlanetTerrain : Node3D
         List<Vector3> observers = new();
         foreach (string group in new[] { "player", "loose_mana", "ecosystem_enemy", "simple_monster", "balloon", "guardian" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
-                if (node is Node3D actor && !actor.IsQueuedForDeletion()) observers.Add(Arena.UpAt(actor.GlobalPosition));
-        int rebuilt = 0;
-        ulong start = Time.GetTicksUsec();
+                if (node is Node3D actor && !actor.IsQueuedForDeletion() && node is not ManaPickup { IsAvailable: false })
+                    observers.Add(Arena.UpAt(actor.GlobalPosition));
         foreach (Patch patch in _patches)
         {
             bool nearby = observers.Count == 0 && patch.Up.DistanceTo(Vector3.Up) * Arena.PlanetRadius < 180 + patch.Bound;
             foreach (Vector3 observer in observers)
-                if (patch.Up.DistanceTo(observer) * Arena.PlanetRadius < 100 + patch.Bound) { nearby = true; break; }
+                if (patch.Up.DistanceTo(observer) * Arena.PlanetRadius < (patch.Resolution > 4 ? 125 : 100) + patch.Bound) { nearby = true; break; }
             // Fixed world-space resolution (about 2 units at face center).
             int resolution = nearby ? Mathf.CeilToInt(Arena.PlanetRadius / 16) * 2 : 4;
-            if (resolution == patch.Resolution) continue;
-            BuildPatch(patch, resolution);
-            rebuilt++;
+            patch.DesiredResolution = resolution;
+            if (resolution != patch.Resolution) _dirty.Add(patch);
         }
-        if (rebuilt > 0) Arena.ReportPlanetRebuild(rebuilt, (Time.GetTicksUsec() - start) / 1000.0);
     }
 
     public int Deform(Vector3 up, float radius, float amount, bool flatten)
     {
         if (radius <= 0) return 0;
-        _edits.Add(new Edit(up, radius, amount, flatten));
+        var edit = new Edit(up, radius, amount, flatten);
+        Vector3 center = up * Arena.PlanetRadius;
+        Vector3I min = EditCell(center - Vector3.One * radius);
+        Vector3I max = EditCell(center + Vector3.One * radius);
+        for (int z = min.Z; z <= max.Z; z++)
+        for (int y = min.Y; y <= max.Y; y++)
+        for (int x = min.X; x <= max.X; x++)
+        {
+            Vector3I cell = new(x, y, z);
+            if (!_editCells.TryGetValue(cell, out var edits)) _editCells[cell] = edits = new List<Edit>();
+            edits.Add(edit); // Preserve chronological flatten/additive semantics.
+        }
         int editedVertices = 0;
         foreach (Patch patch in _patches)
         {
             if (up.DistanceTo(patch.Up) * Arena.PlanetRadius > radius + patch.Bound) continue;
             _dirty.Add(patch);
-            int resolution = Mathf.Max(patch.Resolution, Mathf.CeilToInt(Arena.PlanetRadius / 16) * 2);
-            for (int y = 0; y <= resolution; y++)
-            for (int x = 0; x <= resolution; x++)
-                if (up.DistanceTo(Direction(patch.Face, patch.X + (float)x / resolution, patch.Y + (float)y / resolution)) * Arena.PlanetRadius < radius)
-                    editedVertices++;
-        }
-        if (!_rebuildQueued)
-        {
-            _rebuildQueued = true;
-            Callable.From(RebuildDirty).CallDeferred();
+            patch.PendingEdits.Add(edit);
+            patch.DesiredResolution = Mathf.Max(patch.DesiredResolution, patch.Resolution);
+            // Diagnostic estimate only: height changes are exact and immediate.
+            // Avoid resampling entire fine patches merely to count edited vertices.
+            float spacing = Arena.PlanetRadius / (4f * Mathf.Max(4, patch.DesiredResolution));
+            editedVertices += Mathf.Max(1, Mathf.CeilToInt(Mathf.Pi * radius * radius / (spacing * spacing)));
         }
         return editedVertices;
     }
@@ -131,25 +152,48 @@ public partial class PlanetTerrain : Node3D
     private void RebuildDirty()
     {
         ulong start = Time.GetTicksUsec();
-        foreach (Patch patch in _dirty) BuildPatch(patch, Mathf.Max(patch.Resolution, Mathf.CeilToInt(Arena.PlanetRadius / 16) * 2));
-        Arena.ReportPlanetRebuild(_dirty.Count, (Time.GetTicksUsec() - start) / 1000.0);
-        _dirty.Clear();
-        _rebuildQueued = false;
+        int rebuilt = 0;
+        while (_dirty.Count > 0)
+        {
+            Patch? selected = null;
+            // Fine actor-supporting collision takes precedence over distant LOD.
+            foreach (Patch candidate in _dirty)
+                if (selected == null || candidate.DesiredResolution > selected.DesiredResolution) selected = candidate;
+            _dirty.Remove(selected!);
+            BuildPatch(selected!, Mathf.Max(4, selected!.DesiredResolution));
+            rebuilt++;
+            if ((Time.GetTicksUsec() - start) / 1000.0 >= RebuildBudgetMilliseconds) break;
+        }
+        Arena.ReportPlanetRebuild(rebuilt, (Time.GetTicksUsec() - start) / 1000.0);
     }
+
+    private static Vector3I EditCell(Vector3 point) => new(Mathf.FloorToInt(point.X / EditCellSize),
+        Mathf.FloorToInt(point.Y / EditCellSize), Mathf.FloorToInt(point.Z / EditCellSize));
 
     private void BuildPatch(Patch patch, int resolution)
     {
-        patch.Resolution = resolution;
         int side = resolution + 1;
-        Vector3[] vertices = new Vector3[side * side];
-        Vector3[] normals = new Vector3[vertices.Length];
-        Color[] colors = new Color[vertices.Length];
+        bool fullRebuild = patch.Resolution != resolution || patch.Vertices.Length == 0;
+        patch.Resolution = resolution;
+        Vector3[] vertices = fullRebuild ? new Vector3[side * side] : patch.Vertices;
+        Vector3[] normals = fullRebuild ? new Vector3[vertices.Length] : patch.Normals;
+        Color[] colors = fullRebuild ? new Color[vertices.Length] : patch.Colors;
         int[] indices = new int[resolution * resolution * 6];
         for (int y = 0; y <= resolution; y++)
         for (int x = 0; x <= resolution; x++)
         {
             int index = y * side + x;
             Vector3 up = Direction(patch.Face, patch.X + (float)x / resolution, patch.Y + (float)y / resolution);
+            if (!fullRebuild)
+            {
+                bool affected = false;
+                foreach (Edit edit in patch.PendingEdits)
+                {
+                    float reach = (edit.Radius + 2) / Arena.PlanetRadius;
+                    if (up.DistanceSquaredTo(edit.Up) <= reach * reach) { affected = true; break; }
+                }
+                if (!affected) continue;
+            }
             float height = HeightAt(up);
             vertices[index] = Arena.PlanetCenter + up * (Arena.PlanetRadius + height);
             Vector3 tangent = up.Cross(Mathf.Abs(up.Y) < 0.9f ? Vector3.Up : Vector3.Right).Normalized();
@@ -161,6 +205,10 @@ public partial class PlanetTerrain : Node3D
                 : height < 6 ? new Color(0.22f, 0.42f, 0.16f)
                 : height < 10 ? new Color(0.32f, 0.48f, 0.22f) : new Color(0.44f, 0.42f, 0.35f);
         }
+        patch.Vertices = vertices;
+        patch.Normals = normals;
+        patch.Colors = colors;
+        patch.PendingEdits.Clear();
         int cursor = 0;
         for (int y = 0; y < resolution; y++)
         for (int x = 0; x < resolution; x++)
@@ -184,7 +232,7 @@ public partial class PlanetTerrain : Node3D
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
         // Visual skirts close the geometric gap between different patch LODs.
         // Nearby colliders share the same fine sampling, including cube-face edges.
-        SurfaceTool skirt = new();
+        using SurfaceTool skirt = new();
         skirt.Begin(Mesh.PrimitiveType.Triangles);
         for (int i = 0; i < resolution; i++)
         {

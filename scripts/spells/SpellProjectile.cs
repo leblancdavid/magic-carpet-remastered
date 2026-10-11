@@ -17,6 +17,8 @@ public partial class SpellProjectile : Area3D
     private CarpetFlightController? _owner;
     private float _lifeRemaining;
     private HeightmapArena? _arena;
+    private static readonly SphereMesh SharedMesh = new() { Radius = 0.35f, Height = 0.7f, RadialSegments = 12, Rings = 6 };
+    private static readonly SphereShape3D SharedShape = new() { Radius = 0.35f };
 
     public override void _Ready()
     {
@@ -26,13 +28,14 @@ public partial class SpellProjectile : Area3D
 
         var shape = new CollisionShape3D
         {
-            Shape = new SphereShape3D { Radius = 0.35f }
+            Shape = SharedShape
         };
         AddChild(shape);
 
         var mesh = new MeshInstance3D
         {
-            Mesh = new SphereMesh { Radius = 0.35f, Height = 0.7f }
+            Mesh = SharedMesh,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off
         };
         mesh.MaterialOverride = new StandardMaterial3D
         {
@@ -53,9 +56,9 @@ public partial class SpellProjectile : Area3D
         _lifeRemaining -= deltaF;
         if (_arena?.IsSpherical == true)
         {
-            var ray = PhysicsRayQueryParameters3D.Create(previous, GlobalPosition);
+            using var ray = PhysicsRayQueryParameters3D.Create(previous, GlobalPosition);
             if (IsInstanceValid(_owner)) ray.Exclude = new Godot.Collections.Array<Rid> { _owner!.GetRid() };
-            var result = GetWorld3D().DirectSpaceState.IntersectRay(ray);
+            using var result = GetWorld3D().DirectSpaceState.IntersectRay(ray);
             if (result.Count > 0 && result["collider"].As<Node3D>() is Node3D body)
             {
                 GlobalPosition = (Vector3)result["position"];
@@ -140,11 +143,7 @@ public partial class SpellProjectile : Area3D
 
     private void SpawnImpactBurst()
     {
-        var burst = new SpellImpactBurst
-        {
-            Name = "SpellImpactBurst"
-        };
-        GetTree().CurrentScene.AddChild(burst);
-        burst.GlobalPosition = GlobalPosition;
+        SpellImpactPool.Prepare(GetTree().CurrentScene).Emit(GlobalPosition,
+            new Color(1, 0.58f, 0.12f, 0.85f), new Color(1, 0.32f, 0.05f), 0.28f, 0.4f, 2.2f);
     }
 }
