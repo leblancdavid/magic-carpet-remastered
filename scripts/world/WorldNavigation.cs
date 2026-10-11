@@ -6,7 +6,24 @@ using MagicCarpetRemastered.Scripts.Player;
 namespace MagicCarpetRemastered.Scripts.World;
 
 public enum MapMarkerKind { Player, Home, RivalCastle, Landmark, Upgrade, Mana, Balloon, Enemy }
-public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Color Color, bool Charted = true);
+public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Color Color, bool Charted = true)
+{
+    public Node3D? Actor { get; init; }
+
+    // Membership/metadata is sampled slowly; visible actors move at render cadence.
+    public bool TryGetLiveUp(HeightmapArena arena, out Vector3 up)
+    {
+        up = Up;
+        if (Actor == null) return true;
+        if (!GodotObject.IsInstanceValid(Actor) || Actor.IsQueuedForDeletion() || !Actor.IsInsideTree()) return false;
+        if (Actor is ManaPickup orb && !orb.IsAvailable) return false;
+        if (Actor is EnemyEcosystemEnemy enemy && enemy.Health <= 0) return false;
+        if (Actor is ManaBalloon balloon && balloon.Health <= 0) return false;
+        if (Actor is SpellDiscovery discovery && discovery.IsCollected) return false;
+        up = arena.UpAt(Actor.GlobalPosition);
+        return true;
+    }
+}
 
 public partial class WorldNavigation : Node
 {
@@ -20,7 +37,7 @@ public partial class WorldNavigation : Node
     public string WaypointName { get; private set; } = "";
     public Vector3 TargetUp => WaypointUp ?? _homeUp;
     public string TargetName => WaypointUp.HasValue ? WaypointName : "Home castle";
-    public float TargetDistance => Arena.SurfaceDistance(Player.GlobalPosition, WorldPosition(TargetUp));
+    public float TargetDistance => MapProjection.LocalOffset(TargetUp, Player.GlobalBasis, Arena.PlanetRadius).Length();
     private readonly List<MapMarker> _markers = new();
     private readonly List<WorldLandmark> _landmarks = new();
     private Vector3 _homeUp = Vector3.Up;
@@ -39,7 +56,7 @@ public partial class WorldNavigation : Node
     {
         _timer -= (float)delta;
         if (_timer > 0) return;
-        _timer = 0.2f;
+        _timer = 0.2f + Mathf.Max(_timer, -0.2f);
         Refresh();
     }
 
@@ -61,8 +78,8 @@ public partial class WorldNavigation : Node
     public string BearingText()
     {
         if (TargetDistance < 8) return "Arrived";
-        Vector3 direction = Arena.DirectionTo(Player.GlobalPosition, WorldPosition(TargetUp));
-        float angle = Mathf.RadToDeg(Mathf.Atan2(direction.Dot(Player.GlobalBasis.X), direction.Dot(-Player.GlobalBasis.Z)));
+        Vector2 offset = MapProjection.LocalOffset(TargetUp, Player.GlobalBasis, Arena.PlanetRadius);
+        float angle = Mathf.RadToDeg(Mathf.Atan2(offset.X, -offset.Y));
         if (Mathf.Abs(angle) < 8) return "Ahead";
         return $"{(angle < 0 ? "Left" : "Right")} {Mathf.Abs(angle):0}°";
     }
@@ -71,7 +88,7 @@ public partial class WorldNavigation : Node
     {
         _markers.Clear();
         _landmarks.Clear();
-        _markers.Add(new MapMarker(Arena.UpAt(Player.GlobalPosition), "You", MapMarkerKind.Player, Colors.White));
+        _markers.Add(new MapMarker(Arena.UpAt(Player.GlobalPosition), "You", MapMarkerKind.Player, Colors.White) { Actor = Player });
         foreach (string group in new[] { "player_castle", "enemy_castle" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
             {
@@ -123,7 +140,7 @@ public partial class WorldNavigation : Node
     private bool Nearby(Node3D actor) => Arena.SurfaceDistance(Player.GlobalPosition, actor.GlobalPosition) <= LocalRevealRange;
 
     private void Add(Node3D actor, string title, MapMarkerKind kind, Color color, string detail = "")
-        => _markers.Add(new MapMarker(Arena.UpAt(actor.GlobalPosition), string.IsNullOrEmpty(detail) ? title : $"{title} · {detail}", kind, color));
+        => _markers.Add(new MapMarker(Arena.UpAt(actor.GlobalPosition), string.IsNullOrEmpty(detail) ? title : $"{title} · {detail}", kind, color) { Actor = actor });
 
     private void BuildSurvey()
     {

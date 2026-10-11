@@ -8,9 +8,16 @@ public partial class TacticalMapCanvas : Control
     public WorldNavigation Navigation { get; set; } = null!;
     public bool Expanded { get; set; }
     private float _timer;
+    private Font _font = null!;
+    private string _targetTitle = "";
+    private string _targetGuidance = "";
+    private readonly Vector2[] _diamond = new Vector2[4];
+    private readonly Vector2[] _diamondOutline = new Vector2[5];
+    private readonly Vector2[] _arrow = new Vector2[3];
     private static readonly Color PanelColor = new(0.025f, 0.045f, 0.07f, 0.94f);
     private static readonly Color LineColor = new(0.3f, 0.5f, 0.62f, 0.65f);
     private static readonly Color Gold = new(1, 0.8f, 0.2f);
+    private static readonly string RangeLabel = $"Local range {WorldNavigation.RadarRange:0} m";
 
     public Rect2 SurveyRect
     {
@@ -21,11 +28,21 @@ public partial class TacticalMapCanvas : Control
         }
     }
 
+    public override void _Ready() => _font = GetThemeDefaultFont();
+
     public override void _Process(double delta)
     {
         _timer -= (float)delta;
-        if (_timer > 0) return;
-        _timer = 0.1f;
+        bool refreshText = _timer <= 0;
+        if (refreshText && Navigation != null && GodotObject.IsInstanceValid(Navigation.Player))
+        {
+            _timer = 0.1f + Mathf.Max(_timer, -0.1f);
+            _targetTitle = Navigation.TargetName.Length > 24 ? Navigation.TargetName[..21] + "…" : Navigation.TargetName;
+            _targetGuidance = $"{Navigation.TargetDistance:0} m · {Navigation.BearingText()}";
+        }
+        // The paused survey needs only low-frequency hover/text updates.
+        // Flight-relative radar positions must follow every rendered frame.
+        if (Expanded && !refreshText) return;
         QueueRedraw();
     }
 
@@ -74,24 +91,25 @@ public partial class TacticalMapCanvas : Control
         DrawArc(center, radius * 0.5f, 0, Mathf.Tau, 48, LineColor.Darkened(0.4f), 1, true);
         DrawLine(center - Vector2.Right * radius, center + Vector2.Right * radius, LineColor.Darkened(0.4f));
         DrawLine(center - Vector2.Down * radius, center + Vector2.Down * radius, LineColor.Darkened(0.4f));
+        Basis playerFrame = Navigation.Player.GlobalBasis;
         foreach (MapMarker marker in Navigation.Markers)
         {
             if (marker.Kind == MapMarkerKind.Player) continue;
-            Vector2 offset = MapProjection.LocalOffset(marker.Up, Navigation.Player.GlobalBasis, Navigation.Arena.PlanetRadius);
+            if (!marker.TryGetLiveUp(Navigation.Arena, out Vector3 up)) continue;
+            Vector2 offset = MapProjection.LocalOffset(up, playerFrame, Navigation.Arena.PlanetRadius);
             bool outside = offset.Length() > WorldNavigation.RadarRange;
             if (outside && marker.Kind is not (MapMarkerKind.Home or MapMarkerKind.RivalCastle or MapMarkerKind.Landmark or MapMarkerKind.Upgrade)) continue;
             Vector2 point = center + offset.LimitLength(WorldNavigation.RadarRange) / WorldNavigation.RadarRange * radius;
             Glyph(point, marker, outside ? 3 : 4);
         }
-        Vector2 target = MapProjection.LocalOffset(Navigation.TargetUp, Navigation.Player.GlobalBasis, Navigation.Arena.PlanetRadius);
+        Vector2 target = MapProjection.LocalOffset(Navigation.TargetUp, playerFrame, Navigation.Arena.PlanetRadius);
         DrawLine(center, center + target.LimitLength(WorldNavigation.RadarRange) / WorldNavigation.RadarRange * radius, new Color(1, 0.8f, 0.2f, 0.5f), 1.5f);
         Cross(center + target.LimitLength(WorldNavigation.RadarRange) / WorldNavigation.RadarRange * radius, Gold);
         Arrow(center, Vector2.Up, Colors.White);
         Text(new Vector2(103, 180), "FORWARD", new Color(0.6f, 0.7f, 0.8f), 11);
-        Text(new Vector2(34, 362), $"Local range {WorldNavigation.RadarRange:0} m", new Color(0.65f, 0.75f, 0.85f), 13);
-        string title = Navigation.TargetName.Length > 24 ? Navigation.TargetName[..21] + "…" : Navigation.TargetName;
-        Text(new Vector2(34, 382), title, Gold, 15);
-        Text(new Vector2(34, 402), $"{Navigation.TargetDistance:0} m · {Navigation.BearingText()}", Colors.White, 14);
+        Text(new Vector2(34, 362), RangeLabel, new Color(0.65f, 0.75f, 0.85f), 13);
+        Text(new Vector2(34, 382), _targetTitle, Gold, 15);
+        Text(new Vector2(34, 402), _targetGuidance, Colors.White, 14);
     }
 
     private void DrawSurvey()
@@ -106,6 +124,7 @@ public partial class TacticalMapCanvas : Control
         DrawRect(rect, LineColor, false, 2);
         MapMarker? hover = null;
         float nearest = 15 * 15;
+        Vector2 mouse = GetLocalMousePosition();
         foreach (MapMarker marker in Navigation.Markers)
         {
             Vector2 point = rect.Position + MapProjection.Project(marker.Up) * rect.Size;
@@ -116,7 +135,7 @@ public partial class TacticalMapCanvas : Control
                 Arrow(point, heading.LengthSquared() > 0.00001f ? heading.Normalized() : Vector2.Up, marker.Color);
             }
             else Glyph(point, marker, marker.Kind == MapMarkerKind.Mana ? 3 : 6);
-            float distance = point.DistanceSquaredTo(GetLocalMousePosition());
+            float distance = point.DistanceSquaredTo(mouse);
             if (distance < nearest) { nearest = distance; hover = marker; }
         }
         Cross(rect.Position + MapProjection.Project(Navigation.TargetUp) * rect.Size, Gold);
@@ -132,9 +151,17 @@ public partial class TacticalMapCanvas : Control
             DrawRect(new Rect2(point - Vector2.One * size, Vector2.One * size * 2), marker.Color);
         else if (marker.Kind is MapMarkerKind.Landmark or MapMarkerKind.Upgrade or MapMarkerKind.Balloon)
         {
-            Vector2[] diamond = { point + Vector2.Up * size, point + Vector2.Right * size, point + Vector2.Down * size, point + Vector2.Left * size, point + Vector2.Up * size };
-            if (marker.Charted) DrawColoredPolygon(diamond[..4], marker.Color);
-            else DrawPolyline(diamond, marker.Color, 1.5f, true);
+            _diamond[0] = point + Vector2.Up * size;
+            _diamond[1] = point + Vector2.Right * size;
+            _diamond[2] = point + Vector2.Down * size;
+            _diamond[3] = point + Vector2.Left * size;
+            if (marker.Charted) DrawColoredPolygon(_diamond, marker.Color);
+            else
+            {
+                System.Array.Copy(_diamond, _diamondOutline, 4);
+                _diamondOutline[4] = _diamond[0];
+                DrawPolyline(_diamondOutline, marker.Color, 1.5f, true);
+            }
         }
         else if (marker.Kind == MapMarkerKind.Enemy) Arrow(point, Vector2.Up, marker.Color);
         else DrawCircle(point, size, marker.Color);
@@ -150,9 +177,12 @@ public partial class TacticalMapCanvas : Control
     private void Arrow(Vector2 point, Vector2 direction, Color color)
     {
         Vector2 side = new(-direction.Y, direction.X);
-        DrawColoredPolygon(new[] { point + direction * 8, point - direction * 5 + side * 5, point - direction * 5 - side * 5 }, color);
+        _arrow[0] = point + direction * 8;
+        _arrow[1] = point - direction * 5 + side * 5;
+        _arrow[2] = point - direction * 5 - side * 5;
+        DrawColoredPolygon(_arrow, color);
     }
 
     private void Text(Vector2 point, string text, Color color, int size)
-        => DrawString(GetThemeDefaultFont(), point, text, HorizontalAlignment.Left, -1, size, color);
+        => DrawString(_font, point, text, HorizontalAlignment.Left, -1, size, color);
 }

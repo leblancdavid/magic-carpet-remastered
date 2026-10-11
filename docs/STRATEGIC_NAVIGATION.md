@@ -39,7 +39,9 @@ Spherical balloon search covers half the circumference, allowing possession anyw
 
 The full survey is a starting-hemisphere-centered equirectangular map of both hemispheres with horizontal wrapping. Inverse projection converts clicks to surface directions; heading differences wrap at the seam. The local radar projects angular surface distance into the player's tangent frame, working on the underside and through pole travel.
 
-The 192×96 terrain survey texture is generated once during loading; it is an initial coarse survey, not a live crater display. Marker snapshots refresh at five Hz and UI redraws at ten Hz, including paused feedback. Opening the map never regenerates terrain meshes or the noise atlas.
+The 192×96 terrain survey texture is generated once during loading; it is an initial coarse survey, not a live crater display. Visibility/metadata snapshots refresh at five Hz. The local radar redraws every rendered frame and resolves live positions from those already-known actors, eliminating the previous ten-Hz heading steps and five-Hz moving-marker jumps without per-frame group scans. Invalid/deleted, dead, carried, pending and collected actors are rejected before drawing. New markers and ownership metadata can still take up to 0.2 seconds to appear/change.
+
+Radar guidance text and the paused survey refresh at ten Hz. Guidance derives distance/bearing directly from radial directions rather than querying terrain heights. Glyph buffers and the theme font are reused instead of allocated/resolved per marker per draw; timers preserve normal frame overshoot. Opening the map never regenerates terrain meshes or the noise atlas. Automated/rendered checks confirm correctness; frame-time gains and hands-on smoothness are not yet measured/accepted.
 
 Well seeds/director spawns attach to their owning world parent instead of whichever scene is `CurrentScene` during construction. This prevents dynamic scene tests/restarts leaving actors outside their world with removed player/castle references.
 

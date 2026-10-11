@@ -109,6 +109,20 @@ public partial class StrategicNavigationChecks : Node
             Check(navigation.Markers.Any(marker => marker.Title == "Neutral mana · 77"), "Nearby neutral mana is revealed");
             Check(!navigation.Markers.Any(marker => marker.Title == "Neutral mana · 98"), "Remote neutral mana is not globally revealed");
             Check(navigation.Markers.Any(marker => marker.Title == "Player mana · 123"), "Owned loose mana remains trackable on the far side");
+            MapMarker liveMarker = navigation.Markers.Single(marker => marker.Title == "Neutral mana · 77");
+            Vector3 snapshotUp = liveMarker.Up;
+            nearby.GlobalPosition = arena.OnSurface(player.GlobalPosition + player.GlobalBasis.X * 12, 1);
+            Check(liveMarker.TryGetLiveUp(arena, out Vector3 liveUp)
+                && liveUp.DistanceTo(snapshotUp) > 0.01f
+                && liveUp.DistanceTo(arena.UpAt(nearby.GlobalPosition)) < 0.00001f,
+                "Radar follows moving actors between visibility snapshots without a group refresh");
+            Check(Mathf.Abs(navigation.TargetDistance - arena.SurfaceDistance(player.GlobalPosition, navigation.WorldPosition(navigation.TargetUp))) < 0.01f,
+                "Terrain-free guidance retains accurate great-circle target distance");
+            var disposable = AddOrb(player.GlobalPosition, 7, ManaOwnership.Player);
+            navigation.Refresh();
+            MapMarker disposedMarker = navigation.Markers.Single(marker => marker.Actor == disposable);
+            disposable.Free();
+            Check(!disposedMarker.TryGetLiveUp(arena, out _), "Radar safely rejects disposed actor wrappers between snapshots");
             var hauler = game.GetNode<ManaBalloon>("PlayerBalloon");
             hauler.SetPhysicsProcess(false);
             float distanceBefore = arena.SurfaceDistance(hauler.GlobalPosition, owned.GlobalPosition);
@@ -119,9 +133,12 @@ public partial class StrategicNavigationChecks : Node
             navigation.Refresh();
             Check(navigation.Markers.Any(marker => marker.Title == "Enemy mana · 77"), "Map ownership changes on possession/contesting");
             nearby.ScheduleDrop(nearby.GlobalPosition, 1);
+            Check(!liveMarker.TryGetLiveUp(arena, out _), "Pending drops disappear from live radar before the next visibility scan");
             navigation.Refresh();
             Check(!navigation.Markers.Any(marker => marker.Title.EndsWith("· 77")), "Hidden pending fragments do not appear as available resources");
             owned.BeginCarry(game.GetNode<ManaBalloon>("PlayerBalloon"), Vector3.Zero);
+            Check(!navigation.Markers.Single(marker => marker.Actor == owned).TryGetLiveUp(arena, out _),
+                "Carried mana immediately stops drawing between visibility scans");
             navigation.Refresh();
             Check(!navigation.Markers.Any(marker => marker.Title == "Player mana · 123"), "Carried mana is represented by balloon cargo rather than duplicate loose markers");
 
