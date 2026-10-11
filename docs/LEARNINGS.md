@@ -12,6 +12,9 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 
 ## Spherical Flight Lessons
 
+- Publishing replacement LOD shapes during rendering is not sufficient proof of physics query coverage in that same frame. Keep old collision through an intervening physics step, cancel pending retirement if a coarse shape is reused, and test repeated rendered traversal as well as settled seam rays. Brief overlap is preferable to a handoff hole; authoritative height queries remain necessary during edits.
+- Hysteresis intentionally changes the home working set after first arrival. Compare repeated identical routes/returns when checking retirement, and distinguish live tile/node counts from native static memory, managed heap and GPU resources. Stable nodes do not prove absence of resource-lifetime stalls or memory leaks.
+
 - Whole-world UI must project radial directions, not world X/Z. Use a fixed survey frame and seam-wrapped equirectangular UVs for the overview, and angular distance in the player's tangent heading frame for radar; round-trip both hemispheres/poles and test actual far-side destinations.
 - Decouple radar motion from visibility/metadata sampling. Low-frequency redraws and actor-position snapshots visibly step even at a steady game frame rate. Track live positions of cached known actors at render cadence, guard native-node lifetime and availability, retain slower visibility scans/text updates, and calculate spherical guidance from directions without terrain sampling. Reuse draw buffers when increasing redraw cadence.
 - Distributing resource drops requires compatible hauler reach. Expanding search to the whole globe solves unreachable possessed mana but introduces long balloon absence, so treat travel/delivery pacing as a separate playtest question.

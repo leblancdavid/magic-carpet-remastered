@@ -31,14 +31,35 @@ public partial class PlanetTerrain : Node3D
     private const float EditCellSize = 32;
     private readonly Dictionary<Vector3I, List<Edit>> _editCells = new();
     private readonly HashSet<Patch> _dirty = new();
+    private readonly Dictionary<CollisionShape3D, (int Ticks, bool FreeBody)> _retiringCollisions = new();
+    private readonly List<CollisionShape3D> _retirementBuffer = new();
     private readonly FastNoiseLite _noise = new() { Seed = 27031, Frequency = 0.004f, FractalOctaves = 3 };
     private readonly StandardMaterial3D _material = new() { AlbedoColor = new Color(0.65f, 0.65f, 0.65f), VertexColorUseAsAlbedo = true, Roughness = 1 };
     private float _refreshTimer;
     public int PendingPatchCount => _dirty.Count;
+    public int RetiringCollisionCount => _retiringCollisions.Count;
     public double RebuildBudgetMilliseconds { get; set; } = 2;
     public double FrameRebuildMilliseconds { get; private set; }
     public int FrameRebuiltPatchCount { get; private set; }
     public int FrameLargestTileResolution { get; private set; }
+
+    // Read only by diagnostic tools, outside the terrain rebuild hot path.
+    public (int FineParents, int BuiltTiles, int PublishedMeshes) GetDetailCounts()
+    {
+        int parents = 0, tiles = 0, meshes = 0;
+        foreach (Patch patch in _patches)
+        {
+            if (patch.Tiles.Count > 0) parents++;
+            if (patch.Mesh.Visible) meshes++;
+            foreach (Patch tile in patch.Tiles)
+                if (tile.Resolution > 0)
+                {
+                    tiles++;
+                    if (tile.Mesh.Visible) meshes++;
+                }
+        }
+        return (parents, tiles, meshes);
+    }
 
     public override void _Ready()
     {
@@ -88,6 +109,22 @@ public partial class PlanetTerrain : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
+        // A shape enabled during rendering may not enter the physics broad phase
+        // until the next physics step. Keep the old LOD collider through that step.
+        _retirementBuffer.Clear();
+        _retirementBuffer.AddRange(_retiringCollisions.Keys);
+        foreach (CollisionShape3D collision in _retirementBuffer)
+        {
+            var retirement = _retiringCollisions[collision];
+            if (retirement.Ticks > 1)
+                _retiringCollisions[collision] = (retirement.Ticks - 1, retirement.FreeBody);
+            else
+            {
+                collision.Disabled = true;
+                if (retirement.FreeBody) collision.GetParent().QueueFree();
+                _retiringCollisions.Remove(collision);
+            }
+        }
         _refreshTimer -= (float)delta;
         if (_refreshTimer <= 0)
         {
@@ -198,10 +235,10 @@ public partial class PlanetTerrain : Node3D
                     foreach (Patch tile in parent.Tiles)
                     {
                         tile.Mesh.Visible = true;
-                        tile.Collision.Disabled = false;
+                        EnableCollision(tile.Collision);
                     }
                     parent.Mesh.Visible = false;
-                    parent.Collision.Disabled = true;
+                    _retiringCollisions[parent.Collision] = (2, false);
                     parent.TilesPublished = true;
                 }
             }
@@ -210,15 +247,14 @@ public partial class PlanetTerrain : Node3D
                 // A coarse replacement is ready. Retire the fine geometry only
                 // now, not when the LOD request first enters the queue.
                 selected.Mesh.Visible = true;
-                selected.Collision.Disabled = false;
+                EnableCollision(selected.Collision);
                 foreach (Patch tile in selected.Tiles)
                 {
                     _dirty.Remove(tile);
                     if (tile.Resolution == 0) continue;
                     tile.Mesh.Visible = false;
-                    tile.Collision.Disabled = true;
+                    _retiringCollisions[tile.Collision] = (2, true);
                     tile.Mesh.QueueFree();
-                    tile.Collision.GetParent().QueueFree();
                 }
                 selected.Tiles.Clear();
                 selected.TilesPublished = false;
@@ -232,6 +268,12 @@ public partial class PlanetTerrain : Node3D
 
     private static Vector3I EditCell(Vector3 point) => new(Mathf.FloorToInt(point.X / EditCellSize),
         Mathf.FloorToInt(point.Y / EditCellSize), Mathf.FloorToInt(point.Z / EditCellSize));
+
+    private void EnableCollision(CollisionShape3D collision)
+    {
+        _retiringCollisions.Remove(collision);
+        collision.Disabled = false;
+    }
 
     private void SetBound(Patch patch)
     {

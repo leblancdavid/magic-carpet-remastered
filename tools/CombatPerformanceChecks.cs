@@ -25,7 +25,7 @@ public partial class CombatPerformanceChecks : Node3D
         room.AddChild(arena);
         var terrain = arena.GetChildren().OfType<PlanetTerrain>().Single();
         terrain.SetProcess(false);
-        terrain.SetPhysicsProcess(false);
+        // Keep real physics retirement active while draining mesh builds manually.
         terrain.RebuildBudgetMilliseconds = 0;
         var observer = new Node3D();
         observer.AddToGroup("player");
@@ -63,6 +63,8 @@ public partial class CombatPerformanceChecks : Node3D
             Drain();
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            Check(terrain.RetiringCollisionCount == 0, "Old LOD colliders retire after replacement enters physics");
             Vector3 tangent = arena.Tangent(Vector3.Right, observer.GlobalPosition).Normalized();
             foreach (float offset in new[] { -0.5f, 0f, 0.5f })
                 Check(HasCollision((up + tangent * offset / radius).Normalized(), true),

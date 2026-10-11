@@ -10,6 +10,8 @@ See `docs/BUILD_ROADMAP.md` and `docs/PROGRESS_LOG.md` for priorities and verifi
 
 Rendered combat profiling is available in `tools/CombatFrameProfile.tscn`. It runs Medium and XL workloads and saves per-frame CSV/summary reports under `user://combat-profiles`. Add `-- --mana-isolation` to compare frozen bodies, native physics/radial support, and full mana behavior in fresh 192-body fields. See `docs/COMBAT_PERFORMANCE.md` for commands, measurements, and interpretation.
 
+Long-distance profiling is available in `tools/TraversalFrameProfile.tscn`: two globe laps with LOD/collision, draw-count, node and frame-time diagnostics. Add `-- --all --stress` for all four sizes at accelerated streaming pressure, or `-- --xl` for an XL dash-reference-speed run. Reports go to `user://traversal-profiles`. See `docs/TRAVERSAL_PERFORMANCE.md`.
+
 ## Requirements
 
 - Godot 4.6.3 with .NET/C# support (matches the project SDK)
