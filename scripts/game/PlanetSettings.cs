@@ -1,5 +1,6 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.World;
+using MagicCarpetRemastered.Scripts.Ui;
 
 namespace MagicCarpetRemastered.Scripts.Game;
 
@@ -62,6 +63,8 @@ public partial class PlanetSettings : CanvasLayer
     {
         if (!_panel.Visible)
         {
+            (GetTree().GetFirstNodeInGroup("base_management") as BaseManagement)?.SetOpen(false);
+            (GetTree().GetFirstNodeInGroup("tactical_map_ui") as TacticalMap)?.SetExpanded(false);
             _wasPaused = GetTree().Paused;
             _previousMouse = Input.MouseMode;
             _size.Select(PlanetSizes.SelectedIndex);

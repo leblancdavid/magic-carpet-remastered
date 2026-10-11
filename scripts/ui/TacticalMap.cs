@@ -1,5 +1,6 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.World;
+using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.Ui;
 
@@ -9,10 +10,13 @@ public partial class TacticalMap : CanvasLayer
     public bool IsExpanded => _canvas.Expanded;
     private TacticalMapCanvas _canvas = null!;
     private Input.MouseModeEnum _previousMouse;
+    private ShipFlightController? _player;
 
     public override void _Ready()
     {
         ProcessMode = ProcessModeEnum.Always;
+        AddToGroup("tactical_map_ui");
+        _player = GetTree().GetFirstNodeInGroup("player") as ShipFlightController;
         Layer = 6;
         _canvas = new TacticalMapCanvas { Name = "MapCanvas", Navigation = Navigation, MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_canvas);
@@ -27,15 +31,16 @@ public partial class TacticalMap : CanvasLayer
         _canvas.MouseFilter = expanded ? Control.MouseFilterEnum.Stop : Control.MouseFilterEnum.Ignore;
         if (expanded)
         {
+            (GetTree().GetFirstNodeInGroup("base_management") as BaseManagement)?.SetOpen(false);
             Navigation.Refresh();
             _previousMouse = Input.MouseMode;
-            GetTree().Paused = true;
+            if (_player != null) _player.GameplayInputBlocked = true;
             Input.MouseMode = Input.MouseModeEnum.Visible;
         }
         else
         {
-            GetTree().Paused = false;
-            Input.MouseMode = _previousMouse;
+            if (_player != null) _player.GameplayInputBlocked = false;
+            if (!GetTree().Paused) Input.MouseMode = _previousMouse;
         }
         _canvas.QueueRedraw();
         return true;
@@ -53,6 +58,7 @@ public partial class TacticalMap : CanvasLayer
                 else if (key.Keycode == Key.R)
                 {
                     SetExpanded(false);
+                    GetTree().Paused = false;
                     Callable.From(() => GetTree().ReloadCurrentScene()).CallDeferred();
                 }
             }
@@ -61,12 +67,17 @@ public partial class TacticalMap : CanvasLayer
         else if (key is { Pressed: true, Echo: false, Keycode: Key.M } && SetExpanded(true)) GetViewport().SetInputAsHandled();
     }
 
+    public override void _Process(double delta)
+    {
+        if (IsExpanded && GetTree().Paused) SetExpanded(false);
+    }
+
     public override void _ExitTree()
     {
         if (_canvas != null && IsExpanded)
         {
-            GetTree().Paused = false;
-            Input.MouseMode = _previousMouse;
+            if (IsInstanceValid(_player)) _player!.GameplayInputBlocked = false;
+            if (!GetTree().Paused) Input.MouseMode = _previousMouse;
         }
     }
 }

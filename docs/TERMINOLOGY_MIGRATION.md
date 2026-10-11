@@ -4,7 +4,7 @@
 
 Completed on 2026-10-11. Gameplay filenames, C# types/namespaces/members, scene references, node/group identifiers, input actions, player-facing text and verification tools now use the science-fiction vocabulary while preserving the accepted playable mechanics.
 
-The new construction economy, four-slot restriction and Shift booster follow as separately verified milestones, specified in `BASE_DEVELOPMENT.md` and `SHIP_EQUIPMENT.md`. The inherited starting-power allowance, HP-scaled storage, storage-driven visual stages, discovery ranks and paused survey remain implemented behavior.
+The economy/construction and real-time management foundations were implemented as separately verified milestones after the rename; owned four-slot equipment and Shift booster follow. See `BASE_DEVELOPMENT.md` and `SHIP_EQUIPMENT.md`. At migration completion, inherited starting power, HP-scaled storage, storage-driven stages, discovery ranks and paused survey were preserved. Subsequent work replaces starting power/stages with explicit tiers and storage-backed energy, defines health-layer siege/storage damage and makes the survey real time with ship-input ownership. Discovery ranks remain until their boon/progression milestone.
 
 ## Working Vocabulary
 
@@ -28,7 +28,7 @@ The new construction economy, four-slot restriction and Shift booster follow as 
 
 Provisional display names for the existing abilities: Plasma Bolt, Pulse Burst, Energy Shield, Dash, Guardian Drone and Claim. These are vocabulary choices, not new weapons or revised balance. The existing radar can become Tactical Radar instead of All-Seeing Eye.
 
-Stored antimatter and rechargeable equipment energy now have distinct member names. The current starting-power allowance, damage-scaled storage capacity and regeneration formulas are preserved; their replacement belongs to the next economy milestone.
+Stored antimatter and rechargeable equipment energy have distinct member names. The name-only pass preserved inherited numeric formulas. See `BASE_DEVELOPMENT.md` for the subsequent explicit-tier, storage-backed-energy and configurable recharge implementation.
 
 ## Implemented Paths And Identifiers
 
@@ -41,7 +41,7 @@ Stored antimatter and rechargeable equipment energy now have distinct member nam
 - Groups: `player_castle` / `enemy_castle` → `player_base` / `enemy_base`; `loose_mana` → `loose_antimatter`; `mana_well` → `antimatter_source`; `world_mana_tracker` → `world_antimatter_tracker`; `balloon` → `drone`; `spell_discovery` → `equipment_discovery`.
 - Equipment IDs migrate together across definitions, ranks, landmarks and checks: `firebolt` → `plasma-bolt`, `arcane-burst` → `pulse-burst`, `mana-shield` → `energy-shield`, `wind-dash` → `dash`, `guardian` → `guardian-drone`, `possess` → `claim`. `terrain-shape` remains unchanged. These IDs are match-local; there is no persisted equipment save migration.
 - Input actions: `cast_primary` / `cast_area` / `cast_shield` / `cast_mobility` / `cast_summon` / `cast_possess` → `activate_primary` / `activate_area` / `activate_shield` / `activate_mobility` / `activate_guardian` / `activate_claim`; `cycle_quick_spell` → `cycle_quick_equipment`. Physical mouse/key bindings are preserved.
-- Rechargeable player `Mana` / `ManaCapacity` / `SpendMana` become `Energy` / `EnergyCapacity` / `SpendEnergy`; equipment costs become `EnergyCost`. Physical resources use `AntimatterAmount`, `StoredAntimatter` and antimatter reserve/ownership/tracker APIs. `ClaimedAntimatter` still represents inherited derived power (starting allowance plus storage), **not an additional physical reserve**. Its formulas remain unchanged until the economy milestone.
+- Rechargeable player `Mana` / `ManaCapacity` / `SpendMana` become `Energy` / `EnergyCapacity` / `SpendEnergy`; equipment costs become `EnergyCost`. Physical resources use `AntimatterAmount`, `StoredAntimatter` and antimatter reserve/ownership/tracker APIs. The migration's `ClaimedAntimatter` represented inherited derived power, not a physical reserve. The subsequent economy foundation removes it, `BaseAntimatterBonus`, `InitialClaimedAntimatter` and `MaxClaimedAntimatter`; `EnergyCapacity` is now derived directly from home storage, and `RefreshBaseEnergyLimit` replaces `RefreshBaseAntimatterPower`. Base `Tier` replaces `GrowthStage`; configurable `Tier1StorageCapacity` through `Tier5StorageCapacity` replace writable single-capacity tuning.
 
 ## Profiling Compatibility
 

@@ -2,7 +2,7 @@
 
 ## Status And Direction
 
-Approved design, 2026-10-11. This document specifies future implementation; the current prototype still uses the legacy castle/mana systems. The existing spherical mechanics are accepted as a smooth playtest baseline. Costs, timing, balance, AI, equipment progression and base development remain iterative work.
+Approved design, 2026-10-11. Terminology, explicit-tier/storage-backed-energy accounting, five-slot construction, cancellation/refunds, tier destruction/rebuilding, real-time management and a starter project catalog/effects are implemented. Owned equipment research/installation and four-slot loadouts remain planned. The existing spherical mechanics are accepted as a smooth playtest baseline. Costs, timing, balance, AI, equipment progression and base development remain iterative work.
 
 The game is moving to futuristic faction conflict over planetary resources. A base is the player's home and an RTS-style development hub. Players choose investments rather than obtaining base tiers automatically from stored resources.
 
@@ -33,9 +33,22 @@ There is no construction reservation or post-construction limit-recovery mechani
 
 The numbers illustrate the rules, not an approved balance table.
 
+### Implemented Foundation And Provisional Tuning (2026-10-11)
+
+- Fresh bases start at tier 1; internal sequential `TryCompleteTierUpgrade(targetTier)` supports tiers 2–5 and rejects skipped/duplicate completions. `Construction.TryStartNextTier` owns payment/timing, choosing advancement or rebuilding from surviving tier and purchase history. The B-key management panel exposes ordering and cancellation remotely.
+- Configurable intact capacities default to **120 / 200 / 300 / 400 / 500**. Capacity at each tier is clamped nonnegative and at least the previous tier's capacity.
+- Starting storage remains **30 antimatter**. `InitialEnergy` defaults to 40, capped by starting storage (therefore **30/30 energy** in a fresh match). Initialization occurs once when the home base becomes available, in either spawn order. An initially empty base initializes zero energy; later deliveries do not refill it.
+- Energy limit equals home-base storage exactly, with no starting-power allowance or separate 400-power cap. Recharge defaults to **4% of the current limit per second** (1.2 energy/s at 30 storage); fractional recharge accumulates, and full energy discards unused recharge credit. Respawn retains the existing full refill within the current storage-backed limit, without changing physical resources.
+- `TrySpendAntimatter(amount)` is an all-or-nothing positive payment; unaffordable/nonpositive payments change nothing. Successful payments immediately lower storage/limit and clamp current energy. `WithdrawAntimatter` remains a partial physical transfer API. Cumulative spending, refunds and investment spills are recorded separately from physical totals; see the construction accounting below.
+- Spending or delivery never changes tier. Damage removes health layers/tiers, preserves `HighestPurchasedTier`, and destroys all active projects once. Complete base destruction sets tier 0 and energy limit 0, preserving the defeat rule; no tier-zero recovery is introduced.
+- **Effective storage follows intact lower layers plus the rounded-up fraction of the damaged top layer's incremental capacity.** Tier 1 retains the previous HP-scaled rule. This is continuous at tier boundaries; quiet repair reopens surviving-layer capacity without restoring antimatter or lost tiers.
+- The compact HUD shows base tier/storage and ship energy/limit; F3 adds purchased tier, five slot statuses/progress/payments, recharge, refunds and siege-investment diagnostics. B opens live management with those values, project costs/prerequisites, unavailable reasons, progress, cancellation and siege feedback.
+
+These are provisional implementation defaults selected with user approval to proceed; playtesting determines balance.
+
 ### Collection At Capacity
 
-Claim remains usable on loose antimatter even when the base is full. Collector drones stop gathering when storage is full; owned resources can remain in the world until room becomes available. Capacity-aware handling of already-carried cargo and partial deposits must be specified during implementation, without deleting resources or allowing over-capacity storage.
+Claim remains usable on loose antimatter even when the base is full, subject to its normal current-energy cost. Collector drones stop gathering when storage is full; owned resources remain in the world until room becomes available. Implemented policy: an empty drone waits at its home anchor; a loaded drone returns home, deposits only available room and retains undeposited owned cargo. Dock-delay retries resume delivery when room opens. Partial deposits never neutralize or delete cargo; destroying a loaded drone still releases its exact remaining cargo through the normal neutral-drop path.
 
 Matter is a later milestone. Do not invent material costs or collection behavior during the terminology-only conversion.
 
@@ -60,7 +73,9 @@ Site income and skip rewards introduce new supply. Distinguish them from transfe
 - Installed ship equipment remains owned and usable subject to energy requirements, regardless of lost base tiers.
 - Ordinary passive HP repair must not restore destroyed tiers for free.
 
-Exact HP-to-tier thresholds, per-tier HP, capacities, costs and construction times are tunable implementation decisions. The legacy system uses HP-scaled storage and stored-resource-driven visual stages; that is not an implementation of explicit purchased tiers.
+Each tier adds one health layer, using the base's initial exported `MaxHealth` (**140 by default**) as per-tier HP. Tier completion adds a fresh layer, retaining pre-existing damage in lower layers. A tier is lost when health falls to or below the previous tier's maximum: default thresholds are 560/420/280/140 HP for tiers 5/4/3/2. Surviving `MaxHealth` becomes `Tier * per-tier HP`, so passive repair cannot restore destroyed layers. `HighestPurchasedTier` remains unchanged by damage.
+
+Effective capacity is `capacity(Tier-1) + ceil((capacity(Tier)-capacity(Tier-1)) * top-layer HP / per-tier HP)`. Scaling the whole surviving tier by its own HP fraction would cause capacity to jump upward at some loss boundaries; incremental layers avoid that. A non-tier-losing hit preserves active projects. Single/multi-tier losses reduce access and destroy all projects once. Rebuilding adds one fresh layer with no antimatter refill. HP, capacities, prices and times remain provisional balance values.
 
 ## Construction Slots
 
@@ -75,6 +90,35 @@ Five independent slots each permit one active project:
 | Ship | New equipment, equipment ranks and built-in Claim improvements. |
 
 Multiple categories can run concurrently, with up to five active projects. Each pays its full cost when started. A second project in the same slot cannot start until the active one completes, is cancelled or is destroyed. An automatic queue is not part of the initial design.
+
+### Implemented Lifecycle And Integration Surface
+
+- Every base owns `BaseConstruction`, advanced by its physics tick. Immutable catalog definitions specify ID/name, slot, positive cost/duration, required surviving tier and optional completed-project prerequisite. Unknown, unaffordable, occupied, duplicate, completed or prerequisite-blocked requests reject without payment. Existing global pause freezes timers; active gameplay advances them in real time.
+- Base projects use `TryStartNextTier`; provisional tier 2/3/4/5 prices are **100/150/200/250** and times **20/30/40/50 seconds**, independently configurable. Rebuilds use the same duration and half-price rounding below.
+- Defense/resources/offense/ship slots accept registered content definitions. Non-repeatable completion records finished research once; repeatable projects can be ordered again after completion. The starter catalog below now applies live repair/recharge/collector/Claim effects and launches offensive units. Owned ship equipment/installation remains the next milestone. Completed research records survive tier loss; starter non-ship effects suspend below their prerequisite tier and return after rebuilding.
+- Projects expose immutable payment/definition snapshots, progress, target tier/rebuild flag, and a unique instance ID. `Cancel(slot, instanceId)` cannot accidentally cancel a replacement project from a stale UI action. Active/completed/cancelled/destroyed outcomes are exclusive; terminal projects clear their slots, with no queue or replayed completion/refund.
+- Cancellation deposits the exact payment and spills owned overflow through the existing grounded/radial fragment path. Tier loss destroys all categories synchronously before later timer completion, including the base/rebuild slot; investment neutral drops are separate from storage drops.
+- Player-facing remote orders/cancellation are available through B. Autonomous rival ordering remains pending; both factions use the same catalog/economy rules when orders are issued.
+
+### Starter Catalog And Effects (2026-10-11)
+
+| Project | Slot / required tier | Cost / time | Implemented effect |
+| --- | --- | --- | --- |
+| Repair matrix | Defense / 1 | 20 / 8s | Passive base repair ×1.5; never restores lost tiers. |
+| Energy grid | Defense / 2 | 40 / 12s | Ship recharge ×1.25; completed research suspends below tier 2. |
+| Collector drive | Resources / 1 | 25 / 10s | Home-base collector movement speed ×1.25, including existing collectors. |
+| Strike drone | Offense / 2 | 60 / 15s | Repeatable one-shot unit flies from home to the opposing base, dealing 45 damage once. |
+| Claim range calibration | Ship / 1 | 15 / 8s | Built-in RMB Claim range 120→150; no equipment slot or installation. |
+
+Provisional definitions live in `BaseProjectCatalog.cs`. Effects are derived from completed research and surviving prerequisites rather than repeatedly mutating exported tuning; no double application occurs. Ship energy, collector movement, base repair and newly cast Claim projectiles use these live modifiers. The energy-grid suspension policy is provisional for this initial non-ship catalog; installed equipment retention remains governed separately by `SHIP_EQUIPMENT.md`.
+
+Strike drones use original primitive visuals and spherical/flat routes, speed 18 and a 60-second lifetime. They attach to the owning world, not a stale `CurrentScene`. They expire if the rival base disappears/dies and cannot hit twice; completed unit expenditure is not automatically refunded. Research cannot start without a surviving rival base. This first one-shot unit has no interception HP/collision combat or alternate targeting; those are later unit-content work.
+
+### Construction Accounting
+
+`SpentAntimatter` is cumulative gross payment, **not** an additional physical reserve. `RefundedAntimatter` includes both refund deposits and owned overflow; `InvestmentSpilledAntimatter` records the investment fraction returned as neutral physical drops. `NetCommittedAntimatter = spent - refunded - investment spilled` includes active investment, completed expenditure and permanent losses. `WorldAntimatterTracker` aggregates these, active investment and `DestroyedInvestmentLoss` separately from loose/carried/storage/creature resources.
+
+With no new supply or withdrawals into untracked destinations, `physical world total + net committed = supplied antimatter`. Transfers and ordinary storage spills leave that sum unchanged. Refunds and investment spills return only the actual payment fractions to physical supply. Future income/boon supply and material ledgers must extend this model explicitly.
 
 Remote ordering is allowed. Research and construction run in real time, including while the management UI is open. Ship equipment installation/loadout changes require returning home.
 
@@ -98,7 +142,7 @@ For each destroyed project's paid antimatter:
 - The other 50% is permanently lost; it is not refunded to storage.
 - A project is destroyed once even if one attack removes multiple tiers.
 
-For integer resource accounting, the rounding convention for odd costs remains an implementation decision; record it explicitly and ensure spilled plus permanently lost equals the paid amount.
+Implemented integer rounding: neutral investment spill is `floor(paid / 2)`; permanent loss is the exact remainder (`ceil(paid / 2)`). Thus a 51-antimatter payment spills 25 and loses 26. A one-antimatter payment spills zero and loses one. This is applied per project, not to an aggregated payment.
 
 Base storage damage spills are separate from construction-investment spills. Reducing capacity spills any excess stored antimatter under the retained neutral-spill behavior. Do not count construction investment as stored antimatter or spill the same amount twice.
 
@@ -114,6 +158,7 @@ A tier-4 base has active projects paid at 100 and 60 antimatter. An attack drops
 ## Rebuilding
 
 - Rebuilding a previously purchased, destroyed tier costs 50% of its normal upgrade cost.
+- Integer rebuild prices round **up**, so a normal 101 price rebuilds for 51. Cancellation/destruction use that snapshotted 51 payment, never 101. Rebuild duration currently equals the configured normal upgrade duration.
 - Rebuild one tier at a time using the base construction slot.
 - A tier-4 base reduced to tier 2 must rebuild tier 3, then tier 4, paying the respective reduced prices.
 - Buying a tier never previously obtained remains a full-price advancement.
@@ -135,7 +180,9 @@ The base panel should show:
 - Owned strategic sites, income/storage saturation, research modifiers and station-controlled drones.
 - Relevant boon modifiers, with base HP/recharge bonuses separate from purchased upgrades.
 
-The panel does not pause the match. Input ownership must prevent UI clicks from firing equipment or Claim and restore flight/mouse handling when closed. Preserve existing survey/size-menu/result behavior during the terminology-only conversion; reconcile the paused survey with the approved real-time gameplay interfaces during UI work. Terminal results and fresh-match setup are separate from active-match management.
+Implemented controls: **B** opens/closes remote management; **Esc** closes. Category tabs show available projects and why blocked; five slot cards show progress/paid amounts and full-refund cancel buttons. Tier ordering automatically switches to sequential rebuilds when needed. HP/storage/energy/recharge and surviving/purchased tiers update live. Damaged/lost-tier states show siege messages, including a closed-panel B hint badge. Completed higher-tier effects explicitly show active/suspended status. Owned equipment/pending installation/site/boon displays follow their systems.
+
+Management and the **M world survey both run in real time**. Only one owns ship input at a time; B/M transfer between them. Cursor and prior mouse mode restore on close. Look, movement and equipment input are blocked while open, but timers/recharge/AI/damage continue; drift decelerates normally. Held combat buttons must be released before firing resumes, preventing a closing click from activating equipment. F2 from management closes it and opens the existing paused setup menu; setup/terminal results remain pause owners, and live interfaces cannot open over them. R resets from either live interface; F6 from management returns to the lab. Survey consumes F2/F3/F6 until closed. Automatic closure on base loss/result preserves the terminal pause.
 
 ## Implementation Order
 
@@ -167,9 +214,8 @@ The panel does not pause the match. Input ownership must prevent UI clicks from 
 
 ## Remaining Design Decisions
 
-- Completed base/collector/unit-upgrade behavior when its prerequisite tier is lost: disable temporarily, retain unchanged, or another policy. Ship equipment retention is already decided.
-- Tier damage thresholds, rebuild duration, repair interaction and complete-base-loss policy.
-- Odd-cost rounding for 50% spills/rebuilds.
+- Starter non-ship research effects use provisional suspension below prerequisites; future completed unit/defense upgrades need their own effect-retention policies. Installed ship equipment retention is already decided.
+- Balance tuning of the implemented health-layer thresholds, rebuild times and repair rates; complete loss remains terminal.
 - Pending completed ship research if the base is damaged or the player dies before installation.
 - Matter acquisition/storage/refunds and overflow handling.
 - Rival research behavior, faction differences and eventual participant/networking scope.

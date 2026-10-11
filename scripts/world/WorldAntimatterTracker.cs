@@ -12,6 +12,12 @@ public partial class WorldAntimatterTracker : Node
     public int NeutralCreatureAntimatter { get; private set; }
     public int PlayerControlledAntimatter { get; private set; }
     public int EnemyControlledAntimatter { get; private set; }
+    public long SpentAntimatter { get; private set; }
+    public long RefundedAntimatter { get; private set; }
+    public long InvestmentSpilledAntimatter { get; private set; }
+    public long ActiveConstructionInvestment { get; private set; }
+    public long DestroyedInvestmentLoss { get; private set; }
+    public long NetCommittedAntimatter => SpentAntimatter - RefundedAntimatter - InvestmentSpilledAntimatter;
     public int TotalAntimatter => NeutralLooseAntimatter + NeutralCreatureAntimatter + PlayerControlledAntimatter + EnemyControlledAntimatter;
     public bool EquilibriumMet => TotalAntimatter > 0 && PlayerControlledAntimatter >= TotalAntimatter * EquilibriumFraction;
 
@@ -46,6 +52,8 @@ public partial class WorldAntimatterTracker : Node
         NeutralCreatureAntimatter = 0;
         PlayerControlledAntimatter = 0;
         EnemyControlledAntimatter = 0;
+        SpentAntimatter = 0;
+        RefundedAntimatter = InvestmentSpilledAntimatter = ActiveConstructionInvestment = DestroyedInvestmentLoss = 0;
 
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {
@@ -75,6 +83,8 @@ public partial class WorldAntimatterTracker : Node
             if (node is FactionBase hub)
             {
                 PlayerControlledAntimatter += hub.StoredAntimatter;
+                SpentAntimatter += hub.SpentAntimatter;
+                AddConstructionAccounting(hub);
             }
         }
 
@@ -83,6 +93,8 @@ public partial class WorldAntimatterTracker : Node
             if (node is FactionBase hub)
             {
                 EnemyControlledAntimatter += hub.StoredAntimatter;
+                SpentAntimatter += hub.SpentAntimatter;
+                AddConstructionAccounting(hub);
             }
         }
 
@@ -104,5 +116,13 @@ public partial class WorldAntimatterTracker : Node
                 NeutralCreatureAntimatter += monster.AntimatterReserve;
             }
         }
+    }
+
+    private void AddConstructionAccounting(FactionBase hub)
+    {
+        RefundedAntimatter += hub.RefundedAntimatter;
+        InvestmentSpilledAntimatter += hub.InvestmentSpilledAntimatter;
+        ActiveConstructionInvestment += hub.Construction.ActiveInvestment;
+        DestroyedInvestmentLoss += hub.Construction.DestroyedInvestmentLoss;
     }
 }

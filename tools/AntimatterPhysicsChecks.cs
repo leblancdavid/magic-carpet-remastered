@@ -314,7 +314,7 @@ public partial class AntimatterPhysicsChecks : Node3D
         player.SetProcess(false);
         var orb = Add(new AntimatterPickup { Ownership = AntimatterOwnership.Player, AntimatterAmount = 19 }, new Vector3(6, 4, 0));
         var tracker = Add(new WorldAntimatterTracker(), Vector3.Zero);
-        int claimed = player.ClaimedAntimatter;
+        int claimed = player.EnergyCapacity;
         int antimatter = player.Energy;
         await Frames(90);
         tracker.Refresh();
@@ -324,14 +324,14 @@ public partial class AntimatterPhysicsChecks : Node3D
         orb.GlobalPosition = player.GlobalPosition + new Vector3(0.5f, 0, 0);
         await Frames(60);
         tracker.Refresh();
-        Check(orb.IsAvailable && orb.AntimatterAmount == 19 && player.ClaimedAntimatter == claimed && player.Energy == antimatter, "Actual player contact does not collect or refill antimatter");
+        Check(orb.IsAvailable && orb.AntimatterAmount == 19 && player.EnergyCapacity == claimed && player.Energy == antimatter, "Actual player contact does not collect or refill antimatter");
         Check(tracker.TotalAntimatter == 19 && tracker.PlayerControlledAntimatter == 19, "Player contact leaves claimed antimatter in world accounting");
 
         var hub = Add(new FactionBase { InitialStoredAntimatter = 0 }, new Vector3(-12, 2.5f, 0));
         var drone = Add(new CollectorDrone { CarryCapacity = 1 }, orb.GlobalPosition + Vector3.Up * 4.5f);
         await Frames(240);
         tracker.Refresh();
-        Check(hub.StoredAntimatter == 19 && drone.CarriedCount == 0 && player.ClaimedAntimatter == claimed + 19, "Drone alone collects claimed antimatter and delivers hub power");
+        Check(hub.StoredAntimatter == 19 && drone.CarriedCount == 0 && player.EnergyCapacity == claimed + 19, "Drone alone collects claimed antimatter and delivers storage-backed energy limit");
         Check(tracker.TotalAntimatter == 19 && tracker.PlayerControlledAntimatter == 19, "Drone-only delivery conserves world antimatter");
     }
 

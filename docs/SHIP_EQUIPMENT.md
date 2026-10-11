@@ -53,7 +53,7 @@ Damage types/source tags and modifier stacking formulas are not finalized. Defin
 - Continue using the existing aimed, surface-following resource-claim projectile in the terminology-only pass.
 - Claim stays available when base storage is full; collectors wait for storage space.
 
-Claim upgrade effects, costs and ranks are not selected yet.
+The live-management starter catalog now includes **Claim range calibration**: 15 antimatter, 8 seconds, tier 1; new Claim projectiles gain 25% range (120→150). This built-in research does not create an owned equipment item, occupy a slot or require loadout installation. Additional Claim upgrades/ranks remain undecided.
 
 ## Built-In Booster
 

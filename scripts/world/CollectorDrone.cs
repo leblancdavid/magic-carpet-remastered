@@ -85,7 +85,7 @@ public partial class CollectorDrone : Node3D
                 _dockTimer = Mathf.Max(0.0f, _dockTimer - deltaF);
                 if (_dockTimer <= 0.0f)
                 {
-                    _state = DroneState.Seeking;
+                    _state = _carried.Count > 0 ? DroneState.Returning : DroneState.Seeking;
                 }
 
                 break;
@@ -111,6 +111,12 @@ public partial class CollectorDrone : Node3D
 
     private void HandleSeeking(float delta)
     {
+        if (_base == null || _base.AvailableStorage == 0)
+        {
+            if (_carried.Count > 0) _state = DroneState.Returning;
+            else ReturnToAnchor(delta);
+            return;
+        }
         AntimatterPickup? best = null;
         float bestDistance = float.MaxValue;
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
@@ -157,7 +163,8 @@ public partial class CollectorDrone : Node3D
 
     private void Scoop(AntimatterPickup pickup)
     {
-        if (_carried.Count >= CarryCapacity || !pickup.IsAvailable)
+        if (_base == null || _base.IsDestroyed || _base.AvailableStorage == 0
+            || _carried.Count >= CarryCapacity || !pickup.IsAvailable)
         {
             return;
         }
@@ -196,18 +203,15 @@ public partial class CollectorDrone : Node3D
         {
             return;
         }
-        foreach (AntimatterPickup pickup in _carried)
+        for (int i = _carried.Count - 1; i >= 0; i--)
         {
+            AntimatterPickup pickup = _carried[i];
             int accepted = _base.DepositAntimatter(pickup.AntimatterAmount);
             pickup.TakeAntimatter(accepted);
-            if (pickup.AntimatterAmount > 0)
-            {
-                // Release overflow outside the solid keep, not inside its collider.
-                pickup.SpillAt(_base.GlobalPosition + _base.GlobalBasis * new Vector3(5.0f + pickup.Radius, 2.0f, GD.Randf() * 2.0f - 1.0f));
-                pickup.ReassignOwnership(AntimatterOwnership.Neutral);
-            }
+            // Retain owned cargo at home until room opens; never neutralize or
+            // repeatedly re-scoop capacity overflow.
+            if (pickup.AntimatterAmount == 0) _carried.RemoveAt(i);
         }
-        _carried.Clear();
     }
 
     private void Pop()
@@ -247,10 +251,11 @@ public partial class CollectorDrone : Node3D
 
     private void MoveToward(Vector3 target, float delta)
     {
+        float speed = MoveSpeed * (_base?.CollectorSpeedMultiplier ?? 1);
         if (_arena?.IsSpherical == true)
         {
             Vector3 heading = _arena.DirectionTo(GlobalPosition, target);
-            GlobalPosition = _arena.ClampFlightPosition(_arena.StepToward(GlobalPosition, target, MoveSpeed * delta));
+            GlobalPosition = _arena.ClampFlightPosition(_arena.StepToward(GlobalPosition, target, speed * delta));
             _arena.Orient(this, heading.LengthSquared() > 0.001f ? heading : null);
             return;
         }
@@ -267,7 +272,7 @@ public partial class CollectorDrone : Node3D
         }
         // Turn from the departure position: a capped step can land exactly on
         // target, which would make LookAt(target) invalid after moving.
-        GlobalPosition = GlobalPosition.MoveToward(target, MoveSpeed * delta);
+        GlobalPosition = GlobalPosition.MoveToward(target, speed * delta);
         if (_arena != null) GlobalPosition = _arena.ClampFlightPosition(GlobalPosition);
     }
 

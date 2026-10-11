@@ -130,7 +130,8 @@ public partial class Hud : CanvasLayer
 
         _vitals.Text = $"Health  {_player.Health}     Energy  {_player.Energy} / {_player.EnergyCapacity}\n"
             + (_player.Health <= 0 ? $"Respawn in {_levelObjective?.PlayerRespawnRemaining:0.0}s"
-                : _player.IsShielded ? _player.ShieldStatusText : _player.IsInvulnerable ? "Protected after hit" : "Ship ready");
+                : _player.IsShielded ? _player.ShieldStatusText : _player.IsInvulnerable ? "Protected after hit" : "Ship ready")
+            + (_playerBase == null ? "" : $"\nBase T{_playerBase.Tier}   Antimatter {_playerBase.StoredAntimatter}/{_playerBase.EffectiveStorageCapacity}");
         _objective.Text = _levelObjective == null ? "Eliminate the rival\nDestroy base and pilot"
             : $"Rival base: {(_levelObjective.RivalBaseDestroyed ? "Destroyed" : $"{_enemyBase?.Health} HP")}\n"
                 + $"Rival pilot: {(_levelObjective.RivalPilotDefeated ? _levelObjective.RivalBaseDestroyed ? "Defeated" : $"Respawn {_levelObjective.RivalRespawnRemaining:0}s" : "Alive")}";
@@ -152,7 +153,7 @@ public partial class Hud : CanvasLayer
 
         string details = Section("FLIGHT / PLAYER")
             + $"Camera: {_player.CameraMode}\nSpeed: {_player.Speed:0.0}\nTerrain clearance: {_player.AltitudeAboveTerrain:0.0}\n"
-            + $"Equipment power: {_player.ClaimedAntimatter} (base +{_player.BaseAntimatterBonus})\nAntimatter collection: collector drone delivery\n{_player.ShieldStatusText}\n\n"
+            + $"Storage-backed energy limit: {_player.EnergyCapacity}\nRecharge: {_player.EnergyRechargePerSecond:0.0}/s\nAntimatter collection: collector drone delivery\n{_player.ShieldStatusText}\n\n"
             + Section("EQUIPMENT DISCOVERIES")
             + _player.EquipmentProgressionText + "\nGold beacons grant rank II: fly within 4 units.\nUpgrades survive respawn; R resets them.\n\n"
             + Section("ANTIMATTER ECONOMY")
@@ -164,7 +165,7 @@ public partial class Hud : CanvasLayer
             + Section("TERRAIN") + _player.TerrainDebugText.Replace("   ", "\n")
             + "\n\n"
             + Section("CONTROLS")
-            + "WASD — fly\nSpace / C — ascend / descend\nMouse — look\nV — camera mode\nM — world map / waypoint (planet)\nEsc — capture / release mouse\nR — restart arena\n\n"
+            + "WASD — fly\nSpace / C — ascend / descend\nMouse — look\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nR — restart arena\n\n"
             + $"LMB — {_player.PrimaryEquipmentName}\nTab — cycle quick equipment\nQ — {_player.AreaEquipmentName}\nE — {_player.ShieldEquipmentName}\nF — {_player.MobilityEquipmentName}\nG — {_player.SummonEquipmentName}\n"
             + $"RMB — Claim ({_player.ClaimEquipmentEnergyCost} energy): aim at a globe or the ground before it; the bolt follows terrain after landing.\n\n"
             + Section("OWNERSHIP / ROLE GUIDE")
@@ -184,8 +185,24 @@ public partial class Hud : CanvasLayer
     private static string BaseDetails(FactionBase? hub, string side) => hub == null
         ? $"{side} base: unavailable\n"
         : $"{side} base: {(hub.IsDestroyed ? "Destroyed" : $"HP {hub.Health}/{hub.MaxHealth}")}\n"
-            + $"Storage: {hub.StoredAntimatter}/{hub.EffectiveStorageCapacity} (intact {hub.AntimatterStorageCapacity})  ·  Stage {hub.GrowthStage}\n"
+            + $"Storage: {hub.StoredAntimatter}/{hub.EffectiveStorageCapacity} (intact {hub.AntimatterStorageCapacity})  ·  Tier {hub.Tier} / purchased {hub.HighestPurchasedTier}\n"
+            + $"Payments: {hub.SpentAntimatter} · Refunds: {hub.RefundedAntimatter} · Investment spill: {hub.InvestmentSpilledAntimatter}\n"
+            + $"Construction: {hub.Construction.ActiveInvestment} invested · Siege loss: {hub.Construction.DestroyedInvestmentLoss}\n{hub.Construction.LastStatus}\n"
+            + ConstructionDetails(hub)
             + $"Repair: {(hub.IsDestroyed ? "Ruined" : hub.IsRepairing ? "Repairing" : hub.Health < hub.MaxHealth ? "Waiting for quiet" : "Intact")}\n\n";
+
+    private static string ConstructionDetails(FactionBase hub)
+    {
+        string text = string.Empty;
+        for (int i = 0; i < 5; i++)
+        {
+            var slot = (ConstructionSlot)i;
+            var project = hub.Construction.GetActive(slot);
+            text += project == null ? $"{slot}: idle\n"
+                : $"{slot}: {project.Definition.Name} {project.Progress:P0} · paid {project.PaidAntimatter}\n";
+        }
+        return text;
+    }
 
     private static Label CreateLabel(string text, int fontSize)
     {

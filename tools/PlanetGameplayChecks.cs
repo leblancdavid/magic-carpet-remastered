@@ -137,7 +137,7 @@ public partial class PlanetGameplayChecks : Node3D
             _player = Add(new ShipFlightController(), Offset(underside, 12, 800, Vector3.Forward), 6);
             _player.SetPhysicsProcess(false);
             Check(home.GlobalBasis.Y.Dot(underside) > 0.9999f && rival.GlobalBasis.Y.Dot(rivalUp) > 0.9999f, "Bases upright on underside");
-            Check(_player.EnergyCapacity == 110, "Base-derived equipment power retained");
+            Check(_player.EnergyCapacity == 30, "Energy limit equals home storage on underside");
             await CheckProjectileOwnerLifetime(underside);
 
             AntimatterPickup falling = Add(new AntimatterPickup { AntimatterAmount = 10 }, Offset(underside, 20, 800, Vector3.Right), 6);
@@ -148,10 +148,10 @@ public partial class PlanetGameplayChecks : Node3D
             await Frames(160);
             Check(Mathf.Abs(_arena.Clearance(falling.GlobalPosition) - falling.Radius) < 0.25f, "Antimatter settles on underside collision surface");
             Check(falling.GravityScale == 0 && falling.AntimatterAmount == 10, "Disable global gravity without losing antimatter");
-            int power = _player.ClaimedAntimatter;
+            int power = _player.EnergyCapacity;
             _player.GlobalPosition = falling.GlobalPosition;
             await Frames(15);
-            Check(falling.AntimatterAmount == 10 && _player.ClaimedAntimatter == power, "Player contact never collects physical antimatter");
+            Check(falling.AntimatterAmount == 10 && _player.EnergyCapacity == power, "Player contact never collects physical antimatter");
             _player.GlobalPosition = _arena.OnSurface(home.GlobalPosition + home.GlobalBasis.X * 12, 6);
 
             AntimatterPickup mergeA = Add(new AntimatterPickup { AntimatterAmount = 5, Ownership = AntimatterOwnership.Player }, Offset(underside, 30, 800, Vector3.Forward), 1);
@@ -207,7 +207,7 @@ public partial class PlanetGameplayChecks : Node3D
             int storedBefore = home.StoredAntimatter;
             await Frames(180);
             Check(home.StoredAntimatter == storedBefore + 10, $"Drone scoop/carry/delivery on underside: stored {home.StoredAntimatter}");
-            Check(_player.EnergyCapacity == 120, "Delivery increases current hub-backed equipment capacity");
+            Check(_player.EnergyCapacity == 40, "Delivery raises energy limit to retained home storage");
             Check(drone.GlobalBasis.Y.Dot(_arena.UpAt(drone.GlobalPosition)) > 0.999f, "Drone stays upright while hauling");
 
             EquipmentDiscovery discovery = Add(new EquipmentDiscovery { EquipmentId = "plasma-bolt", EquipmentName = "Plasma Bolt" }, Offset(underside, 22, 800, Vector3.Back), 6);
@@ -231,6 +231,7 @@ public partial class PlanetGameplayChecks : Node3D
             Cast(_player, "CastMobilityEquipment");
             Check(_arena.Tangent(_player.Velocity, _player.GlobalPosition).Length() > 30
                 && _player.Velocity.Dot(_arena.UpAt(_player.GlobalPosition)) > 0, "Dash uses tangent speed plus radial lift");
+            _player.RespawnAt(_player.GlobalPosition);
             Cast(_player, "CastSummonEquipment");
             GuardianDrone summoned = GetChildren().OfType<GuardianDrone>().Last();
             summoned.SetPhysicsProcess(false);
@@ -250,6 +251,7 @@ public partial class PlanetGameplayChecks : Node3D
             EnemyEcosystemEnemy burstTarget = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.GroundBeast }, burstUp, 1);
             burstTarget.SetPhysicsProcess(false);
             int burstHealth = burstTarget.Health;
+            _player.RespawnAt(_player.GlobalPosition);
             Cast(_player, "CastAreaEquipment");
             Check(burstTarget.Health == burstHealth - 32, "Actual Pulse Burst targets spherical ground and damages enemies");
             burstTarget.QueueFree(); await Frames(2);
@@ -288,7 +290,7 @@ public partial class PlanetGameplayChecks : Node3D
             int economicTotal = home.StoredAntimatter + LooseTotal();
             home.ApplyDamage(70);
             Check(home.StoredAntimatter == 60 && home.EffectiveStorageCapacity == 60, "Base damage reduces retained storage and spills excess");
-            Check(home.StoredAntimatter + LooseTotal() == economicTotal && _player.ClaimedAntimatter == 140, "Radial hub spill conserves resources and reduces current power");
+            Check(home.StoredAntimatter + LooseTotal() == economicTotal && _player.EnergyCapacity == 60, "Radial hub spill conserves resources and reduces energy limit");
             foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
                 if (node is AntimatterPickup orb && !orb.IsQueuedForDeletion())
                     Check(orb.LinearVelocity.IsZeroApprox()

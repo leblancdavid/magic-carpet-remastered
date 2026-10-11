@@ -1,6 +1,6 @@
 # Strategic Planet Layout And Navigation
 
-Terminology update (2026-10-11): the implemented radar is now Tactical Radar. Current markers/UI use bases, pilots, antimatter, drones and equipment; paused-survey behavior and layout are preserved. Historical notes below retain the legacy vocabulary. See `TERMINOLOGY_MIGRATION.md` for IDs/types and `README.md` for current controls and commands.
+Terminology/UI update (2026-10-11): the implemented radar is now Tactical Radar. Current markers/UI use bases, pilots, antimatter, drones and equipment. The name-only conversion preserved the paused survey; the subsequent management milestone makes it real time, with ship-input/cursor ownership and B/M transfer between interfaces. Historical layout notes below retain the legacy vocabulary. See `TERMINOLOGY_MIGRATION.md` for IDs/types and `README.md` for current controls and commands.
 
 ## Approved Direction Update (2026-10-11)
 
@@ -13,7 +13,7 @@ The sections below describe the implemented legacy navigation/landmark milestone
 - Planned navigation markers distinguish wrecks, revealed rewards and economic-site roles/ownership; capture feedback shows progress and contest. Exact reveal rules remain undecided.
 - Equipment unlocks/ranks become base research. Current landmark rank-II beacons stay active until replaced in the boon milestone; do not encode them as the future progression model.
 
-New reward and capture interfaces run in real time. The existing paused M-key survey below is current behavior, not an exception established for the new real-time design; map/modal behavior must be reconciled during its UI implementation. Preserve it through terminology-only conversion.
+New reward/capture interfaces will run in real time. The M survey and B management now follow that policy: neither pauses simulation, they block ship controls and restore prior mouse mode on close, and they cannot open over setup/terminal pause. Only one live interface is expanded at a time.
 
 ## First playable milestone (2026-10-10)
 
@@ -42,7 +42,7 @@ Spherical balloon search covers half the circumference, allowing possession anyw
 ## Controls and information
 
 - Heading-relative **220 m local radar** sits below vitals. Forward is up; distant castles/landmarks/upgrades sit on the rim. Gold target line/ring and text give surface distance and left/right bearing. Default guidance is home.
-- **M** opens/closes the world survey; **Esc** closes. The match pauses and cursor releases while open; closing restores the prior mouse mode. It cannot open over a size menu or terminal result.
+- **M** opens/closes the world survey; **Esc** closes. The match stays live and cursor releases while open; ship input is blocked and closing restores prior mouse mode. It cannot open over a size menu or terminal result. **B** transfers to base management.
 - **Left click** a marker or surface location for a static waypoint (twelve-pixel marker snap). **Right click / Delete** clears it, returning guidance to home. Waypoints do not automate flight or command balloons.
 - **R** restarts with the map open. Input is modal: close the map before F2/F3/F6. It cannot steal/unpause another menu's pause.
 - Castles show known locations plus health/storage/ruins. Owned loose mana and allied balloon are globally tracked. Balloon cargo uses a count rather than duplicate loose dots.
@@ -56,7 +56,7 @@ The full survey is a starting-hemisphere-centered equirectangular map of both he
 
 The 192×96 terrain survey texture is generated once during loading; it is an initial coarse survey, not a live crater display. Visibility/metadata snapshots refresh at five Hz. The local radar redraws every rendered frame and resolves live positions from those already-known actors, eliminating the previous ten-Hz heading steps and five-Hz moving-marker jumps without per-frame group scans. Invalid/deleted, dead, carried, pending and collected actors are rejected before drawing. New markers and ownership metadata can still take up to 0.2 seconds to appear/change.
 
-Radar guidance text and the paused survey refresh at ten Hz. Guidance derives distance/bearing directly from radial directions rather than querying terrain heights. Glyph buffers and the theme font are reused instead of allocated/resolved per marker per draw; timers preserve normal frame overshoot. Opening the map never regenerates terrain meshes or the noise atlas. Automated/rendered checks confirm correctness; frame-time gains and hands-on smoothness are not yet measured/accepted.
+Radar guidance text and survey hover/text refresh at ten Hz. Guidance derives distance/bearing directly from radial directions rather than querying terrain heights. Glyph buffers and the theme font are reused instead of allocated/resolved per marker per draw; timers preserve normal frame overshoot. Opening the map never regenerates terrain meshes or the noise atlas. Automated/rendered checks confirm correctness; frame-time gains and hands-on smoothness are not yet measured/accepted.
 
 Well seeds/director spawns attach to their owning world parent instead of whichever scene is `CurrentScene` during construction. This prevents dynamic scene tests/restarts leaving actors outside their world with removed player/castle references.
 

@@ -57,11 +57,12 @@ public partial class Game : Node3D
             AddChild(navigation);
             AddChild(new TacticalMap { Name = "TacticalMap", Navigation = navigation });
         }
+        AddChild(new BaseManagement { Name = "BaseManagement" });
         _arena.RefreshPlanetDetail();
         ProcessMode = ProcessModeEnum.Pausable;
         foreach (Node child in GetChildren())
         {
-            child.ProcessMode = child is Hud or PlanetSettings or TacticalMap ? ProcessModeEnum.Always : ProcessModeEnum.Pausable;
+            child.ProcessMode = child is Hud or PlanetSettings or TacticalMap or BaseManagement ? ProcessModeEnum.Always : ProcessModeEnum.Pausable;
         }
     }
 

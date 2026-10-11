@@ -27,7 +27,7 @@ public partial class EquipmentProgressionChecks : Node3D
             var hub = new FactionBase { InitialStoredAntimatter = 30, Position = new Vector3(-20, 20, 0) };
             AddChild(hub);
             int antimatter = player.Energy;
-            int power = player.ClaimedAntimatter;
+            int power = player.EnergyCapacity;
             Check(player.PlasmaBoltDamage == 25 && player.EffectiveAreaDamage == 32 && player.EffectiveAreaRadius == 8,
                 "Base offensive equipment retain original strength");
             Check(player.EffectiveShieldDuration == 4 && player.EffectiveDashSpeed == 46,
@@ -50,7 +50,7 @@ public partial class EquipmentProgressionChecks : Node3D
                     "Real physics frames collect a nearby beacon at low/high flight clearance and remove it");
                 Check(!player.DiscoverEquipmentUpgrade(ids[i]), "Repeated discoveries cannot stack rank or effects");
             }
-            Check(player.Energy == antimatter && player.ClaimedAntimatter == power && hub.StoredAntimatter == 30,
+            Check(player.Energy == antimatter && player.EnergyCapacity == power && hub.StoredAntimatter == 30,
                 "Equipment discoveries do not change equipment antimatter, power, or physical hub reserves");
             Check(player.PrimaryEquipmentName == "Plasma Bolt II" && player.EquipmentProgressionText.Contains("Guardian Drone II"),
                 "Selected equipment and progression text expose rank II");
@@ -71,6 +71,7 @@ public partial class EquipmentProgressionChecks : Node3D
             guardian.SetPhysicsProcess(false);
             Check(guardian.Damage == 16 && guardian.LifetimeSeconds == 18,
                 "Actual upgraded summon receives stronger attacks and lifetime before Ready");
+            player.RespawnAt(player.GlobalPosition);
             Invoke(player, "CastShieldEquipment");
             Check(player.IsShielded && player.ShieldStatusText.Contains("6.0"), "Actual upgraded shield lasts six seconds");
             // Clear respawn protection before exercising upgraded shield mitigation.
@@ -80,6 +81,7 @@ public partial class EquipmentProgressionChecks : Node3D
             Invoke(player, "CastMobilityEquipment");
             Check(new Vector2(player.Velocity.X, player.Velocity.Z).Length() > 50,
                 "Actual upgraded dash launches faster than base speed");
+            player.RespawnAt(player.GlobalPosition);
             Invoke(player, "CastAreaEquipment");
             var areaBurst = GetChildren().OfType<EquipmentImpactBurst>().Last(burst => burst.Name == "AreaEquipmentBurst");
             var burstTarget = new EnemyEcosystemEnemy
@@ -93,6 +95,7 @@ public partial class EquipmentProgressionChecks : Node3D
             // this 3D radius probe afterward so first-person/chase aim defaults
             // do not silently move it out of the intended nine-unit test range.
             burstTarget.GlobalPosition = areaBurst.GlobalPosition + Vector3.Right * 9;
+            player.RespawnAt(player.GlobalPosition);
             Invoke(player, "CastAreaEquipment");
             Check(burstTarget.Health == 2 && areaBurst.EndScale == 10,
                 $"Actual upgraded Burst deals 40 damage beyond the base eight-unit radius and enlarges feedback (health {burstTarget.Health}, radius {areaBurst.EndScale}, status {player.StatusMessage})");

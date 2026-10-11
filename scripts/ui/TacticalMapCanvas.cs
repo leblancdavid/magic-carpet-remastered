@@ -40,7 +40,7 @@ public partial class TacticalMapCanvas : Control
             _targetTitle = Navigation.TargetName.Length > 24 ? Navigation.TargetName[..21] + "…" : Navigation.TargetName;
             _targetGuidance = $"{Navigation.TargetDistance:0} m · {Navigation.BearingText()}";
         }
-        // The paused survey needs only low-frequency hover/text updates.
+        // Survey hover/text updates remain low frequency; gameplay stays live.
         // Flight-relative radar positions must follow every rendered frame.
         if (Expanded && !refreshText) return;
         QueueRedraw();
@@ -117,7 +117,7 @@ public partial class TacticalMapCanvas : Control
         DrawRect(new Rect2(Vector2.Zero, Size), new Color(0.015f, 0.025f, 0.045f, 0.97f));
         Rect2 rect = SurveyRect;
         Text(new Vector2(rect.Position.X, 78), "TACTICAL RADAR / WORLD SURVEY", Colors.White, 26);
-        Text(new Vector2(rect.Position.X, 108), "M / Esc close  ·  Left click waypoint  ·  Right click / Delete clear  ·  R restart  ·  MATCH PAUSED", new Color(0.7f, 0.8f, 0.9f), 15);
+        Text(new Vector2(rect.Position.X, 108), "M / Esc close  ·  Left click waypoint  ·  Right click / Delete clear  ·  R restart  ·  REAL TIME", new Color(0.7f, 0.8f, 0.9f), 15);
         DrawTextureRect(Navigation.SurveyTexture, rect, false);
         for (int i = 1; i < 12; i++) DrawLine(rect.Position + new Vector2(rect.Size.X * i / 12, 0), rect.Position + new Vector2(rect.Size.X * i / 12, rect.Size.Y), LineColor.Darkened(0.5f));
         for (int i = 1; i < 6; i++) DrawLine(rect.Position + new Vector2(0, rect.Size.Y * i / 6), rect.Position + new Vector2(rect.Size.X, rect.Size.Y * i / 6), LineColor.Darkened(0.5f));

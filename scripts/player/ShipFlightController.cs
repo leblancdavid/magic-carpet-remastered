@@ -46,10 +46,8 @@ public partial class ShipFlightController : CharacterBody3D
     [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
     [Export] public float TerrainFollowStrength { get; set; } = 4.5f;
     [Export] public float TerrainFollowMaxLiftSpeed { get; set; } = 10.0f;
-    [Export] public int EnergyCapacity { get; set; } = 80;
-    [Export] public int InitialClaimedAntimatter { get; set; } = 80;
-    [Export] public int MaxClaimedAntimatter { get; set; } = 400;
-    [Export] public float EnergyRegenPerClaimedAntimatterPerSecond { get; set; } = 0.04f;
+    [Export] public int InitialEnergy { get; set; } = 40;
+    [Export] public float EnergyRegenFractionPerSecond { get; set; } = 0.04f;
     [Export] public int EnergyDepositReserve { get; set; } = 20;
     [Export] public float EnergyDepositRadius { get; set; } = 6.0f;
     [Export] public int PrimaryEquipmentEnergyCost { get; set; } = 5;
@@ -73,10 +71,16 @@ public partial class ShipFlightController : CharacterBody3D
     [Export] public int ClaimEquipmentEnergyCost { get; set; } = 2;
     [Export] public float ClaimEquipmentCooldownSeconds { get; set; } = 0.4f;
 
-    public int Energy { get; private set; } = 40;
-    public int ClaimedAntimatter { get; private set; }
-    // Derived equipment power only; physical world antimatter stays in hub storage.
-    public int BaseAntimatterBonus => ClaimedAntimatter - _baseAntimatterPower;
+    public int Energy { get; private set; }
+    public int EnergyCapacity { get; private set; }
+    public bool GameplayInputBlocked
+    {
+        get => _gameplayInputBlocked;
+        set { _gameplayInputBlocked = value; if (value) _waitForEquipmentRelease = true; }
+    }
+    public float EnergyRechargePerSecond => EnergyCapacity * EnergyRegenFractionPerSecond
+        * (IsInstanceValid(_homeBase) ? _homeBase!.EnergyRechargeMultiplier : 1);
+    public float EffectiveClaimRange => IsInstanceValid(_homeBase) && _homeBase!.Construction.IsEffectActive("claim-range") ? 150 : 120;
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : _arena.Elevation(GlobalPosition) - _arena.HeightAt(GlobalPosition);
@@ -149,7 +153,10 @@ private float _feedbackTimer;
 private EquipmentDefinition _summonEquipment = null!;
     private EquipmentDefinition _terrainEquipment = null!;
     private EquipmentDefinition _claimEquipment = null!;
-    private int _baseAntimatterPower;
+    private bool _initialEnergySet;
+    private FactionBase? _homeBase;
+    private bool _waitForEquipmentRelease;
+    private bool _gameplayInputBlocked;
     private uint _aliveCollisionLayer;
     private uint _aliveCollisionMask;
     private string _discoveryFeedback = string.Empty;
@@ -185,8 +192,7 @@ private EquipmentDefinition _summonEquipment = null!;
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         _arena?.Orient(this);
         _antimatterSource = GetTree().GetFirstNodeInGroup("antimatter_source") as AntimatterSource;
-        _baseAntimatterPower = Mathf.Clamp(Mathf.Max(InitialClaimedAntimatter, EnergyCapacity), 1, Mathf.Max(1, MaxClaimedAntimatter));
-        RefreshBaseAntimatterPower();
+        RefreshBaseEnergyLimit();
         _primaryEquipment = new EquipmentDefinition("plasma-bolt", "Plasma Bolt", EquipmentKind.Projectile, PrimaryEquipmentEnergyCost, FireCooldownSeconds, "Fast projectile damage equipment.");
         _areaEquipment = new EquipmentDefinition("pulse-burst", "Pulse Burst", EquipmentKind.Projectile, AreaEquipmentEnergyCost, AreaEquipmentCooldownSeconds, "Area damage blast at the aimed point.");
         _shieldEquipment = new EquipmentDefinition("energy-shield", "Energy Shield", EquipmentKind.Defense, ShieldEquipmentEnergyCost, ShieldEquipmentCooldownSeconds, "Briefly reduces incoming damage.");
@@ -219,6 +225,7 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (GameplayInputBlocked) return;
         if (@event.IsActionPressed("ui_cancel"))
         {
             Input.MouseMode = Input.MouseMode == Input.MouseModeEnum.Captured
@@ -262,6 +269,10 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         _feedbackTimer = Mathf.Max(0.0f, _feedbackTimer - deltaF);
         _damageInvulnerabilityTimer = Mathf.Max(0.0f, _damageInvulnerabilityTimer - deltaF);
         RegenerateEnergy(deltaF);
+        if (GameplayInputBlocked) _waitForEquipmentRelease = true;
+        else if (_waitForEquipmentRelease && !Input.IsActionPressed("activate_primary") && !Input.IsActionPressed("activate_claim")
+            && !Input.IsActionPressed("activate_area") && !Input.IsActionPressed("activate_shield")
+            && !Input.IsActionPressed("activate_mobility") && !Input.IsActionPressed("activate_guardian")) _waitForEquipmentRelease = false;
 
         if (_arena?.IsSpherical == true)
         {
@@ -273,9 +284,12 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         UpdateCamera(deltaF);
 
         Vector3 localInput = Vector3.Zero;
-        localInput.X = Input.GetActionStrength("move_right") - Input.GetActionStrength("move_left");
-        localInput.Z = Input.GetActionStrength("move_back") - Input.GetActionStrength("move_forward");
-        localInput.Y = Input.GetActionStrength("ascend") - Input.GetActionStrength("descend");
+        if (!GameplayInputBlocked)
+        {
+            localInput.X = Input.GetActionStrength("move_right") - Input.GetActionStrength("move_left");
+            localInput.Z = Input.GetActionStrength("move_back") - Input.GetActionStrength("move_forward");
+            localInput.Y = Input.GetActionStrength("ascend") - Input.GetActionStrength("descend");
+        }
 
         Vector3 horizontalInput = new(localInput.X, 0.0f, localInput.Z);
         if (horizontalInput.LengthSquared() > 1.0f)
@@ -298,6 +312,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
             Vector3 safeCamera = _arena.OnSurface(_camera.GlobalPosition, 0.5f);
             if (_arena.Clearance(_camera.GlobalPosition) < 0.5f) _camera.GlobalPosition = safeCamera;
         }
+        if (GameplayInputBlocked || _waitForEquipmentRelease) return;
         if (Input.IsActionPressed("activate_primary"))
         {
             CastSelectedQuickEquipment();
@@ -334,28 +349,26 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         }
     }
 
-    public void RefreshBaseAntimatterPower()
+    public void RefreshBaseEnergyLimit()
     {
-        long stored = 0;
-        foreach (Node node in GetTree().GetNodesInGroup("player_base"))
+        var home = GetTree().GetFirstNodeInGroup("player_base") as FactionBase;
+        _homeBase = home;
+        int previous = EnergyCapacity;
+        EnergyCapacity = home != null && !home.IsDestroyed && !home.IsQueuedForDeletion() ? home.StoredAntimatter : 0;
+        if (!_initialEnergySet && home != null)
         {
-            if (node is FactionBase hub && !hub.IsDestroyed && !hub.IsQueuedForDeletion())
-            {
-                stored += hub.StoredAntimatter;
-            }
+            Energy = Mathf.Clamp(InitialEnergy, 0, EnergyCapacity);
+            _initialEnergySet = true;
         }
-        int previous = ClaimedAntimatter;
-        ClaimedAntimatter = (int)System.Math.Min((long)_baseAntimatterPower + stored, Mathf.Max(_baseAntimatterPower, MaxClaimedAntimatter));
-        EnergyCapacity = ClaimedAntimatter;
         Energy = Mathf.Clamp(Energy, 0, EnergyCapacity);
-        if (ClaimedAntimatter < previous) _energyRegenAccumulator = 0;
-        if (previous > 0 && previous != ClaimedAntimatter)
+        if (EnergyCapacity < previous) _energyRegenAccumulator = 0;
+        if (previous != EnergyCapacity)
         {
-            StatusMessage = ClaimedAntimatter > previous
-                ? $"Base power +{ClaimedAntimatter - previous}"
-                : $"Base power lost: {previous - ClaimedAntimatter}";
+            StatusMessage = EnergyCapacity > previous
+                ? $"Energy limit +{EnergyCapacity - previous}"
+                : $"Energy limit lost: {previous - EnergyCapacity}";
             _feedbackTimer = 1.5f;
-            if (ClaimedAntimatter > previous) GameAudio.Instance?.PlayPickup();
+            if (EnergyCapacity > previous) GameAudio.Instance?.PlayPickup();
         }
     }
 
@@ -373,12 +386,13 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
 
     private void RegenerateEnergy(float delta)
     {
-        if (Energy >= EnergyCapacity || ClaimedAntimatter <= 0 || EnergyRegenPerClaimedAntimatterPerSecond <= 0.0f)
+        if (Energy >= EnergyCapacity || EnergyCapacity <= 0 || EnergyRegenFractionPerSecond <= 0.0f)
         {
+            _energyRegenAccumulator = 0;
             return;
         }
 
-        _energyRegenAccumulator += ClaimedAntimatter * EnergyRegenPerClaimedAntimatterPerSecond * delta;
+        _energyRegenAccumulator += EnergyRechargePerSecond * delta;
         int regenerated = Mathf.FloorToInt(_energyRegenAccumulator);
         if (regenerated <= 0)
         {
@@ -418,7 +432,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
     {
         GlobalPosition = position;
         Health = 100;
-        RefreshBaseAntimatterPower();
+        RefreshBaseEnergyLimit();
         Energy = EnergyCapacity;
         Velocity = Vector3.Zero;
         _shieldTimer = 0;
@@ -628,7 +642,7 @@ GameAudio.Instance?.PlayEquipmentCast();
 
         SpendEnergy(_claimEquipment.EnergyCost);
         Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
-        var projectile = new ClaimProjectile { Name = "ClaimProjectile" };
+        var projectile = new ClaimProjectile { Name = "ClaimProjectile", MaxRange = EffectiveClaimRange };
         projectile.AntimatterClaimed += OnAntimatterClaimed;
         GetTree().CurrentScene.AddChild(projectile);
         projectile.GlobalPosition = _camera.GlobalPosition + direction * 1.5f;

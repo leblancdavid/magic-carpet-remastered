@@ -119,7 +119,7 @@ public partial class CombatFrameProfile : Node3D
         await Window("base-spill", 180, i =>
         {
             if (i != 0) return;
-            var hub = new FactionBase { IsPlayerBase = false, AntimatterStorageCapacity = 256, InitialStoredAntimatter = 256,
+            var hub = new FactionBase { IsPlayerBase = false, Tier1StorageCapacity = 256, InitialStoredAntimatter = 256,
                 Position = Point(12, 0, 2) };
             _game.AddChild(hub);
             hub.ApplyDamage(1000);

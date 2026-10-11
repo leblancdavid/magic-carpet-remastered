@@ -2,7 +2,7 @@
 
 ## Terminology Update (2026-10-11)
 
-The behavior-preserving migration is complete. Current gameplay uses ships/pilots, bases, physical antimatter, rechargeable energy, collector drones, equipment and Claim. Tactical Radar replaces All-Seeing Eye. Scene paths, geometry, flight, cameras, tuning and controls remain the same. Technical history below retains its original vocabulary; current type/path/ID mappings and verification commands are in `TERMINOLOGY_MIGRATION.md` and `README.md`. Explicit tiers and the new construction economy follow next.
+The behavior-preserving migration is complete. Current gameplay uses ships/pilots, bases, physical antimatter, rechargeable energy, collector drones, equipment and Claim. Tactical Radar replaces All-Seeing Eye. The migration retained scene paths, geometry, flight, cameras, tuning and controls. Subsequent explicit tiers, storage-backed energy, construction/siege/rebuilding and B-key real-time management/starter projects are documented in `BASE_DEVELOPMENT.md`. The M survey is now real time; owned equipment/home installation follows next. Technical history below retains its original vocabulary; current type/path/ID mappings and verification commands are in `TERMINOLOGY_MIGRATION.md` and `README.md`.
 
 ## Direction
 

@@ -169,8 +169,8 @@ public partial class StrategicNavigationChecks : Node
             Check(navigation.Markers.Any(marker => marker.Title == "Guardian Drone II"), "Discovered upgrade remains charted after leaving the site");
 
             var previousMouse = Input.MouseMode;
-            Check(map.SetExpanded(true) && GetTree().Paused && Input.MouseMode == Input.MouseModeEnum.Visible,
-                "Expanded world map pauses combat and releases the cursor");
+            Check(map.SetExpanded(true) && !GetTree().Paused && player.GameplayInputBlocked && Input.MouseMode == Input.MouseModeEnum.Visible,
+                "Expanded world map is real time and owns ship input/cursor");
             Check(!canvas.SelectDestination(Vector2.Zero), "Clicks outside the survey cannot create invalid waypoints");
             Vector2 click = canvas.SurveyRect.Position + MapProjection.Project(arena.UpAt(remoteSite.GlobalPosition)) * canvas.SurveyRect.Size;
             Check(canvas.SelectDestination(click) && navigation.WaypointName == "Starfall Observatory", "Clicking a charted landmark selects its waypoint");
@@ -178,7 +178,7 @@ public partial class StrategicNavigationChecks : Node
             director.SetPhysicsProcess(true);
             player.SetPhysicsProcess(true);
             await Frames(4);
-            Check(director.Intensity == intensity && player.GlobalPosition == start, "Paused navigation leaves gameplay frozen");
+            Check(director.Intensity > intensity && player.Speed < 0.1f, "Real-time survey advances the ecosystem while ship input is blocked");
             director.SetPhysicsProcess(false);
             player.SetPhysicsProcess(false);
 
@@ -190,7 +190,7 @@ public partial class StrategicNavigationChecks : Node
                 Check(image.SavePng(capture) == Error.Ok, "Rendered world-survey capture saves");
             }
             Check(map.SetExpanded(false) && !GetTree().Paused && Input.MouseMode == previousMouse,
-                "Closing map resumes combat and restores the previous mouse mode");
+                "Closing map restores the previous mouse mode without changing pause");
             GetTree().Paused = true;
             Check(!map.SetExpanded(true) && GetTree().Paused, "Map cannot steal pause from another menu or terminal result");
             GetTree().Paused = false;
@@ -206,11 +206,11 @@ public partial class StrategicNavigationChecks : Node
             }
             GetViewport().PushInput(new InputEventKey { Keycode = Key.M, Pressed = true });
             await Frames(2);
-            Check(map.IsExpanded && GetTree().Paused, "Actual M input opens the modal world map");
+            Check(map.IsExpanded && !GetTree().Paused && player.GameplayInputBlocked, "Actual M input opens the real-time modal world map");
             GetViewport().PushInput(new InputEventKey { Keycode = Key.M, Pressed = false });
             GetViewport().PushInput(new InputEventKey { Keycode = Key.F2, Pressed = true });
             await Frames(2);
-            Check(map.IsExpanded && GetTree().Paused, "Map consumes size-menu input while it owns pause");
+            Check(map.IsExpanded && !GetTree().Paused, "Map consumes size-menu input while it owns interface input");
             GetViewport().PushInput(new InputEventKey { Keycode = Key.F2, Pressed = false });
             GetViewport().PushInput(new InputEventKey { Keycode = Key.Escape, Pressed = true });
             await Frames(2);
@@ -236,6 +236,10 @@ public partial class StrategicNavigationChecks : Node
                 && restarted.GetChildren().OfType<WorldLandmark>().All(landmark => !landmark.IsDiscovered), "Restart clears waypoint/chart knowledge and restores gameplay");
             Check(restarted.GetNode<ShipFlightController>("PlayerShip").GetEquipmentRank("guardian-drone") == 1,
                 "Restart resets upgrades alongside the strategic layout");
+            Check(!restarted.GetNode<BaseManagement>("BaseManagement").IsOpen
+                && !restarted.GetNode<ShipFlightController>("PlayerShip").GameplayInputBlocked
+                && restarted.GetNode<FactionBase>("PlayerBase").Construction.ActiveInvestment == 0,
+                "Restart clears management state and restores ship input");
             GD.Print($"Strategic navigation checks passed: {_checks} assertions.");
             GetTree().Quit();
         }

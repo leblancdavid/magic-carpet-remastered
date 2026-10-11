@@ -1,0 +1,155 @@
+using System;
+using System.Collections.Generic;
+
+namespace MagicCarpetRemastered.Scripts.World;
+
+// Owned by FactionBase and advanced by its physics tick. No automatic queues.
+public sealed class BaseConstruction
+{
+    private readonly FactionBase _base;
+    private readonly ConstructionProject?[] _slots = new ConstructionProject?[5];
+    private readonly Dictionary<string, ConstructionDefinition> _catalog = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _completed = new(StringComparer.Ordinal);
+    private long _nextInstanceId;
+
+    public string LastStatus { get; private set; } = "Construction idle";
+    public long ActiveInvestment
+    {
+        get
+        {
+            long total = 0;
+            foreach (var project in _slots) total += project?.PaidAntimatter ?? 0;
+            return total;
+        }
+    }
+    public long CompletedInvestment { get; private set; }
+    public long DestroyedInvestmentLoss { get; private set; }
+    public int DestroyedProjectCount { get; private set; }
+
+    internal BaseConstruction(FactionBase owner) => _base = owner;
+    public ConstructionProject? GetActive(ConstructionSlot slot) => ValidSlot(slot) ? _slots[(int)slot] : null;
+    public bool IsCompleted(string id) => _completed.Contains(id);
+    public IEnumerable<ConstructionDefinition> Catalog => _catalog.Values;
+
+    public bool Register(ConstructionDefinition definition)
+    {
+        if (string.IsNullOrWhiteSpace(definition.Id) || string.IsNullOrWhiteSpace(definition.Name)
+            || !ValidSlot(definition.Slot) || definition.Slot == ConstructionSlot.Base
+            || definition.Cost <= 0 || !double.IsFinite(definition.DurationSeconds) || definition.DurationSeconds <= 0
+            || definition.RequiredTier < 1 || definition.RequiredTier > FactionBase.MaximumTier) return false;
+        return _catalog.TryAdd(definition.Id, definition);
+    }
+
+    public ConstructionDefinition? NextTierDefinition()
+    {
+        int target = _base.Tier + 1;
+        if (_base.IsDestroyed || target > FactionBase.MaximumTier) return null;
+        bool rebuild = target <= _base.HighestPurchasedTier;
+        int cost = _base.UpgradeCostForTier(target);
+        if (rebuild) cost = cost / 2 + cost % 2; // Round rebuild payment up.
+        return new ConstructionDefinition($"base-tier-{target}", $"{(rebuild ? "Rebuild" : "Upgrade")} tier {target}",
+            ConstructionSlot.Base, cost, _base.UpgradeSecondsForTier(target), _base.Tier);
+    }
+
+    public bool TryStartNextTier(out string reason)
+    {
+        var definition = NextTierDefinition();
+        if (definition == null) { reason = "No next tier available"; return false; }
+        return Start(definition, _base.Tier + 1, _base.Tier + 1 <= _base.HighestPurchasedTier, out reason);
+    }
+
+    public bool TryStart(string id, out string reason)
+    {
+        reason = GetStartReason(id);
+        if (reason.Length > 0) return false;
+        return Start(_catalog[id], 0, false, out reason);
+    }
+
+    public string GetStartReason(string id)
+    {
+        if (!_catalog.TryGetValue(id, out var definition)) return "Unknown project";
+        if (!definition.Repeatable && _completed.Contains(id)) return "Completed";
+        string reason = ValidateStart(definition);
+        return reason.Length > 0 ? reason : _base.ProjectUnavailableReason(id);
+    }
+
+    public string GetNextTierStartReason() => NextTierDefinition() is { } definition
+        ? ValidateStart(definition) : "Maximum tier / base destroyed";
+
+    public bool IsEffectActive(string id) => _completed.Contains(id)
+        && _catalog.TryGetValue(id, out var definition) && !_base.IsDestroyed && _base.Tier >= definition.RequiredTier;
+
+    private string ValidateStart(ConstructionDefinition definition)
+    {
+        if (_base.IsDestroyed) return "Base destroyed";
+        if (_slots[(int)definition.Slot] != null) return "Slot occupied";
+        if (_base.Tier < definition.RequiredTier) return $"Requires tier {definition.RequiredTier}";
+        if (definition.RequiredProject != null && !_completed.Contains(definition.RequiredProject)) return $"Requires {definition.RequiredProject}";
+        if (definition.Cost <= 0 || !double.IsFinite(definition.DurationSeconds) || definition.DurationSeconds <= 0) return "Invalid tuning";
+        if (_base.StoredAntimatter < definition.Cost) return $"Need {definition.Cost - _base.StoredAntimatter} more antimatter";
+        return string.Empty;
+    }
+
+    private bool Start(ConstructionDefinition definition, int targetTier, bool rebuild, out string reason)
+    {
+        reason = ValidateStart(definition);
+        if (reason.Length > 0) return false;
+        if (!_base.TrySpendAntimatter(definition.Cost)) { reason = "Insufficient stored antimatter"; return false; }
+        _slots[(int)definition.Slot] = new ConstructionProject(++_nextInstanceId, definition, targetTier, rebuild);
+        LastStatus = $"Started {definition.Name}";
+        reason = string.Empty;
+        return true;
+    }
+
+    // Instance identity prevents delayed UI cancellation from refunding a replacement.
+    public bool Cancel(ConstructionSlot slot, long instanceId)
+    {
+        var project = GetActive(slot);
+        if (project == null || project.InstanceId != instanceId || project.State != ConstructionState.Active) return false;
+        _slots[(int)slot] = null;
+        project.Finish(ConstructionState.Cancelled);
+        _base.RefundConstruction(project.PaidAntimatter);
+        LastStatus = $"Cancelled {project.Definition.Name}: full refund";
+        return true;
+    }
+
+    internal void Advance(double delta)
+    {
+        if (_base.IsDestroyed || _base.GetTree().Paused || !double.IsFinite(delta) || delta <= 0) return;
+        for (int i = 0; i < _slots.Length; i++)
+        {
+            var project = _slots[i];
+            if (project == null) continue;
+            project.Advance(delta);
+            if (project.Progress < 1) continue;
+            // Tier changes from damage destroy projects synchronously before this tick.
+            if (project.TargetTier > 0 && !_base.TryCompleteTierUpgrade(project.TargetTier)) continue;
+            _slots[i] = null;
+            project.Finish(ConstructionState.Completed);
+            CompletedInvestment += project.PaidAntimatter;
+            if (project.TargetTier == 0 && !project.Definition.Repeatable) _completed.Add(project.Definition.Id);
+            if (project.TargetTier == 0) _base.ApplyProjectCompletion(project.Definition.Id);
+            LastStatus = $"Completed {project.Definition.Name}";
+        }
+    }
+
+    internal void DestroyAll()
+    {
+        int count = 0;
+        for (int i = 0; i < _slots.Length; i++)
+        {
+            var project = _slots[i];
+            if (project == null) continue;
+            _slots[i] = null;
+            project.Finish(ConstructionState.Destroyed);
+            int spill = project.PaidAntimatter / 2; // Odd unit is permanently lost.
+            DestroyedInvestmentLoss += project.PaidAntimatter - spill;
+            _base.SpillConstructionInvestment(spill);
+            count++;
+        }
+        DestroyedProjectCount += count;
+        if (count > 0) LastStatus = $"Siege destroyed {count} construction project(s)";
+    }
+
+    private static bool ValidSlot(ConstructionSlot slot) => (int)slot >= 0 && (int)slot < 5;
+}

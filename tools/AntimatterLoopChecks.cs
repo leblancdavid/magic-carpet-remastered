@@ -28,6 +28,8 @@ public partial class AntimatterLoopChecks : Node3D
             ClearActors();
             CheckBaseEconomy();
             ClearActors();
+            CheckTierAndSpendingFoundation();
+            ClearActors();
             CheckDroneArrival();
             ClearActors();
             CheckDronePop();
@@ -68,7 +70,7 @@ public partial class AntimatterLoopChecks : Node3D
         var player = AddActor(new ShipFlightController());
         player.GlobalPosition = new Vector3(0, 20, 0);
         var tracker = AddActor(new WorldAntimatterTracker());
-        int claimed = player.ClaimedAntimatter;
+        int claimed = player.EnergyCapacity;
         int antimatter = player.Energy;
         foreach (AntimatterOwnership owner in new[] { AntimatterOwnership.Neutral, AntimatterOwnership.Player, AntimatterOwnership.Enemy })
         {
@@ -81,7 +83,7 @@ public partial class AntimatterLoopChecks : Node3D
             orb._PhysicsProcess(1.0 / 60);
             Invoke(orb, "OnBodyEntered", player);
             Check(orb.IsAvailable && orb.AntimatterAmount == 10, $"Player proximity/contact cannot absorb {owner} antimatter");
-            Check(player.ClaimedAntimatter == claimed && player.Energy == antimatter, "Player contact grants no equipment power or refill");
+            Check(player.EnergyCapacity == claimed && player.Energy == antimatter, "Player contact grants no energy limit or refill");
         }
         tracker.Refresh();
         int total = tracker.TotalAntimatter;
@@ -108,7 +110,7 @@ public partial class AntimatterLoopChecks : Node3D
         second.GlobalPosition = new Vector3(9, 0, 0);
         var tracker = AddActor(new WorldAntimatterTracker());
         int total = tracker.TotalAntimatter;
-        int claimed = player.ClaimedAntimatter;
+        int claimed = player.EnergyCapacity;
         for (int i = 0; i < 240 && hub.StoredAntimatter < 19; i++)
         {
             drone._PhysicsProcess(1.0 / 60);
@@ -118,7 +120,7 @@ public partial class AntimatterLoopChecks : Node3D
             Check(tracker.TotalAntimatter == total, "Scoop/transit/deposit conserves antimatter");
         }
         Check(hub.StoredAntimatter == 19 && drone.CarriedCount == 0, "Multiple orbs scoop, dock, and deposit without enumeration errors");
-        Check(player.ClaimedAntimatter == claimed + 19, "Base delivery grows power without double counting world antimatter");
+        Check(player.EnergyCapacity == claimed + 19 && player.Energy == 0, "Base delivery raises energy limit without refilling current energy");
 
         hub.DepositAntimatter(hub.AntimatterStorageCapacity - hub.StoredAntimatter - 4);
         var partial = AddActor(new AntimatterPickup { Ownership = AntimatterOwnership.Player, AntimatterAmount = 10 });
@@ -129,8 +131,18 @@ public partial class AntimatterLoopChecks : Node3D
         Invoke(drone, "DepositAll");
         tracker.Refresh();
         Check(hub.StoredAntimatter == hub.AntimatterStorageCapacity && partial.AntimatterAmount == 6, "Partial hub deposit removes accepted amount");
-        Check(!partial.IsCarried && partial.Ownership == AntimatterOwnership.Neutral && drone.CarriedCount == 0, "Overflow spills neutral and clears cargo");
+        Check(partial.IsCarried && partial.Ownership == AntimatterOwnership.Player && drone.CarriedCount == 1, "Partial delivery retains owned cargo while full");
         Check(tracker.TotalAntimatter == total, "Partial hub deposit conserves antimatter");
+
+        var waiting = AddActor(new AntimatterPickup { Ownership = AntimatterOwnership.Player, AntimatterAmount = 3 });
+        Invoke(drone, "Scoop", waiting);
+        Check(!waiting.IsCarried, "Full storage prevents another scoop");
+        Invoke(drone, "DepositAll");
+        Check(partial.AntimatterAmount == 6 && drone.CarriedCount == 1, "Repeated full deposits preserve cargo");
+        Check(hub.TrySpendAntimatter(6), "Payment opens storage room");
+        Invoke(drone, "DepositAll");
+        Check(partial.AntimatterAmount == 0 && drone.CarriedCount == 0 && hub.StoredAntimatter == hub.AntimatterStorageCapacity,
+            "Waiting cargo deposits when construction opens room");
 
         var distant = AddActor(new AntimatterPickup { Ownership = AntimatterOwnership.Player });
         distant.GlobalPosition = drone.GlobalPosition + new Vector3(drone.MaxSeekRadius + 1, 0, 0);
@@ -161,28 +173,28 @@ public partial class AntimatterLoopChecks : Node3D
         var hub = AddActor(new FactionBase { InitialStoredAntimatter = 120, MaxHealth = 100 });
         var player = AddActor(new ShipFlightController());
         var tracker = AddActor(new WorldAntimatterTracker());
-        Check(player.ClaimedAntimatter == 200 && player.BaseAntimatterBonus == 120, "Initial stored antimatter backs power regardless of spawn order");
-        Check(hub.GrowthStage == 4, "Full intact hub reaches growth stage four");
+        Check(player.EnergyCapacity == 120 && player.Energy == 40, "Initial storage alone backs energy with base-first spawn");
+        Check(hub.Tier == 1, "Full storage does not automatically buy tiers");
         Invoke(player, "RegenerateEnergy", 100.0f);
         hub.ApplyDamage(50);
         tracker.Refresh();
         Check(hub.Health == 50 && hub.EffectiveStorageCapacity == 60 && hub.StoredAntimatter == 60, "Half health halves capacity and releases excess storage");
-        Check(hub.GrowthStage == 2 && player.ClaimedAntimatter == 140 && player.Energy == 140, "Damage regresses hub growth, power, and current antimatter cap");
+        Check(hub.Tier == 1 && player.EnergyCapacity == 60 && player.Energy == 60, "Storage damage clamps energy without altering purchased tier");
         Check(tracker.TotalAntimatter == 120 && tracker.NeutralLooseAntimatter == 60, "Base damage conserves antimatter and neutralizes spill");
         Check(hub.DepositAntimatter(10) == 0, "Damage-reduced capacity rejects further deposits when full");
         int withdrawn = hub.WithdrawAntimatter(15);
         var cargo = AddActor(new AntimatterPickup { AntimatterAmount = withdrawn });
         tracker.Refresh();
-        Check(withdrawn == 15 && player.ClaimedAntimatter == 125 && tracker.TotalAntimatter == 120, "Withdrawal removes power while transferred physical antimatter stays accounted");
+        Check(withdrawn == 15 && player.EnergyCapacity == 45 && tracker.TotalAntimatter == 120, "Withdrawal lowers energy limit while transferred physical antimatter stays accounted");
         var drone = AddActor(new CollectorDrone { CarryCapacity = 1 });
         cargo.ReassignOwnership(AntimatterOwnership.Player);
         Invoke(drone, "Scoop", cargo);
         Invoke(drone, "DepositAll");
         tracker.Refresh();
-        Check(hub.StoredAntimatter == 60 && player.ClaimedAntimatter == 140 && tracker.TotalAntimatter == 120, "Re-delivery restores retained power without permanently stacking it");
+        Check(hub.StoredAntimatter == 60 && player.EnergyCapacity == 60 && player.Energy == 45 && tracker.TotalAntimatter == 120, "Re-delivery raises limit without refill or permanently stacking it");
         player.SpendEnergy(player.Energy);
         Invoke(player, "RegenerateEnergy", 1.0f);
-        Check(player.Energy == 5, "Regeneration uses reduced retained-antimatter power");
+        Check(player.Energy == 2, "Regeneration uses reduced storage-backed limit");
         // Recover a real damage spill through the same bolt/drone path as play.
         AntimatterPickup? spill = null;
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
@@ -204,12 +216,12 @@ public partial class AntimatterLoopChecks : Node3D
         Invoke(drone, "Scoop", spill);
         Invoke(drone, "DepositAll");
         tracker.Refresh();
-        Check(hub.StoredAntimatter == 60 && player.ClaimedAntimatter == 140 && tracker.TotalAntimatter == 120,
+        Check(hub.StoredAntimatter == 60 && player.EnergyCapacity == 60 && tracker.TotalAntimatter == 120,
             "Drone can re-deliver a reclaimed damage spill up to damaged capacity");
         hub.ApplyDamage(1000);
         tracker.Refresh();
-        Check(hub.StoredAntimatter == 0 && hub.EffectiveStorageCapacity == 0 && hub.GrowthStage == 0, "Destruction empties storage and leaves stage-zero ruins");
-        Check(player.ClaimedAntimatter == 80 && player.BaseAntimatterBonus == 0, "Base destruction removes bonus but preserves starting allowance");
+        Check(hub.StoredAntimatter == 0 && hub.EffectiveStorageCapacity == 0 && hub.Tier == 0, "Destruction empties storage and leaves tier-zero ruins");
+        Check(player.EnergyCapacity == 0 && player.Energy == 0, "Base destruction leaves no unsupported starting allowance");
         Check(tracker.TotalAntimatter == 120 && tracker.NeutralLooseAntimatter == 120, "Destruction releases the entire remaining reserve");
         hub.ApplyDamage(1000);
         Check(hub.DepositAntimatter(10) == 0 && hub.WithdrawAntimatter(10) == 0, "Destroyed hub rejects storage transfers");
@@ -217,18 +229,19 @@ public partial class AntimatterLoopChecks : Node3D
         Check(tracker.TotalAntimatter == 120, "Repeated destruction cannot duplicate antimatter");
 
         ClearActors();
-        player = AddActor(new ShipFlightController { MaxClaimedAntimatter = 100 });
-        hub = AddActor(new FactionBase { InitialStoredAntimatter = 37, AntimatterStorageCapacity = 37, MaxHealth = 7 });
-        var enemyBase = AddActor(new FactionBase { IsPlayerBase = false, InitialStoredAntimatter = 19, AntimatterStorageCapacity = 19, MaxHealth = 7 });
+        player = AddActor(new ShipFlightController());
+        Check(player.EnergyCapacity == 0 && player.Energy == 0, "No home base means no energy allowance");
+        hub = AddActor(new FactionBase { InitialStoredAntimatter = 37, Tier1StorageCapacity = 37, MaxHealth = 7 });
+        var enemyBase = AddActor(new FactionBase { IsPlayerBase = false, InitialStoredAntimatter = 19, Tier1StorageCapacity = 19, MaxHealth = 7 });
         tracker = AddActor(new WorldAntimatterTracker());
-        Check(player.ClaimedAntimatter == 100 && hub.StoredAntimatter == 37, "Power cap does not discard physical storage (player-first spawn)");
+        Check(player.EnergyCapacity == 37 && player.Energy == 37 && hub.StoredAntimatter == 37, "Player-first spawn initializes energy once from starting storage");
         hub.ApplyDamage(6);
         tracker.Refresh();
-        Check(hub.EffectiveStorageCapacity == 6 && hub.StoredAntimatter == 6 && player.ClaimedAntimatter == 86, "Power recomputes below cap after loss rather than subtracting from capped history");
+        Check(hub.EffectiveStorageCapacity == 6 && hub.StoredAntimatter == 6 && player.EnergyCapacity == 6, "Energy limit follows storage exactly after damage");
         enemyBase.ApplyDamage(1);
         tracker.Refresh();
         Check(enemyBase.StoredAntimatter == 17 && tracker.TotalAntimatter == 56 && tracker.NeutralLooseAntimatter == 33, "Uneven capacities round consistently and rival damage conserves antimatter");
-        Check(player.ClaimedAntimatter == 86, "Rival storage changes cannot alter player power");
+        Check(player.EnergyCapacity == 6, "Rival storage changes cannot alter player energy limit");
         enemyBase.ApplyDamage(100);
         hub.ApplyDamage(100);
         tracker.Refresh();
@@ -242,6 +255,43 @@ public partial class AntimatterLoopChecks : Node3D
             Check(new Vector2(orb.GlobalPosition.X, orb.GlobalPosition.Z).Length() > 6 + orb.Radius - 0.01f,
                 "Base spill clears the solid keep footprint");
         }
+    }
+
+    private void CheckTierAndSpendingFoundation()
+    {
+        var hub = AddActor(new FactionBase { InitialStoredAntimatter = 120 });
+        var player = AddActor(new ShipFlightController { InitialEnergy = 120 });
+        var tracker = AddActor(new WorldAntimatterTracker());
+        Check(!hub.TryCompleteTierUpgrade(3) && !hub.TryCompleteTierUpgrade(1), "Tier completions cannot skip or repeat tiers");
+        Check(!hub.TrySpendAntimatter(121) && !hub.TrySpendAntimatter(0) && !hub.TrySpendAntimatter(-10), "Unaffordable/nonpositive payments are atomic rejections");
+        Check(hub.StoredAntimatter == 120 && hub.SpentAntimatter == 0 && player.Energy == 120, "Rejected spending preserves storage and energy");
+        player.SpendEnergy(5);
+        tracker.Refresh();
+        Check(hub.StoredAntimatter == 120 && tracker.TotalAntimatter == 120 && tracker.SpentAntimatter == 0, "Equipment spends rechargeable energy only");
+        Check(hub.TrySpendAntimatter(100), "Construction foundation accepts full affordable payment");
+        tracker.Refresh();
+        Check(hub.Tier == 1 && hub.StoredAntimatter == 20 && player.EnergyCapacity == 20 && player.Energy == 20, "Payment immediately lowers limit/clamps energy without demotion");
+        Check(tracker.TotalAntimatter == 20 && tracker.SpentAntimatter == 100, "Intentional expenditure is a separate sink, never physical world antimatter");
+        Check(hub.TryCompleteTierUpgrade(2) && hub.AntimatterStorageCapacity == 200, "Sequential explicit completion raises capacity");
+        Check(!hub.TryCompleteTierUpgrade(2) && hub.StoredAntimatter == 20 && player.EnergyCapacity == 20, "Duplicate completion rejected and completion never refunds investment");
+        player.SpendEnergy(10);
+        Check(hub.DepositAntimatter(100) == 100 && player.EnergyCapacity == 120 && player.Energy == 10, "Delivery raises limit without current-energy refill");
+        Invoke(player, "RegenerateEnergy", 1.0f);
+        Check(player.Energy == 14, "Recharge is configurable fraction of retained storage");
+        hub.ApplyDamage(70);
+        hub._PhysicsProcess(100);
+        Check(hub.Tier == 2 && hub.AntimatterStorageCapacity == 200, "Legacy HP repair cannot advance explicit tiers");
+        for (int tier = 3; tier <= FactionBase.MaximumTier; tier++)
+            Check(hub.TryCompleteTierUpgrade(tier), "Foundation supports all five sequential tiers");
+        Check(hub.AntimatterStorageCapacity == 500 && !hub.TryCompleteTierUpgrade(6), "Tier five is maximum with no separate energy power cap");
+        hub.DepositAntimatter(500);
+        Check(player.EnergyCapacity == 500 && hub.Tier == 5, "Storage-backed energy can exceed legacy 400 cap");
+        hub.TrySpendAntimatter(500);
+        Invoke(player, "RegenerateEnergy", 100.0f);
+        player.RespawnAt(player.GlobalPosition);
+        Check(player.EnergyCapacity == 0 && player.Energy == 0 && hub.Tier == 5, "Empty storage prevents recharge/respawn allowance without losing tier");
+        hub.ApplyDamage(1000);
+        Check(!hub.TryCompleteTierUpgrade(1), "Destroyed bases cannot recover through upgrade completion");
     }
 
     private void CheckEnemyTransfers()
@@ -385,7 +435,9 @@ public partial class AntimatterLoopChecks : Node3D
         bolt._PhysicsProcess(0.02);
         Check(Mathf.Abs(bolt.GlobalPosition.Y - 2 - bolt.SurfaceClearance) < 0.001f, "Bolt skims water rather than submerged terrain");
 
+        var hub = AddActor(new FactionBase { InitialStoredAntimatter = 120 });
         var player = AddActor(new ShipFlightController());
+        Check(hub.AvailableStorage == 0, "Claim casting fixture has full storage");
         Check(InputMap.ActionHasEvent("activate_claim", new InputEventMouseButton { ButtonIndex = MouseButton.Right }), "RMB binds claim");
         Check(!InputMap.HasAction("cast_terrain") && !InputMap.HasAction("terrain_raise"), "Terrain tool input is hidden");
         for (int i = 0; i < 5; i++) Invoke(player, "CycleQuickEquipment");

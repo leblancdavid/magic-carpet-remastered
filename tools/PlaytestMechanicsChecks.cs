@@ -102,7 +102,7 @@ public partial class PlaytestMechanicsChecks : Node3D
         Check(hub.Health == 53 && hub.EffectiveStorageCapacity == 64 && hub.IsRepairing,
             "Repair starts after delay at three HP per second and reopens capacity");
         tracker.Refresh();
-        Check(hub.StoredAntimatter == 60 && player.ClaimedAntimatter == 140 && tracker.TotalAntimatter == 120,
+        Check(hub.StoredAntimatter == 60 && player.EnergyCapacity == 60 && tracker.TotalAntimatter == 120,
             "Repair creates capacity but never replaces spilled antimatter or power");
         hub.ApplyDamage(1);
         hub._PhysicsProcess(4);
@@ -115,7 +115,7 @@ public partial class PlaytestMechanicsChecks : Node3D
             .Invoke(drone, new object[] { reclaimed });
         typeof(CollectorDrone).GetMethod("DepositAll", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
             .Invoke(drone, null);
-        Check(hub.StoredAntimatter == 63 && player.ClaimedAntimatter == 143, "Repaired capacity accepts drone deliveries and restores power");
+        Check(hub.StoredAntimatter == 63 && player.EnergyCapacity == 63, "Repaired capacity accepts drone deliveries and raises energy limit");
         hub.ApplyDamage(1000);
         hub._PhysicsProcess(1000);
         Check(hub.IsDestroyed && hub.StoredAntimatter == 0 && hub.EffectiveStorageCapacity == 0, "Destroyed hub never auto-rebuilds");
