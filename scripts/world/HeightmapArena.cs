@@ -142,6 +142,7 @@ public partial class HeightmapArena : Node3D
     }
 
     public int LastEditedVertexCount { get; private set; }
+    public ulong SurfaceRevision { get; private set; }
     public int LastRebuiltChunkCount { get; private set; }
     public double LastRebuildMilliseconds { get; private set; }
 
@@ -342,6 +343,7 @@ public partial class HeightmapArena : Node3D
         }
 
         _pendingEditedVertexCount += editedVertices;
+        SurfaceRevision++;
         LastEditedVertexCount = _pendingEditedVertexCount;
         QueueAffectedChunks(minX, maxX, minZ, maxZ);
         QueueTerrainRebuild();
@@ -518,6 +520,7 @@ public partial class HeightmapArena : Node3D
     private void RegisterPlanetEdit(Vector3 position, float radius, float amount, bool flatten)
     {
         LastEditedVertexCount = _planet!.Deform(UpAt(position), radius, amount, flatten);
+        if (LastEditedVertexCount > 0) SurfaceRevision++;
     }
 
     public void ReportPlanetRebuild(int chunks, double milliseconds)

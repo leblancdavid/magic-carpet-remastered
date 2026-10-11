@@ -9,10 +9,15 @@ public partial class PlanetTerrain : Node3D
 {
     public HeightmapArena Arena { get; set; } = null!;
     private const int PatchesPerFace = 8;
+    public const int MaxTileResolution = 25;
     private sealed record Edit(Vector3 Up, float Radius, float Amount, bool Flatten);
     private sealed class Patch
     {
-        public int Face, X, Y, Resolution, DesiredResolution;
+        public int Face, Resolution, DesiredResolution;
+        public float X, Y, Span = 1;
+        public Patch? Parent;
+        public readonly List<Patch> Tiles = new();
+        public bool TilesPublished;
         public Vector3 Up;
         public float Bound;
         public MeshInstance3D Mesh = null!;
@@ -31,6 +36,9 @@ public partial class PlanetTerrain : Node3D
     private float _refreshTimer;
     public int PendingPatchCount => _dirty.Count;
     public double RebuildBudgetMilliseconds { get; set; } = 2;
+    public double FrameRebuildMilliseconds { get; private set; }
+    public int FrameRebuiltPatchCount { get; private set; }
+    public int FrameLargestTileResolution { get; private set; }
 
     public override void _Ready()
     {
@@ -39,14 +47,7 @@ public partial class PlanetTerrain : Node3D
         for (int x = 0; x < PatchesPerFace; x++)
         {
             Patch patch = new() { Face = face, X = x, Y = y, Up = Direction(face, x + 0.5f, y + 0.5f) };
-            patch.Bound = Arena.PlanetRadius * patch.Up.DistanceTo(Direction(face, x, y)) * 1.5f;
-            patch.Mesh = new MeshInstance3D();
-            AddChild(patch.Mesh);
-            StaticBody3D body = new();
-            body.AddToGroup("deformable_terrain");
-            patch.Collision = new CollisionShape3D();
-            body.AddChild(patch.Collision);
-            AddChild(body);
+            SetBound(patch);
             _patches.Add(patch);
             BuildPatch(patch, 4);
         }
@@ -97,7 +98,11 @@ public partial class PlanetTerrain : Node3D
 
     public override void _Process(double delta)
     {
+        FrameRebuildMilliseconds = 0;
+        FrameRebuiltPatchCount = 0;
+        FrameLargestTileResolution = 0;
         if (_dirty.Count > 0) RebuildDirty();
+        if (FrameRebuiltPatchCount > 0) FrameRebuildMilliseconds = Arena.LastRebuildMilliseconds;
     }
 
     public void RefreshDetail()
@@ -111,11 +116,16 @@ public partial class PlanetTerrain : Node3D
         {
             bool nearby = observers.Count == 0 && patch.Up.DistanceTo(Vector3.Up) * Arena.PlanetRadius < 180 + patch.Bound;
             foreach (Vector3 observer in observers)
-                if (patch.Up.DistanceTo(observer) * Arena.PlanetRadius < (patch.Resolution > 4 ? 125 : 100) + patch.Bound) { nearby = true; break; }
+                if (patch.Up.DistanceTo(observer) * Arena.PlanetRadius < (patch.Tiles.Count > 0 ? 125 : 100) + patch.Bound) { nearby = true; break; }
             // Fixed world-space resolution (about 2 units at face center).
             int resolution = nearby ? Mathf.CeilToInt(Arena.PlanetRadius / 16) * 2 : 4;
             patch.DesiredResolution = resolution;
-            if (resolution != patch.Resolution) _dirty.Add(patch);
+            if (resolution > 4)
+            {
+                _dirty.Remove(patch);
+                if (patch.Tiles.Count == 0) PrepareTiles(patch, resolution);
+            }
+            else if (patch.Tiles.Count > 0 || patch.Resolution != resolution) _dirty.Add(patch);
         }
     }
 
@@ -137,10 +147,27 @@ public partial class PlanetTerrain : Node3D
         int editedVertices = 0;
         foreach (Patch patch in _patches)
         {
-            if (up.DistanceTo(patch.Up) * Arena.PlanetRadius > radius + patch.Bound) continue;
-            _dirty.Add(patch);
-            patch.PendingEdits.Add(edit);
-            patch.DesiredResolution = Mathf.Max(patch.DesiredResolution, patch.Resolution);
+            if (up.DistanceTo(patch.Up) * Arena.PlanetRadius > radius + 2 + patch.Bound) continue;
+            // An active fine patch is rebuilt tile-by-tile. Pending initial tiles
+            // evaluate the latest authoritative edit history when they are built.
+            if (patch.Tiles.Count > 0 && patch.DesiredResolution > 4)
+            {
+                // Invalidate the dormant coarse cache rather than retaining an
+                // ever-growing pending list while the fine surface stays active.
+                patch.Vertices = System.Array.Empty<Vector3>();
+                patch.PendingEdits.Clear();
+                foreach (Patch tile in patch.Tiles)
+                    if (up.DistanceTo(tile.Up) * Arena.PlanetRadius <= radius + 2 + tile.Bound)
+                    {
+                        _dirty.Add(tile);
+                        tile.PendingEdits.Add(edit);
+                    }
+            }
+            else
+            {
+                _dirty.Add(patch);
+                patch.PendingEdits.Add(edit);
+            }
             // Diagnostic estimate only: height changes are exact and immediate.
             // Avoid resampling entire fine patches merely to count edited vertices.
             float spacing = Arena.PlanetRadius / (4f * Mathf.Max(4, patch.DesiredResolution));
@@ -161,17 +188,91 @@ public partial class PlanetTerrain : Node3D
                 if (selected == null || candidate.DesiredResolution > selected.DesiredResolution) selected = candidate;
             _dirty.Remove(selected!);
             BuildPatch(selected!, Mathf.Max(4, selected!.DesiredResolution));
+            FrameLargestTileResolution = Mathf.Max(FrameLargestTileResolution, selected!.Resolution);
+            if (selected.Parent is Patch parent)
+            {
+                if (!parent.TilesPublished && parent.Tiles.TrueForAll(t => t.Resolution > 0 && !_dirty.Contains(t)))
+                {
+                    // Publish the complete replacement before removing its old
+                    // collider. No holes while initial fine tiles are queued.
+                    foreach (Patch tile in parent.Tiles)
+                    {
+                        tile.Mesh.Visible = true;
+                        tile.Collision.Disabled = false;
+                    }
+                    parent.Mesh.Visible = false;
+                    parent.Collision.Disabled = true;
+                    parent.TilesPublished = true;
+                }
+            }
+            else if (selected.Tiles.Count > 0)
+            {
+                // A coarse replacement is ready. Retire the fine geometry only
+                // now, not when the LOD request first enters the queue.
+                selected.Mesh.Visible = true;
+                selected.Collision.Disabled = false;
+                foreach (Patch tile in selected.Tiles)
+                {
+                    _dirty.Remove(tile);
+                    if (tile.Resolution == 0) continue;
+                    tile.Mesh.Visible = false;
+                    tile.Collision.Disabled = true;
+                    tile.Mesh.QueueFree();
+                    tile.Collision.GetParent().QueueFree();
+                }
+                selected.Tiles.Clear();
+                selected.TilesPublished = false;
+            }
             rebuilt++;
             if ((Time.GetTicksUsec() - start) / 1000.0 >= RebuildBudgetMilliseconds) break;
         }
+        FrameRebuiltPatchCount += rebuilt;
         Arena.ReportPlanetRebuild(rebuilt, (Time.GetTicksUsec() - start) / 1000.0);
     }
 
     private static Vector3I EditCell(Vector3 point) => new(Mathf.FloorToInt(point.X / EditCellSize),
         Mathf.FloorToInt(point.Y / EditCellSize), Mathf.FloorToInt(point.Z / EditCellSize));
 
+    private void SetBound(Patch patch)
+    {
+        patch.Bound = 0;
+        foreach (Vector2 corner in new[] { Vector2.Zero, Vector2.Right, Vector2.Down, Vector2.One })
+            patch.Bound = Mathf.Max(patch.Bound, Arena.PlanetRadius * patch.Up.DistanceTo(
+                Direction(patch.Face, patch.X + corner.X * patch.Span, patch.Y + corner.Y * patch.Span)));
+        patch.Bound *= 1.1f;
+    }
+
+    private void PrepareTiles(Patch parent, int resolution)
+    {
+        // Pick a divisor, preserving every vertex of the original fine grid.
+        int divisions = Mathf.CeilToInt((float)resolution / MaxTileResolution);
+        while (resolution % divisions != 0) divisions++;
+        float span = 1f / divisions;
+        for (int y = 0; y < divisions; y++)
+        for (int x = 0; x < divisions; x++)
+        {
+            Patch tile = new() { Parent = parent, Face = parent.Face,
+                X = parent.X + x * span, Y = parent.Y + y * span, Span = span,
+                DesiredResolution = resolution / divisions };
+            tile.Up = Direction(tile.Face, tile.X + span * 0.5f, tile.Y + span * 0.5f);
+            SetBound(tile);
+            parent.Tiles.Add(tile);
+            _dirty.Add(tile);
+        }
+    }
+
     private void BuildPatch(Patch patch, int resolution)
     {
+        if (patch.Resolution == 0)
+        {
+            patch.Mesh = new MeshInstance3D { Visible = patch.Parent == null };
+            AddChild(patch.Mesh);
+            var body = new StaticBody3D();
+            body.AddToGroup("deformable_terrain");
+            patch.Collision = new CollisionShape3D { Disabled = patch.Parent != null };
+            body.AddChild(patch.Collision);
+            AddChild(body);
+        }
         int side = resolution + 1;
         bool fullRebuild = patch.Resolution != resolution || patch.Vertices.Length == 0;
         patch.Resolution = resolution;
@@ -183,7 +284,7 @@ public partial class PlanetTerrain : Node3D
         for (int x = 0; x <= resolution; x++)
         {
             int index = y * side + x;
-            Vector3 up = Direction(patch.Face, patch.X + (float)x / resolution, patch.Y + (float)y / resolution);
+            Vector3 up = Direction(patch.Face, patch.X + (float)x / resolution * patch.Span, patch.Y + (float)y / resolution * patch.Span);
             if (!fullRebuild)
             {
                 bool affected = false;

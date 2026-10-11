@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Threading.Tasks;
 using Godot;
 using MagicCarpetRemastered.Scripts.Player;
@@ -31,6 +32,8 @@ public partial class ManaPhysicsChecks : Node3D
             await CheckCarryAndBalloonOnlyCollection();
             await ClearActors();
             await CheckLiveTerrain();
+            await ClearActors();
+            CheckSupportCache();
             await ClearActors();
             await CheckCastleSpills();
             GD.Print($"Mana physics checks passed: {_checks}");
@@ -100,6 +103,40 @@ public partial class ManaPhysicsChecks : Node3D
         await Frames(150);
         Check(orb.GlobalPosition.X < -1.0f, "Gravity rolls mana downhill");
         Check(orb.AngularVelocity.Length() > 0.1f, "Slope movement produces physical sphere rotation");
+    }
+
+    private void CheckSupportCache()
+    {
+        var arena = Add(new HeightmapArena { CellsPerSide = 24, CellSize = 2,
+            HeightScale = 0, WaterHeight = -20 }, Vector3.Zero);
+        arena.FlattenTerrain(Vector3.Zero, 100, 0);
+        var orb = Add(new ManaPickup { Freeze = true }, Vector3.Zero);
+        orb.SetPhysicsProcess(false);
+        var grounded = typeof(ManaPickup).GetMethod("IsGrounded", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        bool Supported() => (bool)grounded.Invoke(orb, null)!;
+        orb.GlobalPosition = new Vector3(0, orb.Radius, 0);
+        Check(Supported() && Supported(), "Repeated same-tick support checks agree");
+        orb.GlobalPosition += Vector3.Up * 2;
+        Check(!Supported(), "Same-tick movement invalidates support cache");
+        orb.GlobalPosition = new Vector3(0, orb.Radius, 0);
+        Check(Supported(), "Same-tick return to surface recomputes support");
+        orb.LinearVelocity = Vector3.Up * 3;
+        Check(!Supported(), "Same-tick upward velocity invalidates support cache");
+        orb.LinearVelocity = Vector3.Zero;
+        Check(Supported(), "Restored velocity permits supported contact");
+        ulong revision = arena.SurfaceRevision;
+        arena.LowerTerrain(Vector3.Zero, 5, 3);
+        Check(arena.SurfaceRevision > revision && !Supported(), "Immediate terrain edit invalidates cached support before collision rebuild");
+        arena.RaiseTerrain(Vector3.Zero, 5, 3);
+        Check(Supported(), "Same-tick restored terrain recomputes support");
+        orb.GlobalPosition = new Vector3(0, orb.Radius + 0.3f, 0);
+        Check(Supported(), "Ground support accepts its configured contact skin");
+        orb.ManaAmount = 1;
+        Check(!Supported(), "Same-tick shrinking radius invalidates support cache");
+        arena.WaterHeight = 2;
+        Check(Supported(), "Same-tick water-height change invalidates support cache");
+        orb.BeginCarry(this, Vector3.Zero);
+        Check(!Supported(), "Carried mana never reuses a supported result");
     }
 
     private async Task CheckObstacle()

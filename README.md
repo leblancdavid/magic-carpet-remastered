@@ -8,6 +8,8 @@ The default prototype is a spherical planet with upright carpet flight, combat, 
 
 See `docs/BUILD_ROADMAP.md` and `docs/PROGRESS_LOG.md` for priorities and verification history. The original DOS package at `D:\Games\MagicCarpet` is reference material; proprietary files are not copied into this repo.
 
+Rendered combat profiling is available in `tools/CombatFrameProfile.tscn`. It runs Medium and XL workloads and saves per-frame CSV/summary reports under `user://combat-profiles`. Add `-- --mana-isolation` to compare frozen bodies, native physics/radial support, and full mana behavior in fresh 192-body fields. See `docs/COMBAT_PERFORMANCE.md` for commands, measurements, and interpretation.
+
 ## Requirements
 
 - Godot 4.6.3 with .NET/C# support (matches the project SDK)

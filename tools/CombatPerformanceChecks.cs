@@ -17,6 +17,80 @@ public partial class CombatPerformanceChecks : Node3D
         if (!condition) throw new InvalidOperationException(message);
     }
 
+    private async System.Threading.Tasks.Task CheckTileCollision(int radius)
+    {
+        var room = new Node3D();
+        AddChild(room);
+        var arena = new HeightmapArena { IsSpherical = true, PlanetRadius = radius };
+        room.AddChild(arena);
+        var terrain = arena.GetChildren().OfType<PlanetTerrain>().Single();
+        terrain.SetProcess(false);
+        terrain.SetPhysicsProcess(false);
+        terrain.RebuildBudgetMilliseconds = 0;
+        var observer = new Node3D();
+        observer.AddToGroup("player");
+        room.AddChild(observer);
+        bool HasCollision(Vector3 up, bool accurate)
+        {
+            Vector3 point = arena.PlanetCenter + up * radius;
+            float height = arena.HeightAt(point);
+            using var ray = PhysicsRayQueryParameters3D.Create(arena.PlanetCenter + up * (radius + height + 40),
+                arena.PlanetCenter + up * (radius + height - 40));
+            using var hit = GetWorld3D().DirectSpaceState.IntersectRay(ray);
+            return hit.Count > 0 && hit["collider"].As<Node>().IsInGroup("deformable_terrain")
+                && (!accurate || Mathf.Abs(((Vector3)hit["position"]).DistanceTo(arena.PlanetCenter) - radius - height) < 0.35f);
+        }
+        void Drain()
+        {
+            int steps = 0, largest = 0;
+            while (terrain.PendingPatchCount > 0 && steps++ < 20000)
+            {
+                terrain._Process(0);
+                largest = Math.Max(largest, terrain.FrameLargestTileResolution);
+            }
+            Check(terrain.PendingPatchCount == 0 && largest <= PlanetTerrain.MaxTileResolution,
+                $"Radius {radius}: fine/coarse transitions drain with bounded atomic tile resolution");
+        }
+        foreach (Vector3 up in new[] { Vector3.Up, new Vector3(1, 1, 0).Normalized(), Vector3.Down })
+        {
+            observer.GlobalPosition = arena.OnSurface(arena.PlanetCenter + up * radius, 6);
+            terrain.RefreshDetail();
+            arena.FlattenTerrain(observer.GlobalPosition, 45, 7);
+            terrain._Process(0);
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            Check(HasCollision(up, false), $"Radius {radius}: old collider covers queued fine replacement");
+            Drain();
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            Vector3 tangent = arena.Tangent(Vector3.Right, observer.GlobalPosition).Normalized();
+            foreach (float offset in new[] { -0.5f, 0f, 0.5f })
+                Check(HasCollision((up + tangent * offset / radius).Normalized(), true),
+                    $"Radius {radius}: real fine collision is continuous across tile/face seams");
+            float before = arena.HeightAt(observer.GlobalPosition);
+            arena.ApplyCrater(observer.GlobalPosition, 5, 2);
+            Check(Mathf.IsEqualApprox(arena.HeightAt(observer.GlobalPosition), before - 2),
+                "Tile scheduling retains immediate crater heights");
+            // Repeated pending changes must commit the latest chronological state.
+            arena.RaiseTerrain(observer.GlobalPosition, 5, 1);
+            Drain();
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            Check(HasCollision(up, true), "Coalesced crater/raise updates reach actual tile collision");
+        }
+        // Return from the underside after unloading the edited home tiles.
+        observer.GlobalPosition = arena.OnSurface(arena.PlanetCenter + Vector3.Up * radius, 6);
+        terrain.RefreshDetail();
+        Drain();
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        Check(HasCollision(Vector3.Up, true), "Fine/coarse/fine cycling retains edits and collision");
+        observer.RemoveFromGroup("player");
+        room.QueueFree();
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+        await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+    }
+
     public override async void _Ready()
     {
         try
@@ -99,9 +173,18 @@ public partial class CombatPerformanceChecks : Node3D
             terrain.RebuildBudgetMilliseconds = 0;
             terrain._Process(0);
             Check(terrain.PendingPatchCount == pending - 1, "Exhausted frame budget processes one patch rather than draining the queue");
+            Check(terrain.FrameRebuiltPatchCount == 1 && terrain.FrameRebuildMilliseconds >= 0,
+                "Per-frame profiling reports the actual bounded terrain batch");
             Check(Mathf.IsEqualApprox(arena.HeightAt(point), before - 2), "Queued collision does not delay live deformation height");
             while (terrain.PendingPatchCount > 0) terrain._Process(0);
             Check(terrain.PendingPatchCount == 0, "Deferred patch queue eventually drains");
+            terrain._Process(0);
+            Check(terrain.FrameRebuiltPatchCount == 0 && terrain.FrameRebuildMilliseconds == 0,
+                "Idle profiling clears stale rebuild cost and patch counts");
+            arena.QueueFree();
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
+            foreach (int radius in PlanetSizes.Radii) await CheckTileCollision(radius);
             GD.Print($"Combat performance checks passed: {_assertions} assertions.");
             GetTree().Quit();
         }

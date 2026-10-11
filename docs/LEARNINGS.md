@@ -59,6 +59,9 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 
 ## Phase 2 Terrain Lessons
 
+- A soft per-frame terrain queue budget cannot bound an atomic mesh/collision build. Rendered XL profiling measured an 87-ms batch despite a two-ms budget; bound individual work units before reducing the queue budget further. Pair per-frame rebuild telemetry (zeroed when idle) with rendered wall intervals, and separate dense-body stress from terrain impacts. Post-draw timings include frame pacing/submission, not measured GPU execution; first events after warmup are not cold-cache benchmarks.
+- Split fine geometry into divisor-aligned tiles to keep the original sampling grid while reducing atomic collision work. Keep the old collider until the whole initial replacement is ready, and reverse that ordering when returning to coarse LOD. Invalidate dormant coarse vertex caches after fine edits; otherwise an unchanged-resolution downgrade can silently restore stale heights. Test actual radial collision at seams, on the underside, and through fine/coarse/fine cycles. Smaller units trade lower rebuild spikes for more nodes/draw calls, so profile traversal separately from stationary impacts.
+
 - Deformable terrain needs one authoritative stored height grid. Mesh vertices, collision triangles, and `HeightAt()` clearance queries should all read from that grid so visual terrain, physics, and flight safety stay in sync after edits.
 - Radius-based terrain edits should convert world-space bounds into grid index bounds before touching vertices. This keeps crater and sculpt operations proportional to effect size instead of arena size.
 - Terrain deformation can safely update the authoritative height grid immediately and defer visual/physics mesh rebuilding. Coalescing rebuild requests avoids duplicate terrain work when multiple spells edit terrain in one frame.
@@ -70,6 +73,8 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - The underlying design is an embodied RTS economy disguised as first-person aerial spell combat. Prioritize systems where flight, spell choice, mana ownership, balloons, castles, rivals, and terrain deformation interact without scripted events.
 
 ## Mana Ownership Loop Lessons
+
+- Dense rigid-body hitches can come from managed neighbor logic rather than native solver/setup. Compare fresh frozen, solver-plus-custom-gravity and full-behavior fields; time synchronous injection separately from callbacks and record contact monitors. Summed callback timings overlap whole-frame timings and exclude native solver execution. Repeated support queries inside every neighbor loop multiply terrain/native-wrapper work; cache support per physics tick with movement, velocity, radius, collision-mask, water and live-terrain revision guards. Reject unavailable/pending/carried/grace-protected bodies before using cached support, and filter irrelevant body-entry callbacks before allocating deferred closures. Same-tick terrain edits must invalidate support before deferred collision rebuilds.
 
 - Make loose mana a first-class owned object rather than a consumable. A `Neutral`/`Player`/`Enemy` ownership state per orb, distinct colors, and a shared group turn possession, hauling, and contesting into simple queries (`GetNodesInGroup("loose_mana")`) instead of bespoke per-system bookkeeping.
 - Ownership should gate collection at the source. Per user direction (2026-10-10), players possess mana for balloons to haul; they never attract or absorb spheres of any color. Player-owned mana retains gravity and collisions until a balloon picks it up. Castle delivery grows spell capacity/regeneration; possession only changes ownership.

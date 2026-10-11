@@ -61,6 +61,14 @@ public partial class ManaPickup : RigidBody3D
     private float _growthStartRadius;
     private float _growthElapsed;
     private float _dropDelayRemaining;
+    private ulong _supportFrame = ulong.MaxValue;
+    private ulong _supportRevision;
+    private Vector3 _supportPosition;
+    private Vector3 _supportVelocity;
+    private float _supportRadius;
+    private float _supportWaterHeight;
+    private uint _supportMask;
+    private bool _supported;
 
     public override void _Ready()
     {
@@ -75,7 +83,12 @@ public partial class ManaPickup : RigidBody3D
         LinearDamp = 0.15f;
         AngularDamp = 0.2f;
         PhysicsMaterialOverride = new PhysicsMaterial { Friction = 0.35f, Bounce = 0.05f };
-        BodyEntered += body => Callable.From(() => OnBodyEntered(body)).CallDeferred();
+        BodyEntered += body =>
+        {
+            // Terrain and other globes cannot absorb mana. Avoid scheduling a
+            // deferred closure for every irrelevant contact in a dense cluster.
+            if (body is SimpleMonster) Callable.From(() => OnBodyEntered(body)).CallDeferred();
+        };
 
         _sphere = new SphereShape3D { Radius = Radius };
         var collision = new CollisionShape3D
@@ -179,15 +192,39 @@ public partial class ManaPickup : RigidBody3D
     private bool IsGrounded()
     {
         if (!IsAvailable || _mergeGraceRemaining > 0) return false;
-        Vector3 up = _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
-        if (Mathf.Abs(LinearVelocity.Dot(up)) > 1.5f) return false;
-        foreach (Node3D body in GetCollidingBodies())
+        // Dense neighbor loops ask about each globe many times per tick. Reuse
+        // support only while the physical inputs and live terrain are unchanged.
+        ulong frame = Engine.GetPhysicsFrames();
+        ulong revision = _arena?.SurfaceRevision ?? 0;
+        Vector3 position = GlobalPosition;
+        Vector3 velocity = LinearVelocity;
+        float radius = Radius;
+        float waterHeight = _arena?.WaterHeight ?? 0;
+        if (_supportFrame == frame && _supportRevision == revision && _supportPosition == position
+            && _supportVelocity == velocity && _supportRadius == radius && _supportWaterHeight == waterHeight
+            && _supportMask == CollisionMask) return _supported;
+        _supportFrame = frame;
+        _supportRevision = revision;
+        _supportPosition = position;
+        _supportVelocity = velocity;
+        _supportRadius = radius;
+        _supportWaterHeight = waterHeight;
+        _supportMask = CollisionMask;
+        return _supported = ComputeGroundSupport(position, velocity, radius);
+    }
+
+    private bool ComputeGroundSupport(Vector3 position, Vector3 velocity, float radius)
+    {
+        Vector3 up = _arena?.UpAt(position) ?? Vector3.Up;
+        if (Mathf.Abs(velocity.Dot(up)) > 1.5f) return false;
+        var bodies = GetCollidingBodies();
+        foreach (Node3D body in bodies)
             if (body is StaticBody3D) return true;
-        if (_arena != null) return _arena.Clearance(GlobalPosition) <= Radius + 0.35f;
+        if (_arena != null) return _arena.Clearance(position) <= radius + 0.35f;
         // Resting solver manifolds can briefly omit the floor while spheres
         // press against each other. Verify support instead of losing the dwell.
-        using var ray = PhysicsRayQueryParameters3D.Create(GlobalPosition,
-            GlobalPosition - up * (Radius + 0.35f), CollisionMask);
+        using var ray = PhysicsRayQueryParameters3D.Create(position,
+            position - up * (radius + 0.35f), CollisionMask);
         ray.Exclude = new Godot.Collections.Array<Rid> { GetRid() };
         using var hit = GetWorld3D().DirectSpaceState.IntersectRay(ray);
         return hit.Count > 0 && hit["collider"].AsGodotObject() is StaticBody3D;
