@@ -25,6 +25,7 @@ public partial class CollectorDrone : Node3D
     [Export] public float HoverHeight { get; set; } = 4.5f;
 
     public int Health { get; private set; }
+    public bool StationSuspended { get; set; }
     public int CarriedCount => _carried.Count + _carriedMatter.Count;
     public int CarriedMatterAmount
     {
@@ -76,6 +77,7 @@ public partial class CollectorDrone : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (StationSuspended) return;
         float deltaF = (float)delta;
         if (!_homeAnchorSet)
         {

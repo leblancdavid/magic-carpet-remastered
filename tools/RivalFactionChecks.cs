@@ -102,12 +102,12 @@ public partial class RivalFactionChecks : Node3D
                     "Actual shared collector hauls and deposits both AI-owned resources");
 
                 enemy.DepositAntimatter(1000); enemy.DepositMatter(1000);
-                Check(enemy.Construction.TryStartNextTier(out _), "Rival tier requires a paid project"); enemy.Construction.Advance(30);
+                Check(enemy.Construction.TryStartNextTier(out _), "Rival tier requires a paid project"); enemy.Construction.Advance(60);
                 enemy.DepositAntimatter(1000);
                 int beforeOrder = enemy.StoredAntimatter;
-                Check(ai.TryOrderProject("equipment-energy-shield-1") && enemy.StoredAntimatter == beforeOrder - 20,
+                Check(ai.TryOrderProject("equipment-energy-shield-1") && enemy.StoredAntimatter == beforeOrder - 40,
                     "AI orders use ordinary research payment and prerequisites");
-                enemy.Construction.Advance(20);
+                enemy.Construction.Advance(60);
                 Check(rival.GetOwnedEquipmentRank("energy-shield") == 1 && rival.GetEquipmentRank("energy-shield") == 0,
                     "AI research does not install remotely");
                 rival.GlobalPosition = Point(40);
@@ -121,25 +121,26 @@ public partial class RivalFactionChecks : Node3D
                 enemy.WithdrawAntimatter(1000); enemy.DepositAntimatter(20);
                 Check(!ai.TryOrderProject("collector-drive") && enemy.StoredAntimatter == 20, "AI research policy retains its minimum energy storage reserve");
                 enemy.DepositAntimatter(1000);
-                Check(ai.TryOrderProject("equipment-guardian-drone-1"), "Rival can research the same guardian equipment"); enemy.Construction.Advance(30);
+                Check(ai.TryOrderProject("equipment-guardian-drone-1"), "Rival can research the same guardian equipment"); enemy.Construction.Advance(60);
                 rival.GlobalPosition = Point(10); rival.TryInstallEquipment("guardian-drone", 3, out _); rival._PhysicsProcess(100);
                 player.GlobalPosition = Point(25); rival.SetAutonomousControls(Vector3.Zero, player.GlobalPosition - rival.AimOrigin);
                 rival.TryActivateEquipmentSlot(3); var guardian = room.GetChildren().OfType<GuardianDrone>().Single(); guardian.SetPhysicsProcess(false);
                 Check(Invoke(guardian, "FindNearestTarget") == player, "Enemy guardian targets the opponent, not its owner"); guardian.Free();
 
                 Check(ai.TryOrderProject("equipment-plasma-bolt-2"), "Sequential rival ranks use the same tier-gated paid catalog");
-                enemy.Construction.Advance(30); rival.TryInstallEquipment("plasma-bolt", 0, out _);
+                enemy.Construction.Advance(90); rival.TryInstallEquipment("plasma-bolt", 0, out _);
                 enemy.ApplyDamage(enemy.Health - 140);
                 Check(enemy.Tier == 1 && rival.GetOwnedEquipmentRank("plasma-bolt") == 2 && rival.GetEquipmentRank("plasma-bolt") == 2,
                     "Siege tier loss preserves rival owned and installed higher-tier equipment");
                 var rebuild = enemy.Construction.NextTierDefinition()!;
                 int rebuildBefore = enemy.StoredAntimatter;
-                Check(rebuild.Cost == 50 && enemy.Construction.TryStartNextTier(out _) && enemy.StoredAntimatter == rebuildBefore - 50,
-                    "Rival recovery uses normal sequential half-price rebuilding"); enemy.Construction.Advance(30);
+                Check(rebuild.Cost == 60 && enemy.Construction.TryStartNextTier(out _) && enemy.StoredAntimatter == rebuildBefore - 60,
+                    "Rival recovery uses normal sequential half-price rebuilding"); enemy.Construction.Advance(60);
                 Check(enemy.Tier == 2 && rival.GetEquipmentRank("plasma-bolt") == 2, "Rebuilding keeps the existing applied loadout");
 
                 // Exercise committed combat with earned equipment, without waiting
                 // for the normal five-minute strategic attack grace in this fixture.
+                enemy.DepositAntimatter(120); // Combat fixture funds energy independently of the now dearer research/rebuild.
                 rival.GlobalPosition = arena.OnSurface(home.GlobalPosition + home.GlobalBasis.X * 40, 6);
                 player.GlobalPosition = arena.OnSurface(home.GlobalPosition - home.GlobalBasis.X * 60, 6);
                 rival._PhysicsProcess(100); int homeHp = home.Health;
@@ -199,10 +200,14 @@ public partial class RivalFactionChecks : Node3D
             await Frames(180);
             var management = game.GetNode<BaseManagement>("BaseManagement"); management.SetOpen(true);
             int orders = controller.OrdersPlaced;
-            await Frames(480); Engine.TimeScale = originalScale;
+            await Frames(1380); Engine.TimeScale = originalScale;
+            Engine.TimeScale = 8;
+            for (int batch = 0; batch < 40 && npc.GetEquipmentRank("energy-shield") == 0; batch++) await Frames(60);
+            Engine.TimeScale = originalScale;
             Check(!npc.GameplayInputBlocked && hero.GameplayInputBlocked && !GetTree().Paused, "Human live management cannot block rival input or simulation"); management.SetOpen(false);
             Check(controller.OrdersPlaced > orders, "Rival continues paid development while human management is open");
             Check(controller.OrdersPlaced > 0 && hub.SpentAntimatter > 0 && hub.SpentMatter > 0, "Integrated opening funds real paid development from the normal economy");
+            GD.Print($"Rival opening diagnostics: {controller.StatusText}; HP {npc.Health}; tier {hub.Tier}; shield {npc.GetOwnedEquipmentRank("energy-shield")}/{npc.GetEquipmentRank("energy-shield")}");
             Check(GetTree().GetNodesInGroup("strategic_point").OfType<StrategicPoint>().Any(p => p.Ownership == AntimatterOwnership.Enemy),
                 "Integrated economy-first rival actually captures an income site");
             Check(npc.GetOwnedEquipmentRank("energy-shield") > 0 && npc.GetEquipmentRank("energy-shield") > 0,

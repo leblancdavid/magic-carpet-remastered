@@ -198,7 +198,10 @@ public partial class RivalPilotController : Node
     {
         if (_age < 15) return;
         var tier = home.Construction.NextTierDefinition();
-        if (tier != null && home.StoredAntimatter - tier.Cost >= StorageReserve && home.Construction.TryStartNextTier(out _)) OrdersPlaced++;
+        // A tier priced at the current storage ceiling must remain reachable;
+        // reserve policy cannot demand resources the base cannot hold.
+        if (tier != null && home.StoredAntimatter - tier.Cost >= Math.Min(StorageReserve,
+            Math.Max(0, home.EffectiveStorageCapacity - tier.Cost)) && home.Construction.TryStartNextTier(out _)) OrdersPlaced++;
         string[] projects = { "collector-drive", "equipment-energy-shield-1", "equipment-dash-1", "energy-grid", "repair-matrix", "claim-range",
             "equipment-plasma-bolt-2", "equipment-pulse-burst-1", "equipment-energy-shield-2", "equipment-dash-2", "equipment-plasma-bolt-3", "equipment-pulse-burst-2" };
         foreach (string id in projects) if (TryOrderProject(id)) break;

@@ -96,7 +96,7 @@ public partial class EquipmentProgressionChecks : Node3D
             Check(ui.CancelProject(ConstructionSlot.Ship, cancelled.InstanceId) && player.GetOwnedEquipmentRank("plasma-bolt") == 2,
                 "Cancelled upgrade never grants ownership");
             Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId("plasma-bolt", 3)), "Cancelled rank can be ordered again");
-            home.Construction.Advance(100);
+            home.Construction.Advance(120);
             Check(player.GetOwnedEquipmentRank("plasma-bolt") == 3 && player.GetEquipmentRank("plasma-bolt") == 2, "Rank III waits for home application");
             Check(ui.InstallEquipment("plasma-bolt", 0) && player.PlasmaBoltDamage == 45, "Sequential third rank applies exactly once");
             foreach (string id in new[] { "pulse-burst", "energy-shield", "dash" })
@@ -105,7 +105,7 @@ public partial class EquipmentProgressionChecks : Node3D
                 {
                     home.DepositAntimatter(400);
                     Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId(id, rank)), "Utility/offense ranks research sequentially");
-                    home.Construction.Advance(100);
+                    home.Construction.Advance(120);
                 }
                 Check(player.GetOwnedEquipmentRank(id) == 3 && player.GetEquipmentRank(id) < 3, "Purchased utility ranks await installation");
             }

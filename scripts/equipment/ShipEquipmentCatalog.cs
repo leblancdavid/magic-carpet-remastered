@@ -27,7 +27,7 @@ public static class ShipEquipmentCatalog
         {
             string? prerequisite = rank > 1 && !(i == 0 && rank == 2) ? ProjectId(ItemIds[i], rank - 1) : null;
             construction.Register(new(ProjectId(ItemIds[i], rank), $"{names[i]} rank {rank}", ConstructionSlot.Ship,
-                costs[i] * rank, 6 + rank * 4, System.Math.Min(5, tiers[i] + rank - 1), prerequisite,
+                costs[i] * rank * 2, 30 + rank * 30, System.Math.Min(5, tiers[i] + rank - 1), prerequisite,
                 Description: EffectSummary(ItemIds[i], rank) + " Owned permanently on completion. Return home to install; upgrades do not apply remotely."));
         }
     }

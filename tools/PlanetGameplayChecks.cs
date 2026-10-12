@@ -369,8 +369,8 @@ public partial class PlanetGameplayChecks : Node3D
             Check(GetTree().GetNodesInGroup("equipment_discovery").Count == 0
                 && GetTree().GetNodesInGroup("exploration_wreck").Count == 12, "Random wrecks replace legacy discovery beacons");
             Check(GetTree().GetNodesInGroup("drone").Count == 2, "Both hub drones present");
-            Check(GetTree().GetNodesInGroup("ecosystem_enemy").Count == 4 && GetTree().GetNodesInGroup("rival_ship").Count == 1,
-                "Four initial creatures and one shared-mechanics rival ship present");
+            Check(GetTree().GetNodesInGroup("ecosystem_enemy").Count >= 16 && GetTree().GetNodesInGroup("rival_ship").Count == 1,
+                "Grouped initial creatures and one shared-mechanics rival ship present");
             Check(GetTree().GetNodesInGroup("level_objective").Count == 1 && GetTree().GetNodesInGroup("world_antimatter_tracker").Count == 1, "Objective and accounting present");
             Check(LooseTotal() > 0, "Initial neutral world antimatter present");
             await Frames(60);

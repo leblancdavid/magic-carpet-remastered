@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
 using MagicCarpetRemastered.Scripts.World;
@@ -13,14 +14,15 @@ public partial class EnemyEcosystemDirector : Node
     [Export] public int GenerationSeed { get; set; }
     private readonly RandomNumberGenerator _random = new();
     public override void _ExitTree() => _random.Dispose();
-    [Export] public float SpawnIntervalSeconds { get; set; } = 30;
-    [Export] public int MaxActiveEnemies { get; set; } = 10;
-    [Export] public int InitialWaveCount { get; set; } = 4;
-    [Export] public int MaximumPerHabitat { get; set; } = 2;
-    [Export] public int MaxFlyingSwarms { get; set; } = 3;
-    [Export] public int MaxGroundBeasts { get; set; } = 2;
-    [Export] public int MaxRangedCasters { get; set; } = 2;
-    [Export] public int MaxAntimatterThieves { get; set; } = 2;
+    [Export] public float SpawnIntervalSeconds { get; set; } = 5;
+    [Export] public float ReplenishDelaySeconds { get; set; } = 20;
+    [Export] public int MaxActiveEnemies { get; set; } = 24;
+    [Export] public int InitialWaveCount { get; set; } = 24;
+    [Export] public int MaximumPerHabitat { get; set; } = 5;
+    [Export] public int MaxFlyingSwarms { get; set; } = 12;
+    [Export] public int MaxGroundBeasts { get; set; } = 8;
+    [Export] public int MaxRangedCasters { get; set; } = 8;
+    [Export] public int MaxAntimatterThieves { get; set; } = 8;
     [Export] public float BaseExclusionDistance { get; set; } = 180;
     [Export] public float FlatBaseExclusionDistance { get; set; } = 30;
     [Export] public int PlacementAttempts { get; set; } = 64;
@@ -43,9 +45,12 @@ public partial class EnemyEcosystemDirector : Node
 
     private HeightmapArena? _arena;
     private readonly List<Habitat> _habitats = new();
+    private readonly Dictionary<string, float> _replenishTimers = new();
+    private readonly Dictionary<string, int> _lastPopulation = new();
+    private readonly Dictionary<string, int> _populationTargets = new();
+    private readonly Dictionary<string, int> _activeByHabitat = new();
     private readonly int[] _activeByRole = new int[6];
     private int _activeRaiderCount;
-    private float _spawnTimer;
     private float _raidTimer;
     private float _feedbackRemaining;
     private string _raidFeedback = string.Empty;
@@ -60,12 +65,32 @@ public partial class EnemyEcosystemDirector : Node
         if (UseFixedSeed) _random.Seed = unchecked((ulong)GenerationSeed); else _random.Randomize();
         if (_arena.IsSpherical)
         {
+            int population = 8 + Mathf.Clamp(Mathf.RoundToInt(_arena.PlanetRadius / 100), 1, 4) * 8;
+            if (MaxActiveEnemies == 24) MaxActiveEnemies = population;
+            if (InitialWaveCount == 24) InitialWaveCount = population;
+            if (MaxFlyingSwarms == 12) MaxFlyingSwarms = population / 2;
+            if (MaxGroundBeasts == 8) MaxGroundBeasts = population / 3;
+            if (MaxRangedCasters == 8) MaxRangedCasters = population / 3;
+            if (MaxAntimatterThieves == 8) MaxAntimatterThieves = population / 3;
             if (BaseExclusionDistance == 180) BaseExclusionDistance = Mathf.Clamp(_arena.PlanetRadius * 0.3f, 30, 80);
             if (RaidSpawnDistance == 180) RaidSpawnDistance = Mathf.Clamp(_arena.PlanetRadius * 0.35f, 36, 100);
         }
         foreach (Node node in GetTree().GetNodesInGroup("world_landmark"))
             if (node is WorldLandmark landmark && !landmark.IsQueuedForDeletion())
                 _habitats.Add(new Habitat(landmark.SiteId, landmark.GlobalPosition, landmark.Habitat));
+        // Interleave corresponding faction routes rather than exhausting one
+        // hemisphere's population budget first on the smallest world.
+        foreach (var site in GetTree().GetNodesInGroup("strategic_point").OfType<StrategicPoint>().OrderBy(site => site.Role).ThenBy(site => site.Name.ToString()))
+            _habitats.Add(new Habitat($"route-{site.Name}", site.GlobalPosition,
+                site.Role == StrategicPointRole.Research ? EnemyEcosystemEnemy.EnemyRole.RangedCaster
+                : site.Role == StrategicPointRole.Logistics ? EnemyEcosystemEnemy.EnemyRole.AntimatterThief
+                : site.Role == StrategicPointRole.MatterExtractor ? EnemyEcosystemEnemy.EnemyRole.GroundBeast
+                : EnemyEcosystemEnemy.EnemyRole.FlyingSwarm));
+        if (_arena.IsSpherical && _arena.PlanetRadius >= 300)
+            foreach (Node node in GetTree().GetNodesInGroup("strategic_point"))
+                if (node is StrategicPoint { Role: StrategicPointRole.Extractor } site)
+                    _habitats.Add(new Habitat($"outer-{site.Name}", _arena.OnSurface(site.GlobalPosition + site.GlobalBasis.X * 40),
+                        EnemyEcosystemEnemy.EnemyRole.FlyingSwarm));
         if (_habitats.Count == 0)
         {
             // Fixed flat corners, never offsets from a pilot's travelling position.
@@ -73,8 +98,16 @@ public partial class EnemyEcosystemDirector : Node
             for (int i = 0; i < corners.Length; i++)
                 _habitats.Add(new Habitat($"region-{i}", _arena.FromMap(corners[i].X, corners[i].Y, 0), OrdinaryRoles[i]));
         }
-        for (int i = 0; i < InitialWaveCount; i++) TrySpawnNeutral();
-        _spawnTimer = Mathf.Max(1, SpawnIntervalSeconds);
+        int initial = 0;
+        // Role-sized opening groups: swarms of three, beast pairs and initially
+        // solitary casters/scavengers. Further rounds fill larger packs/pairs.
+        foreach (var habitat in _habitats)
+            for (int member = 0; member < (habitat.Role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm ? 3
+                : habitat.Role == EnemyEcosystemEnemy.EnemyRole.GroundBeast ? 2 : 1) && initial < InitialWaveCount; member++)
+                if (TrySpawnNeutral(habitat)) initial++;
+        for (int i = initial; i < InitialWaveCount; i++) TrySpawnNeutral();
+        foreach (var habitat in _habitats)
+            _populationTargets[habitat.Id] = _lastPopulation[habitat.Id] = HabitatPopulation(habitat);
         _raidTimer = Mathf.Max(0, RaidOpeningGraceSeconds);
     }
 
@@ -83,9 +116,23 @@ public partial class EnemyEcosystemDirector : Node
         if (GetTree().Paused || !double.IsFinite(delta) || delta <= 0 || _arena == null) return;
         float elapsed = (float)delta;
         _feedbackRemaining = Mathf.Max(0, _feedbackRemaining - elapsed);
-        _spawnTimer -= elapsed;
-        if (_spawnTimer <= 0)
-        { TrySpawnNeutral(); _spawnTimer = Mathf.Max(1, SpawnIntervalSeconds); }
+        RefreshCounts();
+        foreach (var habitat in _habitats)
+        {
+            int count = HabitatPopulation(habitat);
+            if (_lastPopulation.GetValueOrDefault(habitat.Id) > count)
+                _replenishTimers[habitat.Id] = Mathf.Max(0, ReplenishDelaySeconds);
+            float remaining = _replenishTimers.GetValueOrDefault(habitat.Id);
+            _replenishTimers[habitat.Id] = Mathf.Max(0, remaining - elapsed);
+            if (_replenishTimers[habitat.Id] <= 0 && count < _populationTargets.GetValueOrDefault(habitat.Id))
+            {
+                TrySpawnNeutral(habitat);
+                // Failed/capped placements are bounded retries, not 64 new
+                // terrain probes per habitat on every physics frame.
+                _replenishTimers[habitat.Id] = Mathf.Max(1, SpawnIntervalSeconds);
+            }
+            _lastPopulation[habitat.Id] = HabitatPopulation(habitat);
+        }
         if (RaidsEnabled)
         {
             _raidTimer = Mathf.Max(0, _raidTimer - elapsed);
@@ -102,10 +149,15 @@ public partial class EnemyEcosystemDirector : Node
     private void RefreshCounts()
     {
         Array.Clear(_activeByRole);
+        _activeByHabitat.Clear();
         _activeRaiderCount = 0;
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
             if (node is EnemyEcosystemEnemy { Health: > 0 } enemy && !enemy.IsQueuedForDeletion())
-            { _activeByRole[(int)enemy.Role]++; if (enemy.IsRaider) _activeRaiderCount++; }
+            {
+                _activeByRole[(int)enemy.Role]++;
+                _activeByHabitat[enemy.HabitatId] = _activeByHabitat.GetValueOrDefault(enemy.HabitatId) + 1;
+                if (enemy.IsRaider) _activeRaiderCount++;
+            }
         foreach (Node node in GetTree().GetNodesInGroup("rival_ship"))
             if (node is MagicCarpetRemastered.Scripts.Player.ShipFlightController { Health: > 0 } ship && !ship.IsQueuedForDeletion()) _activeByRole[5]++;
     }
@@ -119,36 +171,45 @@ public partial class EnemyEcosystemDirector : Node
         _ => 0
     };
 
-    public bool TrySpawnNeutral()
+    private int HabitatPopulation(Habitat habitat) => _activeByHabitat.GetValueOrDefault(habitat.Id);
+
+    private int HabitatCapacity(Habitat habitat) => Mathf.Min(MaximumPerHabitat,
+        habitat.Role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm ? 5
+        : habitat.Role == EnemyEcosystemEnemy.EnemyRole.GroundBeast ? 3 : 2);
+
+    public bool TrySpawnNeutral() => TrySpawnNeutral(null);
+
+    private bool TrySpawnNeutral(Habitat? requested)
     {
         if (_arena == null || GetTree().Paused || _habitats.Count == 0) return false;
         RefreshCounts();
         if (_activeByRole[0] + _activeByRole[1] + _activeByRole[2] + _activeByRole[4] >= MaxActiveEnemies) return false;
-        Habitat? habitat = null; int smallest = MaximumPerHabitat;
+        Habitat? habitat = requested; int smallest = MaximumPerHabitat;
+        if (requested != null && HabitatPopulation(requested) >= HabitatCapacity(requested)) return false;
+        if (requested == null)
         for (int i = 0; i < _habitats.Count; i++)
         {
             int index = (_habitatCursor + i) % _habitats.Count;
-            var candidate = _habitats[index]; int count = 0;
-            foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
-                if (node is EnemyEcosystemEnemy { Health: > 0 } enemy && !enemy.IsQueuedForDeletion() && enemy.HabitatId == candidate.Id) count++;
-            if (count >= smallest) continue;
+            var candidate = _habitats[index]; int count = HabitatPopulation(candidate);
+            if (count >= smallest || count >= HabitatCapacity(candidate) || _activeByRole[(int)candidate.Role] >= RoleCap(candidate.Role)) continue;
             habitat = candidate; smallest = count;
         }
         if (habitat == null) return false;
         _habitatCursor = (_habitats.IndexOf(habitat) + 1) % _habitats.Count;
-        var role = _random.Randf() < 0.65f ? habitat.Role : OrdinaryRoles[_random.Randi() % OrdinaryRoles.Length];
+        var role = habitat.Role;
         if (_activeByRole[(int)role] >= RoleCap(role))
         {
-            bool found = false;
-            foreach (var fallback in OrdinaryRoles)
-                if (_activeByRole[(int)fallback] < RoleCap(fallback)) { role = fallback; found = true; break; }
-            if (!found) return false;
+            return false;
         }
         float clearance = role is EnemyEcosystemEnemy.EnemyRole.GroundBeast or EnemyEcosystemEnemy.EnemyRole.AntimatterThief ? 1.1f : 5.5f;
-        if (!TryPlace(habitat.Position, _arena.IsSpherical ? 24 : 8, _arena.IsSpherical ? 40 : 14, clearance, out Vector3 position)) return false;
+        if (!TryPlace(habitat.Position, _arena.IsSpherical ? 14 : 8, _arena.IsSpherical ? 28 : 14, clearance, out Vector3 position)) return false;
         GetParent().AddChild(new EnemyEcosystemEnemy { Name = $"{role}Enemy", Role = role,
             Position = GetParent<Node3D>().ToLocal(position), HabitatPosition = habitat.Position, HabitatId = habitat.Id });
-        RefreshCounts(); return true;
+        RefreshCounts();
+        int population = HabitatPopulation(habitat);
+        _lastPopulation[habitat.Id] = population;
+        _populationTargets[habitat.Id] = Math.Max(population, _populationTargets.GetValueOrDefault(habitat.Id));
+        return true;
     }
 
     // The same placement guards apply to normal populations and raids. Failure

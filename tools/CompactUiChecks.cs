@@ -49,6 +49,21 @@ public partial class CompactUiChecks : Node3D
             Check(!hud.HasNode("HudRoot/Loadout") && !game.GetNode<BoonChoices>("BoonChoices").FindChildren("*", "Button", true, false).OfType<Button>().Any(b => b.Text.StartsWith("H  ")),
                 "Old verbose loadout and separate boon hint are removed");
             Check(Find<HBoxContainer>(hud, "InterfaceActions").GetChildren().OfType<Button>().Count() == 3, "B/M/H share one entry row");
+            var site = game.GetChildren().OfType<StrategicPoint>().First();
+            site.Advance(4, true, false); hud._Process(1);
+            var capturePanel = Find<PanelContainer>(hud, "CapturePanel");
+            Check(capturePanel.Visible && Math.Abs(Find<ProgressBar>(hud, "CaptureProgress").Value - 0.4) < 0.0001,
+                "Screen-space capture bar displays actual site progress without camera aiming");
+            site.Advance(1, false, false); hud._Process(1);
+            Check(!capturePanel.Visible && Math.Abs(site.CaptureProgress - 0.35) < 0.0001,
+                "Leaving hides HUD bar while gameplay progress drains slowly");
+            site.Advance(10, true, false); site.Advance(4, false, true); site.Advance(1, true, false); hud._Process(1);
+            Check(capturePanel.Visible && capturePanel.GetChild<VBoxContainer>(0).GetChild<Label>(0).Text.Contains("Restoring"),
+                "Returning defender sees restoration stage in the screen HUD");
+            site.Advance(1, true, true); hud._Process(1);
+            Check(capturePanel.GetChild<VBoxContainer>(0).GetChild<Label>(0).Text.Contains("Contested")
+                && Math.Abs(Find<ProgressBar>(hud, "CaptureProgress").Value - 0.3) < 0.0001, "Contested HUD shows frozen stage progress");
+            site.Advance(10, true, false); site.Advance(0.01, false, false); hud._Process(1);
             Input.MouseMode = Input.MouseModeEnum.Visible;
             int energy = ship.Energy;
             Mouse(cards[2], true); Input.ActionPress("activate_primary"); ship._PhysicsProcess(0.01); bar.Refresh();
@@ -60,17 +75,17 @@ public partial class CompactUiChecks : Node3D
                 "Entry click opens live management and hides redundant flight controls");
             var tabs = Find<TabContainer>(ui, "ProjectTabs"); tabs.CurrentTab = 1; await Frames(3);
             var repair = Find<UiTile>(ui, "Order_repair-matrix"); var gridUpgrade = Find<UiTile>(ui, "Order_energy-grid");
-            Check(repair.Glyph.IconId == "repair-matrix" && repair.Title.Text.Contains("Repair") && repair.Detail.Text.Contains("20 A") && repair.Detail.Text.Contains("5 M"),
+            Check(repair.Glyph.IconId == "repair-matrix" && repair.Title.Text.Contains("Repair") && repair.Detail.Text.Contains("40 A") && repair.Detail.Text.Contains("10 M"),
                 "Upgrade tile shows original glyph, short name and independent costs");
-            Check(gridUpgrade.Disabled && gridUpgrade.TooltipText.Contains("Requires tier 2") && gridUpgrade.TooltipText.Contains("40 antimatter"),
+            Check(gridUpgrade.Disabled && gridUpgrade.TooltipText.Contains("Requires tier 2") && gridUpgrade.TooltipText.Contains("80 antimatter"),
                 "Unavailable tiles preserve exact tier/cost reasons in tooltip");
             var tooltip = repair._MakeCustomTooltip(repair.TooltipText);
-            Check(tooltip.GetChild<Label>(0).CustomMinimumSize.X == 310 && tooltip.GetChild<Label>(0).Text.Contains("8s"), "Custom tooltips bound width and include duration"); tooltip.Free();
+            Check(tooltip.GetChild<Label>(0).CustomMinimumSize.X == 310 && tooltip.GetChild<Label>(0).Text.Contains("60s"), "Custom tooltips bound width and include duration"); tooltip.Free();
             home.DepositAntimatter(1000); home.DepositMatter(1000); ui.Refresh();
             int before = home.StoredAntimatter, beforeM = home.StoredMatter;
             await Click(repair);
             var project = home.Construction.GetActive(ConstructionSlot.Defense)!;
-            Check(project != null && home.StoredAntimatter == before - 20 && home.StoredMatter == beforeM - 5 && repair.Disabled,
+            Check(project != null && home.StoredAntimatter == before - 40 && home.StoredMatter == beforeM - 10 && repair.Disabled,
                 "Actual icon tile click starts one paid project and disables duplicate order");
             ui.Refresh(); Check(repair.State.Text.Contains("Researching"), "Active tile has progress state");
             home.SetPhysicsProcess(true); double elapsed = project!.ElapsedSeconds; await Frames(8); home.SetPhysicsProcess(false);
@@ -78,10 +93,10 @@ public partial class CompactUiChecks : Node3D
             await Click(Find<Button>(ui, "Cancel_Defense"));
             Check(project.State == ConstructionState.Cancelled && home.StoredAntimatter == before && home.StoredMatter == beforeM, "Compact cancellation preserves both exact refunds");
             // Purchase and install a complete four-slot loadout through ordinary APIs.
-            ui.OrderNextTier(); home.Construction.Advance(30);
+            ui.OrderNextTier(); home.Construction.Advance(60);
             foreach (string id in new[] { "energy-shield", "dash", "pulse-burst" })
             {
-                home.DepositAntimatter(1000); Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId(id, 1)), "Tile catalog retains shared equipment research"); home.Construction.Advance(30);
+                home.DepositAntimatter(1000); Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId(id, 1)), "Tile catalog retains shared equipment research"); home.Construction.Advance(60);
             }
             tabs.CurrentTab = 4; var sections = Find<TabContainer>(ui, "ShipSections"); sections.CurrentTab = 1; ui.Refresh(); await Frames(4);
             Check(sections.GetTabCount() == 2 && sections.GetTabTitle(0) == "Research" && sections.GetTabTitle(1) == "Loadout", "Ship research and installation are separate views");
@@ -126,11 +141,24 @@ public partial class CompactUiChecks : Node3D
                 Check(cards.All(c => c.GetGlobalRect().Position.Y == cards[0].GetGlobalRect().Position.Y), "Equipment remains a single row at supported viewport sizes");
                 var actions = Find<HBoxContainer>(hud, "InterfaceActions");
                 Check(!actions.GetGlobalRect().Intersects(bar.GetGlobalRect()), "Consolidated hints do not overlap the equipment bar");
+                site.Advance(0.01, true, false); hud._Process(1); await Frames(2);
+                Check(capturePanel.Visible && !capturePanel.GetGlobalRect().Intersects(bar.GetGlobalRect())
+                    && !capturePanel.GetGlobalRect().Intersects(actions.GetGlobalRect()), $"Capture HUD clears equipment and interface dock at {size}: visible {capturePanel.Visible}, capture {capturePanel.GetGlobalRect()}, bar {bar.GetGlobalRect()}, dock {actions.GetGlobalRect()}");
+                if (DisplayServer.GetName() != "headless") await Capture($"CaptureHud{size.X}.png");
+                site.Advance(0.01, false, false);
                 ui.SetOpen(true); sections.CurrentTab = 0; await Frames(4);
                 var panel = Find<PanelContainer>(ui, "ManagementPanel");
                 Check(panel.GetGlobalRect().Size.X <= GetViewport().GetVisibleRect().Size.X + 1
                     && panel.GetGlobalRect().End.Y <= GetViewport().GetVisibleRect().Size.Y + 1, "Management bounds stay within viewport");
-                Check(Find<UiTile>(ui, "Order_equipment-plasma-bolt-2").GetParent<GridContainer>().Columns >= 2, "Research grid adapts column count without rebuilding controls");
+                var researchTable = Find<GridContainer>(ui, "EquipmentResearchTable");
+                Check(researchTable.Columns == 4, "Research preserves fixed item and rank columns");
+                Check(researchTable.GetChild<Label>(0).Size.Y < 32 && researchTable.GetChild<Label>(0).Size.X >= 136,
+                    "Research column headings have readable non-collapsed widths");
+                var rankTwo = Find<UiTile>(ui, "Order_equipment-energy-shield-2");
+                var rankThree = Find<UiTile>(ui, "Order_equipment-energy-shield-3");
+                Check(rankTwo.GetGlobalRect().Position.Y == rankThree.GetGlobalRect().Position.Y
+                    && rankTwo.GetGlobalRect().End.X <= rankThree.GetGlobalRect().Position.X,
+                    "Equipment ranks remain aligned horizontally within each item row");
                 if (DisplayServer.GetName() != "headless") await Capture($"CompactUi{size.X}.png");
                 ui.SetOpen(false);
             }

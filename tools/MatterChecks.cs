@@ -36,7 +36,8 @@ public partial class MatterChecks : Node3D
                 var arena = Add(room, new HeightmapArena { IsSpherical = globe, PlanetRadius = 500 });
                 Vector3 origin = globe ? arena.PlanetCenter + Vector3.Down * 500 : new Vector3(45, 0, 45);
                 var home = Add(room, new FactionBase { Position = arena.OnSurface(origin, 2), InitialStoredAntimatter = 120,
-                    InitialStoredMatter = 120, Tier2UpgradeSeconds = 1, Tier3UpgradeSeconds = 1, Tier3MatterCost = 31 });
+                    InitialStoredMatter = 120, Tier2UpgradeCost = 100, Tier2MatterCost = 20,
+                    Tier2UpgradeSeconds = 1, Tier3UpgradeSeconds = 1, Tier3MatterCost = 31 });
                 var rival = Add(room, new FactionBase { IsPlayerBase = false, Position = arena.OnSurface(origin + Vector3.Right * 100, 2), InitialStoredMatter = 0 });
                 var ship = Add(room, new ShipFlightController { Position = arena.OnSurface(origin, 8), EnergyRegenFractionPerSecond = 0 });
                 var tracker = Add(room, new WorldMatterTracker());
@@ -155,7 +156,7 @@ public partial class MatterChecks : Node3D
         tracker.Refresh(); supply = tracker.PhysicalMatter + tracker.NetCommittedMatter;
         rival.DepositMatter(1000); supply += 120;
         rival.DepositAntimatter(1000);
-        logistics.Advance(10, false, true);
+        logistics.Advance(20, false, true);
         Check(ReferenceEquals(logistics.Drone, stationDrone) && stationCrate.Ownership == AntimatterOwnership.Enemy && stationDrone.CarriedMatterAmount == 23
             && stationOrb.Ownership == AntimatterOwnership.Enemy && stationOrb.AntimatterAmount == 7 && stationDrone.CarriedCount == 2,
             "Logistics capture steals both attached cargo kinds on the same drone");
@@ -224,7 +225,9 @@ public partial class MatterChecks : Node3D
         Check(home.AvailableMatterStorage == 0 && site.GeneratedMatter == generated + 1, "Income accepts exact partial room");
         home.WithdrawMatter(10); site.Advance(5, false, true);
         Check(home.AvailableMatterStorage == 0 && site.Ownership == AntimatterOwnership.Player, "Previous material owner keeps income until capture completes");
-        site.Advance(5, false, true); rival.WithdrawMatter(2); site.Advance(1, false, false);
+        site.Advance(5, false, true);
+        Check(site.Ownership == AntimatterOwnership.Neutral, "Material site stops income at neutralization");
+        site.Advance(10, false, true); rival.WithdrawMatter(2); site.Advance(1, false, false);
         Check(site.Ownership == AntimatterOwnership.Enemy && rival.AvailableMatterStorage == 0, "Material income reroutes only to captured owner");
         GetTree().Paused = true; generated = site.GeneratedMatter; site.Advance(100, true, false);
         Check(site.GeneratedMatter == generated && site.Ownership == AntimatterOwnership.Enemy, "Pause freezes material capture/income"); GetTree().Paused = false;

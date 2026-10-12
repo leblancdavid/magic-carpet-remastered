@@ -18,22 +18,22 @@ public partial class FactionBase : StaticBody3D
     [Export] public int Tier3MatterCapacity { get; set; } = 300;
     [Export] public int Tier4MatterCapacity { get; set; } = 400;
     [Export] public int Tier5MatterCapacity { get; set; } = 500;
-    [Export] public int Tier2MatterCost { get; set; } = 20;
-    [Export] public int Tier3MatterCost { get; set; } = 30;
-    [Export] public int Tier4MatterCost { get; set; } = 40;
-    [Export] public int Tier5MatterCost { get; set; } = 50;
+    [Export] public int Tier2MatterCost { get; set; } = 30;
+    [Export] public int Tier3MatterCost { get; set; } = 45;
+    [Export] public int Tier4MatterCost { get; set; } = 60;
+    [Export] public int Tier5MatterCost { get; set; } = 75;
     [Export] public int MaxHealth { get; set; } = 140;
     [Export] public float ScalePerTier { get; set; } = 0.18f;
     [Export] public float RepairDelaySeconds { get; set; } = 5.0f;
     [Export] public float RepairHealthPerSecond { get; set; } = 3.0f;
-    [Export] public int Tier2UpgradeCost { get; set; } = 100;
-    [Export] public int Tier3UpgradeCost { get; set; } = 150;
-    [Export] public int Tier4UpgradeCost { get; set; } = 200;
-    [Export] public int Tier5UpgradeCost { get; set; } = 250;
-    [Export] public float Tier2UpgradeSeconds { get; set; } = 20;
-    [Export] public float Tier3UpgradeSeconds { get; set; } = 30;
-    [Export] public float Tier4UpgradeSeconds { get; set; } = 40;
-    [Export] public float Tier5UpgradeSeconds { get; set; } = 50;
+    [Export] public int Tier2UpgradeCost { get; set; } = 120;
+    [Export] public int Tier3UpgradeCost { get; set; } = 180;
+    [Export] public int Tier4UpgradeCost { get; set; } = 270;
+    [Export] public int Tier5UpgradeCost { get; set; } = 360;
+    [Export] public float Tier2UpgradeSeconds { get; set; } = 60;
+    [Export] public float Tier3UpgradeSeconds { get; set; } = 80;
+    [Export] public float Tier4UpgradeSeconds { get; set; } = 100;
+    [Export] public float Tier5UpgradeSeconds { get; set; } = 120;
 
     public int StoredAntimatter { get; private set; }
     public int StoredMatter { get; private set; }

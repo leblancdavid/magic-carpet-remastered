@@ -53,7 +53,7 @@ public partial class BaseManagementChecks : Node3D
             await Frames(3);
             await Click((Button)panel.FindChild("Order_repair-matrix", true, false));
             var repair = hub.Construction.GetActive(ConstructionSlot.Defense);
-            Check(repair != null && hub.StoredAntimatter == 100 && player.EnergyCapacity == 100, "Actual GUI click starts research and lowers limit");
+            Check(repair != null && hub.StoredAntimatter == 80 && player.EnergyCapacity == 80, "Actual GUI click starts research and lowers limit");
             hub.SetPhysicsProcess(true);
             await Frames(8);
             hub.SetPhysicsProcess(false);
@@ -73,7 +73,7 @@ public partial class BaseManagementChecks : Node3D
             foreach (string action in new[] { "activate_primary", "activate_claim", "activate_shield", "move_forward" }) Input.ActionRelease(action);
             await Frames(2); player.SetPhysicsProcess(false);
             panel.SetOpen(true);
-            hub.DepositAntimatter(20);
+            hub.DepositAntimatter(40);
             await Click((Button)panel.FindChild("Cancel_Defense", true, false));
             Check(repair.State == ConstructionState.Cancelled && hub.StoredAntimatter == 120,
                 "GUI cancellation returns payment when storage has refilled");
@@ -81,12 +81,12 @@ public partial class BaseManagementChecks : Node3D
                 .Any(p => p.Name.ToString().Contains("ConstructionRefundSpill") && p.Ownership == AntimatterOwnership.Player),
                 "Cancellation preserves owned overflow in the world");
             Check(panel.OrderProject("repair-matrix"), "Restart cancelled research");
-            hub._PhysicsProcess(8);
+            hub._PhysicsProcess(60);
             Check(hub.EffectiveRepairHealthPerSecond == 4.5f && hub.Construction.IsCompleted("repair-matrix"), "Completed repair matrix has a live repair effect");
             hub.ApplyDamage(20); hub._PhysicsProcess(6);
             Check(hub.Health == 124 && hub.Tier == 1, "Actual quiet repair uses researched rate without adding tiers");
             Check(panel.OrderProject("collector-drive") && panel.OrderProject("claim-range"), "Resources and ship categories can run concurrently");
-            hub._PhysicsProcess(10);
+            hub._PhysicsProcess(60);
             Check(hub.CollectorSpeedMultiplier == 1.25f && player.EffectiveClaimRange == 150, "Collector speed and built-in Claim range effects apply");
             var collector = game.GetNode<CollectorDrone>("PlayerDrone");
             Vector3 departure = collector.GlobalPosition;
@@ -96,11 +96,11 @@ public partial class BaseManagementChecks : Node3D
             Check(arena.SurfaceDistance(departure, collector.GlobalPosition) > 12, "Real collector movement uses researched speed");
             hub.DepositAntimatter(120);
             Check(panel.OrderNextTier(), "Panel orders tier advancement");
-            hub._PhysicsProcess(20);
+            hub._PhysicsProcess(60);
             Check(hub.Tier == 2, "Timed tier advancement completes through panel order");
             hub.DepositAntimatter(200);
             Check(panel.OrderProject("energy-grid"), "Tier two unlocks energy grid");
-            hub._PhysicsProcess(12);
+            hub._PhysicsProcess(90);
             Check(hub.EnergyRechargeMultiplier == 1.25f && player.EnergyRechargePerSecond == player.EnergyCapacity * player.EnergyRegenFractionPerSecond * 1.25f,
                 "Completed energy grid changes actual ship recharge");
             player.SpendEnergy(player.Energy);
@@ -129,7 +129,7 @@ public partial class BaseManagementChecks : Node3D
                 "Lost tier suspends higher-tier effects and shows siege alert");
             hub.DepositAntimatter(120);
             Check(panel.OrderNextTier(), "UI exposes rebuilding after siege");
-            hub._PhysicsProcess(20);
+            hub._PhysicsProcess(60);
             Check(hub.Tier == 2 && hub.EnergyRechargeMultiplier == 1.25f, "Rebuilding restores retained research effect");
             Key(Godot.Key.M); await Frames(2);
             Check(map.IsExpanded && !panel.IsOpen && player.GameplayInputBlocked && !GetTree().Paused,

@@ -45,13 +45,13 @@ All items have ranks I–III. Plasma Bolt I is free starter equipment; every lat
 
 | Item | Rank-I cost / tier | Rank-II cost / tier | Rank-III cost / tier |
 | --- | --- | --- | --- |
-| Plasma Bolt | Starter / 1 | 30 / 2 | 45 / 3 |
-| Pulse Burst | 25 / 1 | 50 / 2 | 75 / 3 |
-| Energy Shield | 20 / 1 | 40 / 2 | 60 / 3 |
-| Dash | 20 / 1 | 40 / 2 | 60 / 3 |
-| Guardian Drone | 40 / 2 | 80 / 3 | 120 / 4 |
+| Plasma Bolt | Starter / 1 | 60 / 2 | 90 / 3 |
+| Pulse Burst | 50 / 1 | 100 / 2 | 150 / 3 |
+| Energy Shield | 40 / 1 | 80 / 2 | 120 / 3 |
+| Dash | 40 / 1 | 80 / 2 | 120 / 3 |
+| Guardian Drone | 80 / 2 | 160 / 3 | 240 / 4 |
 
-Research durations are 10 / 14 / 18 seconds for ranks I / II / III. Activation costs/cooldowns retain the baseline: Plasma 5/0.25s, Burst 18/2.5s, Shield 14/6s, Dash 10/3s, Guardian 24/8s. Rank effects: Plasma damage 25/35/45; Burst damage 32/40/48 and radius 8/10/12; Shield duration 4/6/8s; Dash speed 46/55.2/64.4; Guardian damage 12/16/20 and lifetime 12/18/24s. No damage-specialization taxonomy is introduced yet.
+Research durations are **60 / 90 / 120 seconds** for ranks I / II / III before research-station bonuses (2026-10-12 playtest tuning). The Research view has one row per item with fixed I/II/III columns; Plasma I is explicitly Starting/Owned. Activation costs/cooldowns retain the baseline: Plasma 5/0.25s, Burst 18/2.5s, Shield 14/6s, Dash 10/3s, Guardian 24/8s. Rank effects: Plasma damage 25/35/45; Burst damage 32/40/48 and radius 8/10/12; Shield duration 4/6/8s; Dash speed 46/55.2/64.4; Guardian damage 12/16/20 and lifetime 12/18/24s. No damage-specialization taxonomy is introduced yet.
 
 Installation is allowed while alive, in unpaused live gameplay, within **18 surface units** of the living home base and **16 elevation units** of its origin. Spherical distance/elevation use the arena's radial helpers; flat gameplay uses horizontal distance/height. Distance is exported on `ShipFlightController`. No automatic installation occurs on completion, return, death or respawn. Completed research permanently records ownership on the home construction state, even through tier loss; the ship stores installed ranks separately. Applying a rank uses the latest researched rank. Previously researched items can be installed after losing their prerequisite tier. Completed uninstalled items/ranks survive death and tier loss; active projects still obey siege destruction/refund rules.
 
@@ -69,7 +69,7 @@ Initial boon attribution: Plasma Bolt and summoned Guardian use energy damage, P
 - Continue using the existing aimed, surface-following resource-claim projectile in the terminology-only pass.
 - Claim stays available when base storage is full; collectors wait for storage space.
 
-The live-management starter catalog now includes **Claim range calibration**: 15 antimatter, 8 seconds, tier 1; new Claim projectiles gain 25% range (120→150). This built-in research does not create an owned equipment item, occupy a slot or require loadout installation. Additional Claim upgrades/ranks remain undecided.
+The live-management starter catalog includes **Claim range calibration**: 30 antimatter, 60 seconds, tier 1; new Claim projectiles gain 25% range (120→150). Its separate built-in research row does not create an owned equipment item, occupy a slot or require loadout installation. Additional Claim upgrades/ranks remain undecided.
 
 ## Built-In Booster
 

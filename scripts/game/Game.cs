@@ -64,9 +64,9 @@ public partial class Game : Node3D
         CreateMatterFields();
         AddChild(new ExplorationDirector { Name = "ExplorationDirector", UseFixedSeed = UseSphericalWorld,
             GenerationSeed = WorldSeeds.Derive(ActiveWorldSeed, 3) });
+        CreateStrategicPoints();
         CreateEnemyEcosystem();
         CreateLevelObjective();
-        CreateStrategicPoints();
         AddChild(new WorldAntimatterTracker { Name = "WorldAntimatterTracker" });
         AddChild(new WorldMatterTracker { Name = "WorldMatterTracker" });
         AddChild(new Hud { Name = "Hud" });

@@ -44,8 +44,8 @@ public partial class StrategicPointChecks : Node3D
                 extractor.Advance(20, true, true);
                 Check(extractor.IsContested && extractor.CaptureProgress == 0.5 && extractor.CaptureCount == 0, "Opposing presence freezes progress");
                 extractor.Advance(1, false, false);
-                Check(extractor.CaptureProgress == 0 && extractor.Claimant == AntimatterOwnership.Neutral, "Departure resets progress");
-                extractor.Advance(10, true, false);
+                Check(Math.Abs(extractor.CaptureProgress - 0.45) < 0.0001 && extractor.Claimant == AntimatterOwnership.Player, "Departure slowly drains progress");
+                extractor.Advance(5.5, true, false);
                 Check(extractor.Ownership == AntimatterOwnership.Player && extractor.CaptureCount == 1, "Full dwell captures exactly once");
                 extractor.Advance(0.25, true, false); extractor.Advance(0.25, true, false);
                 player._PhysicsProcess(0);
@@ -55,7 +55,9 @@ public partial class StrategicPointChecks : Node3D
                 Check(extractor.Ownership == AntimatterOwnership.Player && home.StoredAntimatter == 91 && rival.StoredAntimatter == 80,
                     "Previous owner retains income during takeover");
                 extractor.Advance(5, false, true);
-                Check(extractor.Ownership == AntimatterOwnership.Enemy && home.StoredAntimatter == 101, "Income ownership changes only on completion");
+                Check(extractor.Ownership == AntimatterOwnership.Neutral && home.StoredAntimatter == 101, "First takeover stage neutralizes and stops old income");
+                extractor.Advance(10, false, true);
+                Check(extractor.Ownership == AntimatterOwnership.Enemy && home.StoredAntimatter == 101, "Second takeover stage captures without neutral income");
                 extractor.Advance(1, false, true);
                 Check(rival.StoredAntimatter == 82 && home.StoredAntimatter == 101 && extractor.CaptureCount == 2, "New owner alone receives income without repeated capture");
                 rival.DepositAntimatter(1000); long supplied = extractor.GeneratedAntimatter;
@@ -66,6 +68,19 @@ public partial class StrategicPointChecks : Node3D
                 extractor.Advance(0.25, false, false);
                 Check(rival.AvailableStorage == 0 && extractor.GeneratedAntimatter == supplied + 1, "Partial room accepts exact amount");
                 var research = new StrategicPoint { Role = StrategicPointRole.Research, Position = extractor.GlobalPosition }; room.AddChild(research); research.SetPhysicsProcess(false);
+                research.Advance(4, true, false); research.Advance(2, false, true);
+                Check(research.Claimant == AntimatterOwnership.Player && Math.Abs(research.CaptureProgress - 0.2) < 0.0001,
+                    "Opposing claimant must drain retained neutral progress before building its own");
+                research.Advance(4, false, true);
+                Check(research.Claimant == AntimatterOwnership.Enemy && Math.Abs(research.CaptureProgress - 0.2) < 0.0001,
+                    "Claimant reversal carries remaining work into the new capture");
+                research.Advance(4, false, false);
+                Check(research.CaptureProgress == 0 && research.Claimant == AntimatterOwnership.Neutral, "Abandoned partial capture decays fully without ownership");
+                research.Advance(10, true, false); research.Advance(4, false, true); research.Advance(2, true, false);
+                Check(research.Ownership == AntimatterOwnership.Player && Math.Abs(research.CaptureProgress - 0.2) < 0.0001,
+                    "Defending owner actively restores unfinished neutralization");
+                research.Advance(2, true, false);
+                Check(research.Claimant == AntimatterOwnership.Neutral && research.CaptureCount == 1, "Restoration clears attacker progress without a duplicate capture");
                 Trace("research");
                 home.Construction.TryStart("repair-matrix", out _);
                 var project = home.Construction.GetActive(ConstructionSlot.Defense)!;
@@ -77,7 +92,9 @@ public partial class StrategicPointChecks : Node3D
                 research.Advance(5, false, true);
                 Check(StrategicPoint.ProjectSpeed(home) == 1.25 && StrategicPoint.ProjectSpeed(rival) == 1, "Old research benefit survives incomplete takeover");
                 research.Advance(5, false, true);
-                Check(StrategicPoint.ProjectSpeed(home) == 1 && StrategicPoint.ProjectSpeed(rival) == 1.25, "Research benefit transfers atomically");
+                Check(StrategicPoint.ProjectSpeed(home) == 1 && StrategicPoint.ProjectSpeed(rival) == 1, "Neutral research provides neither faction a bonus");
+                research.Advance(10, false, true);
+                Check(StrategicPoint.ProjectSpeed(rival) == 1.25, "Research benefit begins after second stage");
                 var extraResearch = new StrategicPoint { Role = StrategicPointRole.Research, Position = extractor.GlobalPosition };
                 room.AddChild(extraResearch); extraResearch.SetPhysicsProcess(false); extraResearch.Advance(10, false, true);
                 Check(StrategicPoint.ProjectSpeed(rival) == 1.5, "Multiple station bonuses add without compounding");
@@ -98,6 +115,12 @@ public partial class StrategicPointChecks : Node3D
                 var tracker = new WorldAntimatterTracker(); room.AddChild(tracker); tracker.Refresh(); int total = tracker.TotalAntimatter;
                 Check(tracker.SiteGeneratedAntimatter == extractor.GeneratedAntimatter, "World accounting reports accepted extractor supply separately from transfers");
                 logistics.Advance(10, false, true);
+                Check(drone.StationSuspended && drone.UsePlayerAntimatter && cargo.Ownership == AntimatterOwnership.Player,
+                    "Neutral logistics suspends work and preserves old cargo ownership");
+                Vector3 suspendedPosition = drone.GlobalPosition; drone._PhysicsProcess(10);
+                Check(drone.GlobalPosition == suspendedPosition && drone.CarriedCount == 1, "Suspended station drone does not move or deposit cargo");
+                logistics.Advance(10, false, true);
+                Check(!drone.StationSuspended, "Final capture resumes station work");
                 tracker.Refresh();
                 Check(ReferenceEquals(logistics.Drone, drone) && !drone.UsePlayerAntimatter && drone.CarriedCount == 1
                     && cargo.Ownership == AntimatterOwnership.Enemy && cargo.AntimatterAmount == 12 && tracker.TotalAntimatter == total,
@@ -115,20 +138,20 @@ public partial class StrategicPointChecks : Node3D
                 Check(cargo.AntimatterAmount == 12 && home.StoredAntimatter == oldStorage, "Full new base retains stolen cargo and prevents old-base deposit");
                 rival.WithdrawAntimatter(5); Invoke(drone, "DepositAll");
                 Check(cargo.AntimatterAmount == 7 && drone.CarriedCount == 1 && rival.AvailableStorage == 0, "Partial deposit retains exact remainder aboard");
-                logistics.Advance(10, true, false);
+                logistics.Advance(20, true, false);
                 Check(ReferenceEquals(logistics.Drone, drone) && cargo.Ownership == AntimatterOwnership.Player && cargo.AntimatterAmount == 7,
                     "Repeated recapture preserves drone and remaining cargo");
                 int roomBefore = home.AvailableStorage; Invoke(drone, "DepositAll");
                 Check(home.AvailableStorage == roomBefore - 7 && drone.CarriedCount == 0, "Recaptured cargo deposits only into current home");
                 drone.ApplyDamage(1000); await Frames(2);
-                logistics.Advance(10, false, true);
+                logistics.Advance(20, false, true);
                 Check(!GodotObject.IsInstanceValid(logistics.Drone) || logistics.Drone!.IsQueuedForDeletion(), "Destroyed station drones do not duplicate on recapture");
                 GetTree().Paused = true; supplied = extractor.GeneratedAntimatter; extractor.Advance(100, true, false);
                 Check(extractor.GeneratedAntimatter == supplied && extractor.Ownership == AntimatterOwnership.Enemy, "Pause rejects capture and income advancement");
                 GetTree().Paused = false;
-                research.Advance(10, true, false);
+                research.Advance(20, true, false);
                 player.GlobalPosition = research.GlobalPosition + arena.UpAt(research.GlobalPosition) * 8;
-                research.Advance(10, false, true); // Return it to rival, then test actual presence sampling.
+                research.Advance(20, false, true); // Return it to rival, then test actual presence sampling.
                 research.SetPhysicsProcess(true); await Frames(8); research.SetPhysicsProcess(false);
                 Check(research.Claimant == AntimatterOwnership.Player && research.CaptureProgress > 0, "Real physics samples eligible ship on flat/underside capture ring");
                 var pilot = new MagicCarpetRemastered.Scripts.Enemies.EnemyEcosystemEnemy
@@ -142,7 +165,7 @@ public partial class StrategicPointChecks : Node3D
                 pilot.Free();
                 player.GlobalPosition = arena.OnSurface(origin + Vector3.Right * 150, 8);
                 research._PhysicsProcess(0.1);
-                Check(research.CaptureProgress == 0, "Real out-of-range ship cannot continue capture");
+                Check(research.CaptureProgress > 0 && research.CaptureProgress < progress + 0.1, "Real out-of-range ship drains rather than resets capture");
                 var ui = new BaseManagement(); room.AddChild(ui); ui.SetOpen(true);
                 Check(ui.SummaryText.Contains("Sites") && !GetTree().Paused, "Management summarizes economic sites in real time");
                 ui.SetOpen(false);
@@ -186,7 +209,7 @@ public partial class StrategicPointChecks : Node3D
                 {
                     var ship = (ShipFlightController)GetTree().GetFirstNodeInGroup("player");
                     var site = (StrategicPoint)points[0];
-                    ship.GlobalPosition = arena.OnSurface(site.GlobalPosition + site.GlobalBasis.Z * 28, 8);
+                    ship.GlobalPosition = arena.OnSurface(site.GlobalPosition, 2);
                     arena.Orient(ship, -site.GlobalBasis.Z);
                     await Frames(12);
                     await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);

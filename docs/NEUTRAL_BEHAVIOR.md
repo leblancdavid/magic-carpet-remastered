@@ -16,7 +16,7 @@ Pre-playtest phase 2 implemented, 2026-10-11. Ordinary enemies occupy stable hab
 | Habitat leash | 120 | 50 |
 | Patrol radius | 12 | 6 |
 
-**Compact-world update (2026-10-12):** the Globe column above is retained for diagnostic radii above 400. Live Small/Medium/Large/XL use proximity **16/16/24/25**, retaliation **30/30/45/55**, disengagement **40/40/60/70**, leash **60/60/90/100**, patrol **6/8/12/12 m**. Explicit non-default exported values are preserved. Population/group rules remain the baseline until `TERRAIN_HOVER_PLAN.md` stage 5.
+**Compact-world update (2026-10-12):** the Globe column above is retained for diagnostic radii above 400. Live Small/Medium/Large/XL use proximity **16/16/24/25**, retaliation **30/30/45/55**, disengagement **40/40/60/70**, leash **60/60/90/100**, patrol **6/8/12/12 m**. Explicit non-default exported values are preserved. Grouped populations are now implemented from playtest feedback.
 
 - Distances use spherical surface arcs, or flat X/Z distance. Both living faction pilots are eligible; proximity chooses the nearest, and damage explicitly identifies the attacker. Targets and the mob must remain inside the habitat leash.
 - Plasma Bolt, Pulse Burst, Guardian Drone and rival projectiles provide attacker identity. Guardian hits identify its pilot. An unknown/disposed attacker or a hit outside retaliation range causes a **three-second local alert/search**, not global tracking. Existing valid pursuit is not cancelled by unrelated distant hits.
@@ -28,11 +28,12 @@ Pre-playtest phase 2 implemented, 2026-10-11. Ordinary enemies occupy stable hab
 
 ## Population and safe placement
 
-- Globe populations are attached to the five authored landmarks/habitats. Flat reference populations use four fixed outer corners. No spawn positions are relative to a travelling pilot.
-- Four initial mobs occupy separate least-populated habitats. Replacement attempts run every **30 seconds** with **two per habitat**, **ten ordinary mobs maximum**, and independent caps: **three swarms / two beasts / two casters / two scavengers**. Current role caps can keep the ordinary total below ten. A habitat's role has a 65% preference; legal fallbacks still enforce their own caps.
+- Globe populations use five authored landmarks plus eight economic-route habitats; Large/XL also have two outer extractor-route swarm habitats. Corresponding faction routes are interleaved when seeding the population budget. Flat reference uses its site habitats/fixed-corner fallback. No spawn is relative to a travelling pilot.
+- Initial/maximum ordinary populations are **16/24/32/40** on Small/Medium/Large/XL, subject to bounded placement. Opening swarms start with three, beasts with two, casters/scavengers with one; further rounds enlarge groups. Per-habitat caps are **five swarms / three beasts / two casters / two scavengers**. Global swarm cap is half the population budget; each other role is capped at one third. Explicit exported overrides survive size substitution. Aggression remains individual, not automatic whole-pack aggro.
+- Each habitat remembers its seeded population target, so another habitat cannot consume its replacement slot. Death starts a **20-second recovery delay**, then replacements arrive individually every **five seconds**. Pause freezes both population and raid clocks; live interfaces do not. A blocked placement retries safely rather than allocating an actor.
 - Ordinary spawning cannot create rival ships or base raiders. The designated rival is created/respawned only by the match/objective loop.
 - Every placement gets at most **64 attempts**. It excludes **30/60/80/80 m around every compact globe base** (30 flat), avoids sharp support transitions, other mobs and scenery, and stays inside the flat arena. Failure allocates nothing and never uses an unsafe nearby fallback.
-- Mobs start in a **24–40-unit habitat ring** (8–14 flat); the stable habitat centre is their home. Long-lived populations remain bounded rather than following the player across the planet.
+- Mobs start in a **14–28-unit habitat ring** (8–14 flat); the stable habitat centre is their home. Long-lived populations remain bounded rather than following the player across the planet.
 
 ## Neutral scavengers
 

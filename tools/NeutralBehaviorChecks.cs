@@ -226,15 +226,19 @@ public partial class NeutralBehaviorChecks : Node3D
             foreach (var e in game.GetChildren().OfType<EnemyEcosystemEnemy>()) e.SetPhysicsProcess(false);
             foreach (var d in game.GetChildren().OfType<CollectorDrone>()) d.SetPhysicsProcess(false);
             var initial = game.GetChildren().OfType<EnemyEcosystemEnemy>().Where(e => e.IsTerritorial).ToArray();
-            Check(initial.Length == 4 && initial.Select(e => e.HabitatId).Distinct().Count() == 4, "Initial mobs inhabit four stable separated regions");
+            Check(initial.Length >= director.InitialWaveCount - 2 && initial.Length <= director.InitialWaveCount
+                && initial.GroupBy(e => e.HabitatId).Count(g => g.Count() >= 2) >= 4,
+                $"{radius}: increased initial population contains multiple stable groups ({initial.Length}/{director.InitialWaveCount})");
             Check(initial.All(e => !e.IsRaider && arena.SurfaceDistance(e.GlobalPosition, home.GlobalPosition) >= director.EffectiveBaseExclusion
                 && arena.SurfaceDistance(e.GlobalPosition, rival.GlobalPosition) >= director.EffectiveBaseExclusion), "All-size initial populations exclude every base");
             Check(!director.IsSpawnPositionValid(home.GlobalPosition) && !director.IsSpawnPositionValid(rival.GlobalPosition), "Placement rejects both faction bases");
             player.GlobalPosition = PlanetLayout.Position(arena, game.Layout!.Landmarks[4].Up, 8);
-            Check(director.TrySpawnNeutral(), "A travelling pilot does not prevent habitat-based replenishment");
+            bool spawned = director.TrySpawnNeutral();
+            Check(spawned || initial.Length == director.MaxActiveEnemies, "Travelling pilot does not alter habitat placement or bypass population cap");
             var balanced = game.GetChildren().OfType<EnemyEcosystemEnemy>().Where(e => e.IsTerritorial).ToArray();
             foreach (var e in balanced) e.SetPhysicsProcess(false);
-            Check(balanced.Select(e => e.HabitatId).Distinct().Count() == 5, "Replenishment fills the unoccupied habitat rather than spawning around the pilot");
+            Check(balanced.All(e => e.HabitatId.Length > 0) && balanced.GroupBy(e => e.HabitatId).All(g => g.Select(e => e.Role).Distinct().Count() == 1),
+                "Groups retain stable habitat identity and a consistent role");
             for (int i = 0; i < 30; i++) director.TrySpawnNeutral();
             var all = game.GetChildren().OfType<EnemyEcosystemEnemy>().ToArray();
             foreach (var e in all) e.SetPhysicsProcess(false);
@@ -246,10 +250,27 @@ public partial class NeutralBehaviorChecks : Node3D
                 && all.Count(e => e.Role == EnemyEcosystemEnemy.EnemyRole.AntimatterThief) <= director.MaxAntimatterThieves,
                 "Fallback selections enforce every ordinary role cap");
             Check(GetTree().GetNodesInGroup("rival_ship").Count == 1 && !all.Any(e => e.IsRaider), "Ordinary spawning never creates rival ships or raiders");
+            var depletedGroup = all.Where(e => e.IsTerritorial).GroupBy(e => e.HabitatId).Last(g => g.Count() >= 2).ToArray();
+            var victim = depletedGroup[0]; string depleted = victim.HabitatId;
+            int populationBefore = all.Count(e => e.IsTerritorial && e.HabitatId == depleted);
+            victim.ApplyDamage(1000); depletedGroup[1].ApplyDamage(1000); await Frames(3);
+            director._PhysicsProcess(19);
+            Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == depleted) == populationBefore - 2,
+                "Depleted habitat does not replenish before its 20-second recovery delay");
+            director._PhysicsProcess(1);
+            Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == depleted) == populationBefore - 1,
+                "Depleted habitat replenishes one member independently after recovery delay");
+            director._PhysicsProcess(4);
+            Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == depleted) == populationBefore - 1,
+                "Group does not respawn all remaining members at once");
+            director._PhysicsProcess(1);
+            Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == depleted) == populationBefore,
+                "Remaining member returns five seconds after the first");
+            foreach (var e in game.GetChildren().OfType<EnemyEcosystemEnemy>()) e.SetPhysicsProcess(false);
             GetTree().Paused = true; float remaining = director.RaidRemaining;
             director._PhysicsProcess(200); Check(director.RaidRemaining == remaining && !director.TrySpawnNeutral(), "Pause stops raid clocks and population orders");
             GetTree().Paused = false;
-            director._PhysicsProcess(179);
+            director._PhysicsProcess(director.RaidRemaining - 1);
             Check(!game.GetChildren().OfType<EnemyEcosystemEnemy>().Any(e => e.IsRaider), "Opening grace prevents initial base raids");
             director._PhysicsProcess(1.1);
             var raider = game.GetChildren().OfType<EnemyEcosystemEnemy>().Single(e => e.IsRaider); raider.SetPhysicsProcess(false);

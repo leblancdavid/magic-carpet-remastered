@@ -12,12 +12,16 @@ public partial class StrategicPoint : Node3D
     [Export] public StrategicPointRole Role { get; set; }
     [Export] public float CaptureRadius { get; set; } = 18;
     [Export] public double CaptureSeconds { get; set; } = 10;
+    [Export] public double CaptureDecayMultiplier { get; set; } = 0.5;
     [Export] public double IncomePerSecond { get; set; } = 2;
     [Export] public double ResearchBonus { get; set; } = 0.25;
     public AntimatterOwnership Ownership { get; private set; }
     public AntimatterOwnership Claimant { get; private set; }
     public double CaptureProgress { get; private set; }
     public bool IsContested { get; private set; }
+    public bool PlayerPresent { get; private set; }
+    public string CaptureStage => IsContested ? "Contested" : Ownership != AntimatterOwnership.Neutral
+        && Claimant != AntimatterOwnership.Neutral ? "Neutralizing" : "Capturing";
     public long GeneratedAntimatter { get; private set; }
     public long GeneratedMatter { get; private set; }
     public int CaptureCount { get; private set; }
@@ -28,11 +32,10 @@ public partial class StrategicPoint : Node3D
         StrategicPointRole.MatterExtractor => $"+{IncomePerSecond:0.#} matter/s (room permitting)",
         StrategicPointRole.Research => $"+{ResearchBonus * 100:0}% project speed",
         _ => Drone == null ? "Collector activates on first capture" : GodotObject.IsInstanceValid(Drone) && !Drone.IsQueuedForDeletion()
-            ? $"Station drone · {Drone.CarriedCount} cargo objects ({Drone.CarriedMatterAmount} matter)" : "Station drone destroyed"
+            ? $"Station drone{(Drone.StationSuspended ? " · suspended" : "")} · {Drone.CarriedCount} cargo objects ({Drone.CarriedMatterAmount} matter)" : "Station drone destroyed"
     };
     public string StatusText => $"{Role} · {Ownership} · {BenefitText}\n"
-        + (IsContested ? $"CONTESTED · {Claimant} {CaptureProgress:P0}" : Claimant != AntimatterOwnership.Neutral
-            ? $"{Claimant} capturing {CaptureProgress:P0}" : "Remain in ring to capture");
+        + (IsContested || Claimant != AntimatterOwnership.Neutral ? $"{CaptureStage} · {Claimant} {CaptureProgress:P0}" : "Remain in ring to capture");
     private HeightmapArena _arena = null!;
     private Label3D _label = null!;
     private StandardMaterial3D _material = null!;
@@ -79,23 +82,45 @@ public partial class StrategicPoint : Node3D
     internal void Advance(double delta, bool playerPresent, bool enemyPresent)
     {
         if (GetTree().Paused || !double.IsFinite(delta) || delta <= 0) return;
-        // Pay elapsed time to the existing owner; the new owner starts next tick.
-        AdvanceIncome(delta);
         playerPresent &= BaseFor(AntimatterOwnership.Player) is { IsDestroyed: false };
         enemyPresent &= BaseFor(AntimatterOwnership.Enemy) is { IsDestroyed: false };
+        PlayerPresent = playerPresent;
         IsContested = playerPresent && enemyPresent;
+        // Income ends at neutralization even when one diagnostic/accelerated
+        // tick spans both takeover stages. The new owner starts next tick.
+        bool draining = !IsContested && (Ownership == AntimatterOwnership.Player && enemyPresent
+            || Ownership == AntimatterOwnership.Enemy && playerPresent);
+        AdvanceIncome(draining ? Math.Min(delta, (1 - CaptureProgress) * Math.Max(0.01, CaptureSeconds)) : delta);
         if (!IsContested)
         {
             var present = playerPresent ? AntimatterOwnership.Player : enemyPresent ? AntimatterOwnership.Enemy : AntimatterOwnership.Neutral;
+            double work = delta / Math.Max(0.01, CaptureSeconds);
             if (present == AntimatterOwnership.Neutral || present == Ownership)
             {
-                Claimant = AntimatterOwnership.Neutral; CaptureProgress = 0;
+                CaptureProgress = Math.Max(0, CaptureProgress - work * (present == Ownership && present != AntimatterOwnership.Neutral
+                    ? 1 : Math.Max(0, CaptureDecayMultiplier)));
+                if (CaptureProgress == 0) Claimant = AntimatterOwnership.Neutral;
             }
             else
             {
-                if (Claimant != present) { Claimant = present; CaptureProgress = 0; }
-                CaptureProgress = Math.Min(1, CaptureProgress + delta / Math.Max(0.01, CaptureSeconds));
-                if (CaptureProgress >= 1) CompleteCapture(present);
+                if (Claimant != present && CaptureProgress > 0)
+                {
+                    double reversed = Math.Min(work, CaptureProgress);
+                    CaptureProgress -= reversed; work -= reversed;
+                }
+                if (CaptureProgress == 0) Claimant = present;
+                if (Claimant == present)
+                {
+                    double needed = 1 - CaptureProgress;
+                    CaptureProgress = Math.Min(1, CaptureProgress + work);
+                    if (CaptureProgress >= 1 && Ownership != AntimatterOwnership.Neutral)
+                    {
+                        Ownership = AntimatterOwnership.Neutral; _incomeFraction = 0;
+                        if (GodotObject.IsInstanceValid(Drone) && !Drone!.IsQueuedForDeletion()) Drone.StationSuspended = true;
+                        CaptureProgress = Math.Min(1, Math.Max(0, work - needed));
+                    }
+                    if (CaptureProgress >= 1) CompleteCapture(present);
+                }
             }
         }
         RefreshVisuals();
@@ -128,7 +153,10 @@ public partial class StrategicPoint : Node3D
             GetParent().AddChild(Drone);
         }
         if (GodotObject.IsInstanceValid(Drone) && !Drone!.IsQueuedForDeletion() && BaseFor(owner) is { } hub)
+        {
+            Drone.StationSuspended = false;
             Drone.TransferTo(hub);
+        }
     }
 
     private FactionBase? BaseFor(AntimatterOwnership owner) => owner == AntimatterOwnership.Neutral ? null
@@ -139,8 +167,8 @@ public partial class StrategicPoint : Node3D
         _material.AlbedoColor = Ownership switch { AntimatterOwnership.Player => new Color(0.15f, 0.85f, 1),
             AntimatterOwnership.Enemy => new Color(1, 0.25f, 0.3f), _ => new Color(0.65f, 0.7f, 0.75f) };
         _material.Emission = IsContested ? Colors.Orange : _material.AlbedoColor;
-        _label.Text = IsContested ? $"CONTESTED · {CaptureProgress:P0}" : Claimant != AntimatterOwnership.Neutral
-            ? $"{Role} · {CaptureProgress:P0}" : Ownership == AntimatterOwnership.Player ? $"{Role} · OWNED"
+        _label.Text = IsContested || Claimant != AntimatterOwnership.Neutral
+            ? $"{Role} · {CaptureStage} {CaptureProgress:P0}" : Ownership == AntimatterOwnership.Player ? $"{Role} · OWNED"
             : $"{Role}\nHold in ring to capture";
     }
 

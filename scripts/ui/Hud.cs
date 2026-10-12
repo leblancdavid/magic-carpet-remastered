@@ -9,6 +9,9 @@ public partial class Hud : CanvasLayer
 {
     private Label _vitals = null!;
     private Label _objective = null!;
+    private PanelContainer _capturePanel = null!;
+    private Label _captureLabel = null!;
+    private ProgressBar _captureProgress = null!;
     private EquipmentBar _equipmentBar = null!;
     private HBoxContainer _actions = null!;
     private Button _baseAction = null!, _boonAction = null!, _mapAction = null!;
@@ -46,6 +49,13 @@ public partial class Hud : CanvasLayer
         _feedbackPanel = AddLabelPanel(root, "Feedback", Control.LayoutPreset.BottomLeft,
             new Vector2(16, -110), new Vector2(300, 46), out _feedback, 14);
         _feedbackPanel.Visible = false;
+        _capturePanel = CreatePanel("CapturePanel"); root.AddChild(_capturePanel);
+        Place(_capturePanel, Control.LayoutPreset.CenterBottom, new Vector2(-190, -222), new Vector2(380, 66));
+        var captureColumn = new VBoxContainer(); _capturePanel.AddChild(captureColumn);
+        _captureLabel = CreateLabel("", 14); captureColumn.AddChild(_captureLabel);
+        _captureProgress = new ProgressBar { Name = "CaptureProgress", MaxValue = 1, ShowPercentage = false,
+            CustomMinimumSize = new Vector2(0, 12), MouseFilter = Control.MouseFilterEnum.Ignore };
+        captureColumn.AddChild(_captureProgress); _capturePanel.Visible = false;
 
         _resultPanel = AddLabelPanel(root, "LevelResult", Control.LayoutPreset.Center,
             new Vector2(-240, -95), new Vector2(480, 190), out _result, 24);
@@ -155,6 +165,21 @@ public partial class Hud : CanvasLayer
                 + $"{_levelObjective.ResultMessage}\n\nPress R to restart";
         }
         bool livePanel = _player.GameplayInputBlocked;
+        StrategicPoint? capture = null;
+        foreach (Node node in GetTree().GetNodesInGroup("strategic_point"))
+            if (node is StrategicPoint site && !site.IsQueuedForDeletion() && site.PlayerPresent
+                && (capture == null || site.CaptureProgress > capture.CaptureProgress)) capture = site;
+        _capturePanel.Visible = capture != null && !livePanel && !GetTree().Paused && _player.Health > 0 && !_resultPanel.Visible;
+        if (capture != null)
+        {
+            bool restoring = capture.Claimant == AntimatterOwnership.Enemy;
+            string stage = capture.IsContested ? "Contested" : restoring ? "Restoring"
+                : capture.Ownership == AntimatterOwnership.Player ? "Owned" : capture.CaptureStage;
+            double progress = capture.IsContested ? capture.CaptureProgress
+                : restoring ? 1 - capture.CaptureProgress : capture.Ownership == AntimatterOwnership.Player ? 1 : capture.CaptureProgress;
+            _captureLabel.Text = $"{capture.Role} · {stage} · {progress:P0}";
+            _captureProgress.Value = progress;
+        }
         _debugHint.GetParent<PanelContainer>().Visible = !livePanel && !GetTree().Paused;
         _actions.Visible = !GetTree().Paused && !livePanel && _player.Health > 0;
         _baseAction.Text = _playerBase is { Health: var hp, MaxHealth: var max } && hp < max ? "B  Base !" : "B  Base";

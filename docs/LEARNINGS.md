@@ -1,5 +1,12 @@
 # Project Learnings
 
+## Economy And Capture Playtest Follow-Up (2026-10-12)
+
+- Upgrade prices must fit the previous tier's capacity **and** AI reserve policy. A 120-cost tier with 120 capacity and a mandatory 12 reserve is unreachable; bound the tier reserve requirement by remaining possible storage rather than bypassing shared payment rules.
+- Remember each habitat's seeded population target. A global cap plus independent refill clocks can otherwise let unrelated habitats consume a dead group's replacement slot before its recovery delay expires.
+- Grid labels with word wrapping need explicit minimum widths. A fixed-column table can satisfy column/row assertions while collapsing its item heading to one letter per line; verify rendered headings and bounds as well as row geometry.
+- Capture neutralization and final acquisition are distinct transitions. Stop benefits/suspend logistics at the first, preserve cargo ownership until the second, and reverse retained progress before accepting a new claimant. Diagnostic ticks spanning both stages must not grant income for time after neutralization.
+
 - Keep researched equipment rank separate from applied ship rank and slot occupancy. Construction completion grants ownership without changing remote combat stats; home installation explicitly applies the latest researched rank. Query durable completion records directly rather than prerequisite-gated active effects so siege cannot revoke owned or installed gear. Every activation path, including direct item hotkeys, must honor the shared slot limit; Tab must skip unequipped items. Verify replacement/movement, free re-equipping, pending ranks, death, tier loss and real GUI clicks independently.
 
 Durable lessons from implementation, playtesting, and research. Use this for understanding that should guide future decisions, not for daily changelog entries.

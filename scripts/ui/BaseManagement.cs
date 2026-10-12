@@ -82,6 +82,11 @@ public partial class BaseManagement : CanvasLayer
                 research.AddChild(Text("Research remotely · install completed items/ranks at home in Loadout", 13));
             }
             else research.AddChild(Text("Click a tile to order · hover for effects and requirements", 13));
+            if (slot == ConstructionSlot.Ship)
+            {
+                AddResearchRows(research);
+                continue;
+            }
             var grid = Grid(); research.AddChild(grid);
             if (slot == ConstructionSlot.Base)
             {
@@ -103,6 +108,33 @@ public partial class BaseManagement : CanvasLayer
     {
         var label = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
         label.AddThemeFontSizeOverride("font_size", size); return label;
+    }
+    private void AddResearchRows(VBoxContainer research)
+    {
+        var table = new GridContainer { Name = "EquipmentResearchTable", Columns = 4,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        table.AddThemeConstantOverride("h_separation", 8); table.AddThemeConstantOverride("v_separation", 8);
+        research.AddChild(table);
+        foreach (string heading in new[] { "Equipment", "Rank I", "Rank II", "Rank III" }) table.AddChild(ResearchLabel(heading));
+        foreach (string id in ShipEquipmentCatalog.ItemIds)
+        {
+            table.AddChild(ResearchLabel(_player.FindEquipment(id)!.DisplayName));
+            for (int rank = 1; rank <= ShipEquipmentCatalog.MaximumRank; rank++)
+            {
+                string projectId = ShipEquipmentCatalog.ProjectId(id, rank);
+                if (id == "plasma-bolt" && rank == 1) { table.AddChild(ResearchLabel("Starting · Owned")); continue; }
+                var tile = Tile($"Order_{projectId}", id); table.AddChild(tile);
+                _orders.Add(projectId, tile); tile.Pressed += () => OrderProject(projectId);
+            }
+        }
+        table.AddChild(ResearchLabel("Built-in Claim"));
+        var claim = Tile("Order_claim-range", UiIcon.ForProject("claim-range")); table.AddChild(claim);
+        _orders.Add("claim-range", claim); claim.Pressed += () => OrderProject("claim-range");
+        table.AddChild(ResearchLabel("—")); table.AddChild(ResearchLabel("—"));
+    }
+    private static Label ResearchLabel(string text)
+    {
+        var label = Text(text, 13); label.CustomMinimumSize = new Vector2(136, 0); return label;
     }
     private GridContainer Grid()
     {
