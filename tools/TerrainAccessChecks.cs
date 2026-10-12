@@ -133,13 +133,16 @@ public partial class TerrainAccessChecks : Node3D
                     // A previous seed's flattened pads must not influence the
                     // next seed's start selection. Match fresh-game generation.
                     var room = new Node3D(); AddChild(room);
-                    var arena = new HeightmapArena { IsSpherical = true, PlanetRadius = radius }; room.AddChild(arena);
-                    var layout = PlanetLayout.Create(arena, seed);
-                    arena.PreparePlanetLayout(layout);
+                    bool randomTerrain = Array.IndexOf(OS.GetCmdlineUserArgs(), "--random-worlds") >= 0;
+                    var arena = new HeightmapArena { IsSpherical = true, PlanetRadius = radius,
+                        GenerateSeededLayout = randomTerrain, WorldSeed = seed }; room.AddChild(arena);
+                    var layout = randomTerrain ? arena.GeneratedLayout! : PlanetLayout.Create(arena, seed);
+                    Check(layout != null, "Requested random world has an accepted layout");
+                    if (!randomTerrain) arena.PreparePlanetLayout(layout!);
                     CheckLandBudget(arena, seed);
                     for (int side = 0; side < 2; side++)
                     {
-                        Vector3 start = layout.Starts[side];
+                        Vector3 start = layout!.Starts[side];
                         var route = VerifyRoute(arena, start, layout.AntimatterFields[side], $"R{radius}, seed {seed}, faction {side}, antimatter");
                         VerifyRoute(arena, start, layout.MatterFields[side * 2], $"R{radius}, seed {seed}, faction {side}, matter");
                         for (int role = 0; role < 4; role++)
@@ -168,10 +171,11 @@ public partial class TerrainAccessChecks : Node3D
     private void CheckLandBudget(HeightmapArena arena, int seed)
     {
         int land = 0, comfortable = 0, blocked = 0;
-        const int samples = 2048;
+        // Different density and orientation from the generator's calibration.
+        const int samples = 4096;
         for (int i = 0; i < samples; i++)
         {
-            float y = 1 - 2 * (i + 0.5f) / samples, angle = i * 2.39996323f, r = Mathf.Sqrt(1 - y * y);
+            float y = 1 - 2 * (i + 0.5f) / samples, angle = i * 2.39996323f + 0.37f, r = Mathf.Sqrt(1 - y * y);
             Vector3 up = new(r * Mathf.Cos(angle), y, r * Mathf.Sin(angle));
             if (arena.HeightAt(Point(arena, up)) <= arena.WaterHeight) continue;
             land++;
@@ -179,7 +183,8 @@ public partial class TerrainAccessChecks : Node3D
             if (slope <= Mathf.Tan(Mathf.DegToRad(20))) comfortable++;
             if (slope > Mathf.Tan(Mathf.DegToRad(40))) blocked++;
         }
-        Check(comfortable >= land * 0.85f && blocked <= land * 0.05f,
-            $"Prepared land budgets hold on fresh radius {arena.PlanetRadius}, seed {seed}");
+        GD.Print($"Access profile {arena.PlanetRadius}, seed {seed}: gentle {100f * comfortable / land:0.0}%, steep {100f * blocked / land:0.0}%");
+        Check(comfortable >= land * 0.85f && blocked >= land * 0.03f && blocked <= land * 0.05f,
+            $"Prepared land stays predominantly gentle with 3–5% steep coverage on fresh radius {arena.PlanetRadius}, seed {seed}");
     }
 }

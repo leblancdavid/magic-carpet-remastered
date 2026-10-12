@@ -13,6 +13,9 @@ public partial class Game : Node3D
 {
     [Export] public bool UseSphericalWorld { get; set; }
     [Export] public int LayoutSeed { get; set; } = 7319;
+    [Export] public bool UseSessionWorldSeed { get; set; } = true;
+    public int ActiveWorldSeed { get; private set; }
+    public bool GenerationSucceeded { get; private set; }
     [Export] public float MinimumFactionStartAngle { get; set; } = PlanetLayout.DefaultMinimumStartAngle;
     public PlanetLayout? Layout { get; private set; }
     private HeightmapArena _arena = null!;
@@ -38,10 +41,20 @@ public partial class Game : Node3D
 
     public override void _Ready()
     {
+        ActiveWorldSeed = UseSessionWorldSeed ? WorldSeeds.Current : LayoutSeed;
         CreateLighting();
         EquipmentImpactPool.Prepare(this);
         AddChild(new GameAudio { Name = "GameAudio" });
         CreateArena();
+        if (UseSphericalWorld && Layout == null)
+        {
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+            AddChild(new PlanetSettings { Name = "PlanetSettings" });
+            var layer = new CanvasLayer(); AddChild(layer);
+            layer.AddChild(new Label { Text = $"World {ActiveWorldSeed} could not meet generation requirements.\nF2: choose a fresh world or another seed.\n{_arena.GenerationError}", Position = new Vector2(24, 100) });
+            return;
+        }
+        GenerationSucceeded = true;
         if (UseSphericalWorld) CreateLandmarks();
         CreateAntimatterSource();
         CreateBases();
@@ -49,7 +62,8 @@ public partial class Game : Node3D
         CreateDrones();
         CreateAntimatterPickups();
         CreateMatterFields();
-        AddChild(new ExplorationDirector { Name = "ExplorationDirector" });
+        AddChild(new ExplorationDirector { Name = "ExplorationDirector", UseFixedSeed = UseSphericalWorld,
+            GenerationSeed = WorldSeeds.Derive(ActiveWorldSeed, 3) });
         CreateEnemyEcosystem();
         CreateLevelObjective();
         CreateStrategicPoints();
@@ -98,13 +112,14 @@ public partial class Game : Node3D
 
     private void CreateArena()
     {
-        _arena = new HeightmapArena { Name = "HeightmapArena", IsSpherical = UseSphericalWorld, PlanetRadius = PlanetSizes.SelectedRadius };
+        _arena = new HeightmapArena { Name = "HeightmapArena", IsSpherical = UseSphericalWorld, PlanetRadius = PlanetSizes.SelectedRadius,
+            GenerateSeededLayout = UseSphericalWorld, WorldSeed = ActiveWorldSeed, MinimumStartAngle = MinimumFactionStartAngle };
         AddChild(_arena);
 
         if (UseSphericalWorld)
         {
-            Layout = PlanetLayout.Create(_arena, LayoutSeed, MinimumFactionStartAngle);
-            _arena.PreparePlanetLayout(Layout);
+            Layout = _arena.GeneratedLayout;
+            if (Layout == null) return;
             foreach (Vector3 up in Layout.Scenery) AddPillar(PlanetLayout.Position(_arena, up, 1.5f));
             return;
         }
@@ -235,7 +250,8 @@ public partial class Game : Node3D
 
     private void CreateEnemyEcosystem()
     {
-        AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector" });
+        AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector", UseFixedSeed = UseSphericalWorld,
+            GenerationSeed = WorldSeeds.Derive(ActiveWorldSeed, 4) });
     }
 
     private void CreateLevelObjective()

@@ -60,6 +60,7 @@ public partial class PlanetLayoutChecks : Node3D
 
     private async Task RunChecks()
     {
+        WorldSeeds.UseSeed(7319);
         try
         {
             foreach (int radius in PlanetSizes.Radii)

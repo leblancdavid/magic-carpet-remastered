@@ -45,6 +45,7 @@ public partial class NeutralBehaviorChecks : Node3D
     public override void _Ready() => Callable.From(() => { _ = RunChecks(); }).CallDeferred();
     private async Task RunChecks()
     {
+        WorldSeeds.UseSeed(7319);
         try
         {
             foreach (Vector3 up in new[] { Vector3.Zero, Vector3.Down, new Vector3(1, -1, 1).Normalized() })

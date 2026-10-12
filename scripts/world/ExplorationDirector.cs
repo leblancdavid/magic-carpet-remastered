@@ -7,6 +7,8 @@ namespace MagicCarpetRemastered.Scripts.World;
 public partial class ExplorationDirector : Node
 {
     [Export] public int InitialCount { get; set; } = 12;
+    [Export] public bool UseFixedSeed { get; set; }
+    [Export] public int GenerationSeed { get; set; }
     [Export] public int MaximumActive { get; set; } = 20;
     [Export] public float BaseExclusionDistance { get; set; } = 180;
     [Export] public float MinimumSpacing { get; set; } = 100;
@@ -24,7 +26,7 @@ public partial class ExplorationDirector : Node
     {
         AddToGroup("exploration_director");
         _arena = (HeightmapArena)GetTree().GetFirstNodeInGroup("heightmap_arena");
-        _random.Randomize();
+        if (UseFixedSeed) _random.Seed = unchecked((ulong)GenerationSeed); else _random.Randomize();
         if (!_arena.IsSpherical) { BaseExclusionDistance = 30; MinimumSpacing = 18; InitialCount = 5; MaximumActive = 8; }
         else
         {

@@ -88,6 +88,7 @@ public partial class PlanetGameplayChecks : Node3D
 
     public override async void _Ready()
     {
+        WorldSeeds.UseSeed(7319);
         try
         {
             Check(PlanetSizes.Radii.Length == 4 && PlanetSizes.Radii[0] == 100 && PlanetSizes.Radii[1] == 200

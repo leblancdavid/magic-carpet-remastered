@@ -192,7 +192,11 @@ public partial class Hud : CanvasLayer
             + BaseDetails(_playerBase, "Player") + BaseDetails(_enemyBase, "Rival")
             + (_enemyEcosystem?.StatusText ?? "Ecosystem unavailable") + "\n\n"
             + "Rival AI: " + ((GetTree().GetFirstNodeInGroup("rival_ai") as MagicCarpetRemastered.Scripts.Enemies.RivalPilotController)?.StatusText ?? "unavailable") + "\n\n"
-            + Section("TERRAIN") + _player.TerrainDebugText.Replace("   ", "\n")
+            + Section("TERRAIN")
+            + (GetParent() is MagicCarpetRemastered.Scripts.Game.Game world ? $"World seed: {world.ActiveWorldSeed}\nR retries this world; F2 creates a fresh world or replays a seed.\n" : string.Empty)
+            + (GetParent().GetNodeOrNull<HeightmapArena>("HeightmapArena") is { } seedArena
+                ? $"Terrain seed: {seedArena.TerrainSeed} · generation attempts: {seedArena.GenerationAttempts}\n" : string.Empty)
+            + _player.TerrainDebugText.Replace("   ", "\n")
             + "\n\n"
             + Section("CONTROLS")
             + "WASD — hover / steer\nSpace — jump (2 current energy, fresh press)\nShift — built-in forward boost (fresh press)\nMouse — look / aim\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nR — restart arena\n\n"

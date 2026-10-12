@@ -21,6 +21,7 @@ public partial class StrategicPointChecks : Node3D
 
     private async Task RunChecks()
     {
+        WorldSeeds.UseSeed(7319);
         try
         {
             foreach (bool spherical in new[] { false, true })

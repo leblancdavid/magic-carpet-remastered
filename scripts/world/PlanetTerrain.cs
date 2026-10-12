@@ -42,6 +42,9 @@ public partial class PlanetTerrain : Node3D
     private readonly List<MountainRegion> _mountainRegions = new();
     private sealed record LandingPad(Vector3 Up, float Inner, float Outer, float Height);
     private readonly List<LandingPad> _landingPads = new();
+    private sealed record OpeningApproach(Vector3 From, Vector3 To, Vector3 Tangent, Vector3 Normal, float Angle);
+    private readonly List<OpeningApproach> _openingApproaches = new();
+    private float _mountainFoldAmplitude;
     private readonly StandardMaterial3D _material = new() { AlbedoColor = new Color(0.65f, 0.65f, 0.65f), VertexColorUseAsAlbedo = true, Roughness = 1 };
     private float _refreshTimer;
     public int PendingPatchCount => _dirty.Count;
@@ -50,6 +53,9 @@ public partial class PlanetTerrain : Node3D
     public double FrameRebuildMilliseconds { get; private set; }
     public int FrameRebuiltPatchCount { get; private set; }
     public int FrameLargestTileResolution { get; private set; }
+    public PlanetLayout? GeneratedLayout { get; private set; }
+    public string GenerationError { get; private set; } = string.Empty;
+    public int GenerationAttempts { get; private set; }
 
     public override void _ExitTree()
     {
@@ -78,7 +84,25 @@ public partial class PlanetTerrain : Node3D
 
     public override void _Ready()
     {
-        PrepareMountainRegions();
+        if (Arena.GenerateSeededLayout)
+        {
+            if (!float.IsFinite(Arena.MinimumStartAngle) || Arena.MinimumStartAngle <= 0 || Arena.MinimumStartAngle > 180)
+            { GenerationError = "Faction separation must be greater than zero and at most 180 degrees."; return; }
+            for (int attempt = 0; attempt < 16; attempt++)
+            {
+                GenerationAttempts = attempt + 1;
+                _landingPads.Clear(); _openingApproaches.Clear(); _mountainFoldAmplitude = 0;
+                Arena.TerrainSeed = WorldSeeds.Derive(Arena.WorldSeed, 1 + attempt * 8);
+                ConfigureNoise(); PrepareMountainRegions();
+                var layout = PlanetLayout.Create(Arena, WorldSeeds.Derive(Arena.WorldSeed, 2 + attempt * 8), Arena.MinimumStartAngle);
+                PrepareLayout(layout);
+                if (!PlanetGenerationValidation.Accept(Arena, layout, out string reason))
+                { GenerationError = reason; continue; }
+                GeneratedLayout = layout; GenerationError = string.Empty; break;
+            }
+            if (GeneratedLayout == null) return;
+        }
+        else { ConfigureNoise(); PrepareMountainRegions(); }
         for (int face = 0; face < 6; face++)
         for (int y = 0; y < PatchesPerFace; y++)
         for (int x = 0; x < PatchesPerFace; x++)
@@ -102,6 +126,14 @@ public partial class PlanetTerrain : Node3D
         while (_dirty.Count > 0) RebuildDirty();
     }
 
+    private void ConfigureNoise()
+    {
+        // Preserve the historical fixed-seed diagnostics while real matches use
+        // a world-derived seed and an independent fine-detail stream.
+        _continents.Seed = Arena.TerrainSeed;
+        _noise.Seed = Arena.TerrainSeed == 27031 ? 27031 : WorldSeeds.Derive(Arena.TerrainSeed, 1);
+    }
+
     public float HeightAt(Vector3 up)
     {
         Vector3 point = up * Arena.PlanetRadius;
@@ -117,6 +149,7 @@ public partial class PlanetTerrain : Node3D
                 height = Mathf.Lerp(pad.Height, background, Ease(pad.Inner, pad.Outer, distance));
             }
         }
+        height += MountainFolds(up, height);
         if (!_editCells.TryGetValue(EditCell(point), out var edits)) return height;
         foreach (Edit edit in edits)
         {
@@ -157,8 +190,8 @@ public partial class PlanetTerrain : Node3D
     private void PrepareMountainRegions()
     {
         _mountainRegions.Clear();
-        // Three separated land-biased caps occupy about 7.6% of the whole globe;
-        // mountains no longer form barriers running around entire great circles.
+        // Three separated land-biased regions; compact worlds need more shoulder
+        // area because their protected destination ramps cover a larger fraction.
         for (int region = 0; region < 3; region++)
         {
             Vector3 best = Vector3.Up;
@@ -179,7 +212,8 @@ public partial class PlanetTerrain : Node3D
 
     private float MountainHeight(Vector3 up, MountainRegion region)
     {
-        float reach = Arena.PlanetRadius * 0.32f;
+        float compact = 1 - Mathf.Clamp((Arena.PlanetRadius - 100) / 100, 0, 1);
+        float reach = Arena.PlanetRadius * (0.38f + 0.06f * compact);
         float distance = up.DistanceTo(region.Up) * Arena.PlanetRadius;
         if (distance >= reach) return 0;
         float foothills = 1 - Ease(0, reach, distance);
@@ -187,12 +221,90 @@ public partial class PlanetTerrain : Node3D
         float along = up.Dot(region.Frame.Z) * Arena.PlanetRadius;
         float ridge = 1 - Ease(0, Mathf.Clamp(Arena.PlanetRadius * 0.055f, 6, 18), across);
         float pass = Ease(0, 5, Mathf.Abs(along - reach * 0.2f));
-        return foothills * Mathf.Clamp(Arena.PlanetRadius * 0.1f, 16, 32) * (0.55f + 0.45f * ridge * pass);
+        // Concentrate relief into a broader steep shoulder within each region,
+        // keeping its outskirts gentle and its summit height near the old budget.
+        float shoulder = 1 - Ease(Arena.PlanetRadius * (0.25f + 0.06f * compact),
+            Arena.PlanetRadius * (0.33f + 0.06f * compact), distance);
+        return Mathf.Clamp(Arena.PlanetRadius * 0.1f, 10, 40)
+            * (0.85f * shoulder + 0.1f * foothills + 0.05f * shoulder * ridge * pass);
+    }
+
+    private float MountainFolds(Vector3 up, float height)
+    {
+        if (_mountainFoldAmplitude <= 0 || _landingPads.Count == 0 || height <= Arena.WaterHeight + 1) return 0;
+        float folds = 0;
+        foreach (MountainRegion region in _mountainRegions)
+        {
+            float distance = up.DistanceTo(region.Up) * Arena.PlanetRadius;
+            float envelope = 1 - Ease(Arena.PlanetRadius * 0.15f, Arena.PlanetRadius * 0.34f, distance);
+            if (envelope <= 0) continue;
+            float across = up.Dot(region.Frame.X) * Arena.PlanetRadius;
+            float along = up.Dot(region.Frame.Z) * Arena.PlanetRadius;
+            // Curving, uneven ridges rather than a regular grid of bumps.
+            folds += envelope * (0.75f * Mathf.Sin(across / 1.5f + 1.2f * Mathf.Sin(along / 9))
+                + 0.25f * Mathf.Sin((along + across * 0.4f) / 2.3f));
+        }
+        if (folds == 0) return 0;
+        float protection = 1;
+        foreach (LandingPad pad in _landingPads)
+            protection *= Ease(pad.Inner + 3, pad.Inner + 15, up.DistanceTo(pad.Up) * Arena.PlanetRadius);
+        foreach (OpeningApproach approach in _openingApproaches)
+        {
+            float along = Mathf.Atan2(up.Dot(approach.Tangent), up.Dot(approach.From));
+            float distance = along >= 0 && along <= approach.Angle ? Mathf.Abs(up.Dot(approach.Normal)) * Arena.PlanetRadius
+                : Mathf.Min(up.DistanceTo(approach.From), up.DistanceTo(approach.To)) * Arena.PlanetRadius;
+            protection *= Ease(6, 14, distance);
+        }
+        return folds * _mountainFoldAmplitude * protection * Ease(Arena.WaterHeight + 1, Arena.WaterHeight + 3, height);
+    }
+
+    private void TuneMountainFolds()
+    {
+        // Startup only. Different layout pads protect different portions of the
+        // mountains, so tune the remaining folds to ~4% of actual exposed land.
+        float low = 0, high = 3, best = 0, bestError = float.PositiveInfinity;
+        _mountainFoldAmplitude = 0;
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            int land = 0, steep = 0;
+            for (int i = 0; i < 2048; i++)
+            {
+                float y = 1 - 2 * (i + 0.5f) / 2048, a = i * 2.39996323f, r = Mathf.Sqrt(1 - y * y);
+                Vector3 up = new(r * Mathf.Cos(a), y, r * Mathf.Sin(a));
+                Vector3 point = Arena.PlanetCenter + up * Arena.PlanetRadius;
+                if (Arena.HeightAt(point) <= Arena.WaterHeight) continue;
+                land++;
+                Basis frame = PlanetGeometry.Frame(up, Mathf.Abs(up.Z) < 0.9f ? Vector3.Forward : Vector3.Right);
+                float x = (Arena.SurfaceHeight(point + frame.X) - Arena.SurfaceHeight(point - frame.X)) / 2;
+                float z = (Arena.SurfaceHeight(point + frame.Z) - Arena.SurfaceHeight(point - frame.Z)) / 2;
+                if (new Vector2(x, z).Length() > Mathf.Tan(Mathf.DegToRad(40))) steep++;
+            }
+            float coverage = (float)steep / Mathf.Max(1, land), error = Mathf.Abs(coverage - 0.04f);
+            if (error < bestError) { bestError = error; best = _mountainFoldAmplitude; }
+            if (coverage >= 0.037f && coverage <= 0.043f) return;
+            if (coverage < 0.04f) low = _mountainFoldAmplitude; else high = _mountainFoldAmplitude;
+            _mountainFoldAmplitude = (low + high) / 2;
+        }
+        _mountainFoldAmplitude = best;
     }
 
     public void PrepareLayout(PlanetLayout layout)
     {
         _landingPads.Clear();
+        _mountainFoldAmplitude = 0;
+        _openingApproaches.Clear();
+        for (int side = 0; side < 2; side++)
+        {
+            void Approach(Vector3 to)
+            {
+                Vector3 from = layout.Starts[side];
+                Vector3 tangent = (to - from * from.Dot(to)).Normalized();
+                _openingApproaches.Add(new OpeningApproach(from, to, tangent, from.Cross(tangent).Normalized(),
+                    Mathf.Acos(Mathf.Clamp(from.Dot(to), -1, 1))));
+            }
+            Approach(layout.AntimatterFields[side]); Approach(layout.MatterFields[side * 2]);
+            for (int role = 0; role < 4; role++) Approach(layout.EconomicSites[side * 4 + role].Up);
+        }
         void Pad(Vector3 up, float inner, float outer, bool dry)
         {
             float natural = ProfileHeight(up);
@@ -222,6 +334,7 @@ public partial class PlanetTerrain : Node3D
         // Bases take final priority: overlapping approaches must not tilt the
         // ship/collector footprint inside an otherwise flat starting pad.
         foreach (Vector3 up in layout.Starts) Pad(up, 20, 45, true);
+        TuneMountainFolds();
         // Startup only: invalidate both visible fine surfaces and dormant coarse
         // caches so later LOD changes cannot resurrect the pre-pad landscape.
         foreach (Patch patch in _patches)

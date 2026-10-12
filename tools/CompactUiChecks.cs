@@ -28,6 +28,7 @@ public partial class CompactUiChecks : Node3D
 
     private async Task Run()
     {
+        WorldSeeds.UseSeed(7319);
         try
         {
             PlanetSizes.SelectedIndex = 1;

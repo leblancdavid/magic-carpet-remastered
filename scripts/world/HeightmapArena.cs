@@ -13,6 +13,13 @@ public partial class HeightmapArena : Node3D
     [Export] public float MaxFlightClearance { get; set; } = 12.0f;
     [Export] public bool IsSpherical { get; set; }
     [Export] public float PlanetRadius { get; set; } = 800;
+    [Export] public int TerrainSeed { get; set; } = 27031;
+    public bool GenerateSeededLayout { get; set; }
+    public int WorldSeed { get; set; }
+    public float MinimumStartAngle { get; set; } = PlanetLayout.DefaultMinimumStartAngle;
+    public PlanetLayout? GeneratedLayout => _planet?.GeneratedLayout;
+    public string GenerationError => _planet?.GenerationError ?? string.Empty;
+    public int GenerationAttempts => _planet?.GenerationAttempts ?? 0;
     public Vector3 PlanetCenter => new(0, -PlanetRadius, 0);
     private PlanetTerrain? _planet;
 

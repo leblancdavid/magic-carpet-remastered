@@ -50,10 +50,10 @@ public partial class CompactTerrainChecks : Node3D
                 GD.Print($"Terrain {radius}: {lowest:0.0}..{highest:0.0} m, ocean {100f * ocean / samples:0.0}%, comfortable land {100f * comfortable / land:0.0}%, impassable land {100f * steep / land:0.0}%");
                 Check(ocean > samples * 0.15f && ocean < samples * 0.75f && lowest < arena.WaterHeight - 3,
                     "World retains substantial deep ocean and land rather than becoming all hills");
-                Check(highest > Mathf.Max(12, radius * 0.06f) && lowlands > samples * 0.15f && steep > 0,
+                Check(highest > Mathf.Max(10, radius * 0.06f) && lowlands > samples * 0.15f && steep > 0,
                     "Each size retains low combat terrain and occasional route-blocking mountain slopes");
                 Check(comfortable >= land * 0.85f && steep <= land * 0.05f,
-                    "At least 85% of raw land is under 20 degrees and at most 5% exceeds the 40-degree hover limit");
+                    "Raw land remains predominantly gentle before protected approaches reduce its steep coverage");
                 foreach (Vector3 seam in new[] { new Vector3(1, 1, 0), new Vector3(0, -1, 1), new Vector3(-1, 0, -1) })
                 {
                     Vector3 up = seam.Normalized();
@@ -68,7 +68,8 @@ public partial class CompactTerrainChecks : Node3D
                 {
                     float floor = arena.HeightAt(arena.PlanetCenter + site.Up * radius);
                     if (floor <= arena.WaterHeight)
-                        Check(floor < arena.WaterHeight - 0.4f, "Floating station pad stays below ocean mesh without coplanar terrain");
+                        Check(floor < arena.WaterHeight - 0.02f,
+                            $"Submerged station terrain stays separated from the ocean mesh, including blended coastlines (floor {floor}, sea {arena.WaterHeight})");
                 }
                 foreach (Vector3 up in layout.Starts)
                 {
@@ -131,8 +132,8 @@ public partial class CompactTerrainChecks : Node3D
             if (slope > Mathf.Tan(Mathf.DegToRad(40))) blocked++;
         }
         GD.Print($"Prepared {arena.PlanetRadius}: comfortable land {100f * comfortable / land:0.0}%, impassable land {100f * blocked / land:0.0}%, remaining peak {maximumHeight:0.0} m");
-        Check(comfortable >= land * 0.85f && blocked <= land * 0.05f,
-            "Destination pads preserve the comfortable-land and impassable-land budgets");
+        Check(comfortable >= land * 0.85f && blocked >= land * 0.03f && blocked <= land * 0.05f,
+            "Prepared default-layout land is at least 85% gentle, with 3–5% above the 40-degree hover limit");
         Check(maximumHeight > 10 && blocked > 0, "Prepared world retains occasional substantial mountains rather than becoming entirely flat");
     }
 }

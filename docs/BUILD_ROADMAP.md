@@ -35,6 +35,10 @@ User approved compact **100/200/300/400 m** planets with genuine curvature, dram
 
 **Accessibility correction implemented/verified after user playtest:** the initial belts were too pervasive. Most land is now gentle, with three localized mountain regions, lowland-preferring starts and longer adaptive destination/coastal ramps. Prepared land below 20° is **97.0/94.1/95.4/97.9%**; above the 40° hover limit is **0.8/1.0/0.9/0.6%**. Terrain checks pass 16,482 headless/16,484 rendered; layout 1,939 headless/1,853 rendered. Independent fresh-world access checks pass **3,288**, with 192 practical opening routes across four sizes/four seeds, only four local detours, and both-faction actual normal-hover resource out-and-back travel on every size. **Next: runtime rival slope-aware routing/deformation/live-obstacle recovery**, then difficulty and grouped density. The initial stage-2 tuning above is historical evidence superseded by this correction; hands-on feel/balance remains iterative.
 
+**Steepness follow-up implemented/verified:** user increased the target to **3–5% of prepared land above 40°**, while retaining mostly gentle terrain/protected access. Localized shoulders and layout-calibrated folds give default steep coverage **3.8/3.8/3.6/4.1%**, gentle coverage **91.7/90.9/91.8/93.4%**. Independent sixteen-world sampling measures 3.3–4.3% steep; all 192 openings and ordinary-hover round trips remain verified (nine detours). Terrain checks pass 16,483 headless/16,485 rendered, access 3,287, layout 1,942. These measurements supersede the lower steepness figures above. Runtime rival routing/recovery remains next.
+
+**Random-world generation implemented/verified:** new applications and F2 blank-seed starts choose fresh world seeds; **R retries the current seed/size**. F2 supports entered-seed replay and shows the current seed; F3 exposes accepted terrain seed/attempt diagnostics. Independent streams seed actual geography, layout, initial wrecks and neutral placement. Up to sixteen deterministic candidates validate land/slope budgets and twelve normal-hover opening approaches before mesh/actor creation. Sixteen tested terrain/size cases accept within 1–3 attempts, replay identically, preserve 3–5% steep/≥85% gentle land, and pass 192 opening routes plus real resource round trips. Fixed-noise measurements above are historical diagnostics, not a default random world. Runtime rival routing/recovery remains next.
+
 Next work, in order (completed foundation history):
 
 1. **Completed 2026-10-11:** behavior-preserving terminology conversion to bases, ships/pilots, equipment, antimatter, collector drones and Claim. Files/types/references, identifiers, controls, UI and verification tools are migrated; build/import, gameplay regressions and rendered UI checks pass. Historical research and working project identity remain. See `docs/TERMINOLOGY_MIGRATION.md` for mappings and profiler compatibility.
@@ -53,6 +57,17 @@ Items 1–9 and all four readiness phases are implemented for their first pass. 
 Current victory direction (user update, 2026-10-10): destroy the rival player's castle AND defeat its wizard, in either order. Mana possession/storage supports combat power and logistics; it is not a victory condition. This supersedes the earlier equilibrium-quota objective plan.
 
 Playtest mechanics update (2026-10-10): wizards respawn after ten seconds while their respective castle survives; a rival respawn clears its previous defeat. Killing the wizard first can win only if the castle falls before it returns. Player castle destruction causes defeat. Surviving castles slowly repair after a quiet delay, neutral creatures carry/drop intrinsic mana, destruction spills fragment into ballistic small spheres, and shared flight clearance is capped at 12 units above terrain/water. See `docs/PLAYTEST_MECHANICS.md` for current defaults and validation steps.
+
+## Planned Balance Tooling — AI-Versus-AI Simulation (2026-10-12)
+
+User approved recording this future milestone; implementation is deferred until reached. Establish a lightweight harness after runtime rival routing/recovery is reliable, alongside upcoming combat/difficulty and balance work. Routing/recovery remains the immediate priority; the harness does not block the approved difficulty/grouped-habitat work.
+
+- Run two AI-controlled factions through the actual shared gameplay systems in headless matches, with recorded seeds/settings, swapped starting positions, a match time limit and unattended result collection.
+- Begin with economy-first, aggressive and defensive strategy profiles as rival equipment/tactical competence develops. Keep strategy priorities configurable independently of shared gameplay rules.
+- Export CSV/JSON results: winner/duration, tier and research timings, resource income/spending, combat/deaths/base damage, and stalled navigation/stalemates. Distinguish execution failures from strategy outcomes.
+- Measure wall-clock match throughput before choosing acceleration or parallel batch sizes; faster simulation must preserve meaningful physics/combat outcomes. Recorded seeds/configurations should support visible reproduction of interesting runs; exact replay determinism must be verified rather than assumed.
+- Expand later into multi-seed round-robin tournaments and paired single-parameter comparisons for upgrade costs/effects. Use early runs for structural problems and broad trends; fine balance follows representative systems and watched/human playtests.
+- A simplified high-throughput economic simulator is a possible later extension, not part of the initial milestone. Automated balance conclusions remain limited by bot competence.
 
 ## Development Tracks
 

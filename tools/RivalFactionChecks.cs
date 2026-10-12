@@ -23,6 +23,7 @@ public partial class RivalFactionChecks : Node3D
 
     private async Task Run()
     {
+        WorldSeeds.UseSeed(7319);
         double originalScale = Engine.TimeScale;
         try
         {

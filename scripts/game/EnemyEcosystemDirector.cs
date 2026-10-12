@@ -9,6 +9,10 @@ namespace MagicCarpetRemastered.Scripts.Game;
 public partial class EnemyEcosystemDirector : Node
 {
     private sealed record Habitat(string Id, Vector3 Position, EnemyEcosystemEnemy.EnemyRole Role);
+    [Export] public bool UseFixedSeed { get; set; }
+    [Export] public int GenerationSeed { get; set; }
+    private readonly RandomNumberGenerator _random = new();
+    public override void _ExitTree() => _random.Dispose();
     [Export] public float SpawnIntervalSeconds { get; set; } = 30;
     [Export] public int MaxActiveEnemies { get; set; } = 10;
     [Export] public int InitialWaveCount { get; set; } = 4;
@@ -53,6 +57,7 @@ public partial class EnemyEcosystemDirector : Node
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         AddToGroup("enemy_ecosystem_director");
         if (_arena == null) return;
+        if (UseFixedSeed) _random.Seed = unchecked((ulong)GenerationSeed); else _random.Randomize();
         if (_arena.IsSpherical)
         {
             if (BaseExclusionDistance == 180) BaseExclusionDistance = Mathf.Clamp(_arena.PlanetRadius * 0.3f, 30, 80);
@@ -131,7 +136,7 @@ public partial class EnemyEcosystemDirector : Node
         }
         if (habitat == null) return false;
         _habitatCursor = (_habitats.IndexOf(habitat) + 1) % _habitats.Count;
-        var role = GD.Randf() < 0.65f ? habitat.Role : OrdinaryRoles[GD.Randi() % OrdinaryRoles.Length];
+        var role = _random.Randf() < 0.65f ? habitat.Role : OrdinaryRoles[_random.Randi() % OrdinaryRoles.Length];
         if (_activeByRole[(int)role] >= RoleCap(role))
         {
             bool found = false;
@@ -156,7 +161,7 @@ public partial class EnemyEcosystemDirector : Node
         Basis frame = PlanetGeometry.Frame(up, Mathf.Abs(up.Z) < 0.9f ? Vector3.Forward : Vector3.Right);
         for (int i = 0; i < PlacementAttempts; i++)
         {
-            float angle = GD.Randf() * Mathf.Tau, distance = Mathf.Lerp(minimum, maximum, GD.Randf());
+            float angle = _random.Randf() * Mathf.Tau, distance = Mathf.Lerp(minimum, maximum, _random.Randf());
             Vector3 tangent = frame.X.Rotated(up, angle);
             Vector3 point = _arena.IsSpherical
                 ? _arena.PlanetCenter + new Quaternion(up.Cross(tangent), distance / _arena.PlanetRadius) * up * _arena.PlanetRadius

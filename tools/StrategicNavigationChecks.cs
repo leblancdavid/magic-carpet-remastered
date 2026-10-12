@@ -32,6 +32,7 @@ public partial class StrategicNavigationChecks : Node
 
     private async Task RunChecks()
     {
+        WorldSeeds.UseSeed(7319);
         try
         {
             foreach (Vector3 up in new[] { Vector3.Up, Vector3.Down, Vector3.Right, Vector3.Left, Vector3.Forward, Vector3.Back,
