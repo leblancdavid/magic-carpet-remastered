@@ -3,7 +3,7 @@
 ## Project Context
 
 - Engine target: Godot 4.x with C#
-- Current state: accepted spherical prototype with economy, construction/siege/rebuilding, live management, equipment, booster, wrecks/boons, sites and matter logistics complete for their first pass. All four readiness phases are implemented and verified. Shared hover/paid Space jump and compact 100/200/300/400 m planets with layered dramatic terrain are implemented/verified. Next: slope-aware opening validation/rival routing, then approved Easy/Normal/Hard combat and grouped habitats. See `docs/TERRAIN_HOVER_PLAN.md` for live stage status and `docs/COMPACT_UI.md` for UI.
+- Current state: accepted spherical prototype with economy, construction/siege/rebuilding, live management, equipment, booster, wrecks/boons, sites and matter logistics complete for their first pass. All four readiness phases are implemented and verified. Shared hover/paid Space jump and compact 100/200/300/400 m planets are implemented/verified. Terrain accessibility correction makes 94–98% of prepared land gentle, with three localized mountain regions; independent checks verify openings and normal-hover resource round trips. Next: runtime rival slope-aware routing/recovery, then approved Easy/Normal/Hard combat and grouped habitats. See `docs/TERRAIN_HOVER_PLAN.md` for live stage status and `docs/COMPACT_UI.md` for UI.
 - Reference projects: `D:\Dev\Games\rustgrindgalaxy` and `D:\Dev\Games\kbtv`
 - Local original game reference: `D:\Games\MagicCarpet`
 

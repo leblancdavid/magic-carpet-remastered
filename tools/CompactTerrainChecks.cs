@@ -21,7 +21,7 @@ public partial class CompactTerrainChecks : Node3D
             foreach (int radius in PlanetSizes.Radii)
             {
                 var arena = new HeightmapArena { IsSpherical = true, PlanetRadius = radius }; AddChild(arena);
-                int ocean = 0, steep = 0, lowlands = 0;
+                int ocean = 0, steep = 0, lowlands = 0, land = 0, comfortable = 0;
                 float lowest = float.PositiveInfinity, highest = float.NegativeInfinity;
                 Vector3 peak = Vector3.Up;
                 const int samples = 4096;
@@ -39,13 +39,21 @@ public partial class CompactTerrainChecks : Node3D
                     Basis frame = PlanetGeometry.Frame(up, Mathf.Abs(up.Z) < 0.9f ? Vector3.Forward : Vector3.Right);
                     float dx = (arena.SurfaceHeight(point + frame.X) - arena.SurfaceHeight(point - frame.X)) / 2;
                     float dz = (arena.SurfaceHeight(point + frame.Z) - arena.SurfaceHeight(point - frame.Z)) / 2;
-                    if (height > arena.WaterHeight + 3 && new Vector2(dx, dz).Length() > Mathf.Tan(Mathf.DegToRad(40))) steep++;
+                    if (height > arena.WaterHeight)
+                    {
+                        land++;
+                        float slope = new Vector2(dx, dz).Length();
+                        if (slope <= Mathf.Tan(Mathf.DegToRad(20))) comfortable++;
+                        if (slope > Mathf.Tan(Mathf.DegToRad(40))) steep++;
+                    }
                 }
-                GD.Print($"Terrain {radius}: {lowest:0.0}..{highest:0.0} m, ocean {100f * ocean / samples:0.0}%, lowlands {lowlands}, steep {steep}");
+                GD.Print($"Terrain {radius}: {lowest:0.0}..{highest:0.0} m, ocean {100f * ocean / samples:0.0}%, comfortable land {100f * comfortable / land:0.0}%, impassable land {100f * steep / land:0.0}%");
                 Check(ocean > samples * 0.15f && ocean < samples * 0.75f && lowest < arena.WaterHeight - 3,
                     "World retains substantial deep ocean and land rather than becoming all hills");
-                Check(highest > Mathf.Max(12, radius * 0.06f) && lowlands > samples * 0.15f && steep > 10,
-                    "Each size includes low combat terrain, mountain relief and route-blocking slopes");
+                Check(highest > Mathf.Max(12, radius * 0.06f) && lowlands > samples * 0.15f && steep > 0,
+                    "Each size retains low combat terrain and occasional route-blocking mountain slopes");
+                Check(comfortable >= land * 0.85f && steep <= land * 0.05f,
+                    "At least 85% of raw land is under 20 degrees and at most 5% exceeds the 40-degree hover limit");
                 foreach (Vector3 seam in new[] { new Vector3(1, 1, 0), new Vector3(0, -1, 1), new Vector3(-1, 0, -1) })
                 {
                     Vector3 up = seam.Normalized();
@@ -55,6 +63,7 @@ public partial class CompactTerrainChecks : Node3D
                 }
                 var layout = PlanetLayout.Create(arena);
                 arena.PreparePlanetLayout(layout);
+                CheckPreparedSlopes(arena);
                 foreach (var site in layout.EconomicSites)
                 {
                     float floor = arena.HeightAt(arena.PlanetCenter + site.Up * radius);
@@ -99,5 +108,31 @@ public partial class CompactTerrainChecks : Node3D
             GD.Print($"Compact terrain checks passed: {_checks}"); GetTree().Quit();
         }
         catch (Exception error) { GD.PushError(error.ToString()); GetTree().Quit(1); }
+    }
+
+    private void CheckPreparedSlopes(HeightmapArena arena)
+    {
+        int land = 0, comfortable = 0, blocked = 0;
+        float maximumHeight = float.NegativeInfinity;
+        for (int i = 0; i < 4096; i++)
+        {
+            float y = 1 - 2 * (i + 0.5f) / 4096, a = i * 2.39996323f, r = Mathf.Sqrt(1 - y * y);
+            Vector3 up = new(r * Mathf.Cos(a), y, r * Mathf.Sin(a));
+            Vector3 point = arena.PlanetCenter + up * arena.PlanetRadius;
+            float height = arena.HeightAt(point);
+            maximumHeight = Mathf.Max(maximumHeight, height);
+            if (height <= arena.WaterHeight) continue;
+            land++;
+            Basis frame = PlanetGeometry.Frame(up, Mathf.Abs(up.Z) < 0.9f ? Vector3.Forward : Vector3.Right);
+            float dx = (arena.SurfaceHeight(point + frame.X) - arena.SurfaceHeight(point - frame.X)) / 2;
+            float dz = (arena.SurfaceHeight(point + frame.Z) - arena.SurfaceHeight(point - frame.Z)) / 2;
+            float slope = new Vector2(dx, dz).Length();
+            if (slope <= Mathf.Tan(Mathf.DegToRad(20))) comfortable++;
+            if (slope > Mathf.Tan(Mathf.DegToRad(40))) blocked++;
+        }
+        GD.Print($"Prepared {arena.PlanetRadius}: comfortable land {100f * comfortable / land:0.0}%, impassable land {100f * blocked / land:0.0}%, remaining peak {maximumHeight:0.0} m");
+        Check(comfortable >= land * 0.85f && blocked <= land * 0.05f,
+            "Destination pads preserve the comfortable-land and impassable-land budgets");
+        Check(maximumHeight > 10 && blocked > 0, "Prepared world retains occasional substantial mountains rather than becoming entirely flat");
     }
 }

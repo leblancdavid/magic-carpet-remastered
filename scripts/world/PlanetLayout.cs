@@ -138,7 +138,10 @@ public sealed class PlanetLayout
         Basis frame = PlanetGeometry.Frame(up, Mathf.Abs(up.Z) < 0.9f ? Vector3.Forward : Vector3.Right);
         foreach (Vector3 offset in new[] { frame.X * 9, -frame.X * 9, frame.Z * 9, -frame.Z * 9 })
             variation = Mathf.Max(variation, Mathf.Abs(arena.HeightAt(point + offset) - height));
-        return Mathf.Min(height - arena.WaterHeight, 4) - variation * 2;
+        // Prefer ordinary lowlands over a calm-looking summit that would strand
+        // the opening on a raised plateau when its footprint is flattened.
+        return Mathf.Min(height - arena.WaterHeight, 4) - variation * 2
+            - Mathf.Max(0, height - arena.WaterHeight - 4) * 0.75f;
     }
 
     private static Vector3 RandomDirection(RandomNumberGenerator random)

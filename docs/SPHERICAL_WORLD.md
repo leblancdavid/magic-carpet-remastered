@@ -1,6 +1,6 @@
 # Spherical Worlds
 
-**Current redesign (2026-10-12):** gameplay ships use automatic low hovering, gravity/ramp momentum and a **2-current-energy Space jump** with no fall damage. Manual altitude control and the live ship ground-relative ceiling are superseded; non-ship actors and the F6 flight lab retain their existing flight bounds. **Compact 100/200/300/400 m presets and layered dramatic terrain are live:** oceans/islands/lowlands, narrow mountain belts/saddles and actual seeded-start landing pads. Slope-aware opening validation/rival routing is next. See `TERRAIN_HOVER_PLAN.md`; technical history below retains previous tuning.
+**Current redesign (2026-10-12):** gameplay ships use automatic low hovering, gravity/ramp momentum and a **2-current-energy Space jump** with no fall damage. Manual altitude control and the live ship ground-relative ceiling are superseded; non-ship actors and the F6 flight lab retain their existing flight bounds. **Compact 100/200/300/400 m presets are live.** Terrain is mostly gentle oceans/islands/lowlands, with three localized mountain regions and smooth low-elevation destination approaches. Prepared land below 20° is 94–98%; opening connectivity and both-faction normal-hover resource trips are independently verified. Runtime rival routing/recovery is next. See `TERRAIN_HOVER_PLAN.md`; technical history below retains previous tuning.
 
 ## Terminology Update (2026-10-11)
 

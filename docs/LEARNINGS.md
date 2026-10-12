@@ -25,6 +25,11 @@ Durable lessons from implementation, playtesting, and research. Use this for und
 - A flattened seabed exactly at water height causes obvious coplanar z-fighting with the ocean mesh. Keep wet terrain below sea and let surface support place floating actors on the water plane. Inspect whole-globe views as well as the starting camera; one may expose artifacts hidden in the other.
 - Navigation fixtures should compare antipodal routes to πR rather than obsolete metre thresholds. Live UI blocks steering, not gravity/suspension: check tangent velocity for input isolation rather than total speed.
 
+- Dramatic terrain needs an upper roughness budget, not only a minimum count of steep samples. Measure exposed land separately from water, both before and after destination shaping; oceans otherwise hide how difficult the actual land is. Localized mountain caps with broad foothills leave most ordinary travel gentle, unlike belts that divide the whole globe.
+- Good slope coverage and flat endpoints do not prove connectivity. A raised station can have zero slope at its centre and an impassable ring around it. Independently sample entire route links/connectors, bound detour length, and drive real ships without paid mobility to validate the traversal contract.
+- Snapshot pad heights from the unprepared profile rather than preceding pads. Constrain destination elevation, expand transition width with surrounding height difference, and apply base footprints last so overlapping ramps cannot tilt ship/collector starts. Use support height near coasts instead of blending to a deep seabed.
+- Start-selection fixtures need fresh terrain per seed: a previous layout's prepared pads can bias the next candidate scoring and test a world that a fresh match would never generate. A test-only route oracle is evidence of terrain accessibility, not implementation of runtime AI routing or dynamic-obstacle/deformation recovery.
+
 ## Terminology And Reference Migration
 
 - Godot C# renames span filenames/classes, script UID sidecars, scene paths, dynamic node names, group strings, reflection-based checks, input-action definitions/synthetic inputs and gameplay IDs. Compile success alone misses string-reference failures; run the real resource, objective, discovery, navigation and rendered-scene checks after import.
