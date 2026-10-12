@@ -13,6 +13,7 @@ public partial class EnemyProjectile : Area3D
 
     private Vector3 _direction = Vector3.Forward;
     private Node3D? _owner;
+    private bool _rivalShot;
     private float _lifeRemaining;
     private HeightmapArena? _arena;
 
@@ -88,6 +89,7 @@ public partial class EnemyProjectile : Area3D
             _direction = direction.Normalized();
         }
         _owner = owner;
+        _rivalShot = owner is EnemyEcosystemEnemy { Role: EnemyEcosystemEnemy.EnemyRole.RivalShip };
     }
 
     private void OnBodyEntered(Node3D body)
@@ -103,10 +105,17 @@ public partial class EnemyProjectile : Area3D
 
         if (body is ShipFlightController player)
         {
-            player.ApplyDamage(Damage);
+            if (!_rivalShot || player.Ownership != AntimatterOwnership.Enemy)
+                player.ApplyDamage(Damage, IsInstanceValid(_owner) ? _owner : null);
         }
 
-        if (body is FactionBase hub)
+        if (body is EnemyEcosystemEnemy enemy
+            && (_rivalShot ? enemy.IsTerritorial : enemy.Role == EnemyEcosystemEnemy.EnemyRole.RivalShip))
+            enemy.ApplyDamage(Damage, IsInstanceValid(_owner) ? _owner : null);
+
+        // Territorial casters only fight pilots. A stray shot does not turn
+        // ordinary habitat combat into a base siege.
+        if (_rivalShot && body is FactionBase hub && hub.IsPlayerBase)
         {
             hub.ApplyDamage(Damage);
         }

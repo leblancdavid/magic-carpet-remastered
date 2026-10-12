@@ -59,14 +59,15 @@ public partial class StrategicPoint : Node3D
     public override void _PhysicsProcess(double delta)
     {
         bool player = false, enemy = false;
-        foreach (Node node in GetTree().GetNodesInGroup("player"))
-            if (node is ShipFlightController ship && ship.Health > 0 && InRange(ship)) player = true;
+        foreach (Node node in GetTree().GetNodesInGroup("pilots"))
+            if (node is ShipFlightController ship && ship.Health > 0 && InRange(ship))
+            { if (ship.IsPlayerControlled) player = true; else enemy = true; }
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
             if (node is EnemyEcosystemEnemy pilot && pilot.Role == EnemyEcosystemEnemy.EnemyRole.RivalShip
                 && pilot.Health > 0 && InRange(pilot)) enemy = true;
         Advance(delta, player, enemy);
         _label.Visible = GetTree().GetFirstNodeInGroup("player") is ShipFlightController observer
-            && _arena.SurfaceDistance(GlobalPosition, observer.GlobalPosition) <= 65;
+            && observer.Health > 0 && _arena.SurfaceDistance(GlobalPosition, observer.GlobalPosition) <= CaptureRadius + 12;
         // Follow authoritative terrain, including live deformation.
         GlobalPosition = _arena.OnSurface(GlobalPosition);
     }
@@ -138,7 +139,9 @@ public partial class StrategicPoint : Node3D
         _material.AlbedoColor = Ownership switch { AntimatterOwnership.Player => new Color(0.15f, 0.85f, 1),
             AntimatterOwnership.Enemy => new Color(1, 0.25f, 0.3f), _ => new Color(0.65f, 0.7f, 0.75f) };
         _material.Emission = IsContested ? Colors.Orange : _material.AlbedoColor;
-        _label.Text = StatusText;
+        _label.Text = IsContested ? $"CONTESTED · {CaptureProgress:P0}" : Claimant != AntimatterOwnership.Neutral
+            ? $"{Role} · {CaptureProgress:P0}" : Ownership == AntimatterOwnership.Player ? $"{Role} · OWNED"
+            : $"{Role}\nHold in ring to capture";
     }
 
     public static double ProjectSpeed(FactionBase hub)

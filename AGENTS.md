@@ -3,7 +3,7 @@
 ## Project Context
 
 - Engine target: Godot 4.x with C#
-- Current state: accepted spherical gameplay prototype with storage-backed energy, construction/siege/rebuilding, real-time management/survey, starter project effects, owned equipment/four-slot home installation, built-in Shift booster, exploration wrecks/persistent choice boons, timed economic capture points and matter collection/storage/material-dependent construction complete for their first pass; next priorities are dual-resource/economic/exploration/mobility balance from playtesting, then deeper faction AI/campaign/content
+- Current state: accepted spherical prototype with economy, construction/siege/rebuilding, live management, equipment, booster, wrecks/boons, sites and matter logistics complete for their first pass. All four readiness phases are implemented and verified. Shared hover/paid Space jump and compact 100/200/300/400 m planets with layered dramatic terrain are implemented/verified. Next: slope-aware opening validation/rival routing, then approved Easy/Normal/Hard combat and grouped habitats. See `docs/TERRAIN_HOVER_PLAN.md` for live stage status and `docs/COMPACT_UI.md` for UI.
 - Reference projects: `D:\Dev\Games\rustgrindgalaxy` and `D:\Dev\Games\kbtv`
 - Local original game reference: `D:\Games\MagicCarpet`
 
@@ -15,7 +15,11 @@ Do not copy proprietary game code, data, art, audio, level files, or binary-deri
 
 Matter is an independent reserve with Claim-marked surface crates and mixed drone cargo; it never contributes to energy. Construction pays both resources atomically, snapshots both costs, and applies exact refunds/siege splits/half-price rebuilds independently. Eight economic sites include two matter extractors; income stops at applicable capacity and logistics capture steals both cargo kinds. See `docs/BASE_DEVELOPMENT.md` for provisional material defaults.
 
+Spherical matches use one seeded `PlanetLayout` with antipodal starts and configurable 120° minimum separation, comparable opening fields/site routes and globe-wide content. Both factions start with 30/30 reserves. Neutrals use stable habitats, 25/65/85/120 aggression/leash ranges and committed return. Scavengers steal locally and retain/drop neutral reserves. One-at-a-time raids alternate living bases after 180s grace/interval, deal 4 HP per 3s and expire after 90s (`NEUTRAL_BEHAVIOR.md`). Live rivals use `ShipFlightController(IsPlayerControlled=false)` plus decision-only `RivalPilotController`: same flight, Claim/hauling, energy, paid research, home installation, combat, boons and persistent respawn. Human-only `player` group owns input/camera/UI; both ships use `pilots`. Legacy rival archetypes are diagnostic fixtures only. See `RIVAL_AI.md` for policy and limitations. Spherical strike lifetimes cover their actual route plus 15s while preserving speed/damage.
+
 ## Repository Expectations
+
+UI uses original procedural line glyphs, compact icon tiles/tooltips and separate Ship Research/Loadout views. Five construction categories, full-refund instance-safe cancel and home-only installation remain live. Bottom equipment HUD is four numbered cards with selected/cooldown/energy states; mouse-down selects through `TrySelectEquipmentFromInterface` and latches global combat until release. B/M/H share a dock. Width-adaptive grids/scrolling and scoped/reused StyleBoxes are verified on 1280×720 and 960×540 canvases.
 
 Target structure:
 

@@ -30,9 +30,9 @@ public partial class ExplorationWreck : StaticBody3D
         AddChild(_visual);
         _collision = new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(4, 2, 5) }, Disabled = ArrivalRemaining > 0 };
         AddChild(_collision);
-        _label = new Label3D { Text = $"WRECK · {Health} HP\nDestroy to reveal salvage", Position = Vector3.Up * 3,
+        _label = new Label3D { Text = $"WRECK · {Health} HP\nFire to reveal salvage", Position = Vector3.Up * 3,
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, FontSize = 28, PixelSize = 0.012f,
-            VisibilityRangeEnd = 120 };
+            VisibilityRangeEnd = 55 };
         AddChild(_label);
         FollowSurface();
     }
@@ -46,7 +46,7 @@ public partial class ExplorationWreck : StaticBody3D
         FollowSurface();
         if (!IsRevealed || ArrivalRemaining > 0) return;
         _visual.RotateY((float)delta);
-        foreach (Node node in GetTree().GetNodesInGroup("player"))
+        foreach (Node node in GetTree().GetNodesInGroup("pilots"))
             if (node is ShipFlightController ship && TryCollect(ship)) return;
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
             if (node is EnemyEcosystemEnemy { Role: EnemyEcosystemEnemy.EnemyRole.RivalShip, Health: > 0 } rival
@@ -62,20 +62,20 @@ public partial class ExplorationWreck : StaticBody3D
     {
         if (amount <= 0 || IsRevealed || IsCollected || ArrivalRemaining > 0) return;
         Health = Mathf.Max(0, Health - amount);
-        _label.Text = $"WRECK · {Health} HP\nDestroy to reveal salvage";
+        _label.Text = $"WRECK · {Health} HP\nFire to reveal salvage";
         if (!IsRevealed) return;
         _collision.SetDeferred(CollisionShape3D.PropertyName.Disabled, true);
         _visual.Mesh = new PrismMesh { Size = new Vector3(1.8f, 2.2f, 1.8f) };
         _visual.MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(1, 0.78f, 0.18f),
             EmissionEnabled = true, Emission = new Color(1, 0.6f, 0.1f) };
-        _label.Text = "BOON SALVAGE\nFly close to secure three choices";
+        _label.Text = "SALVAGE\nFly close to secure choices";
         FollowSurface();
     }
 
     public bool TryCollect(ShipFlightController ship)
     {
         if (!IsRevealed || IsCollected || IsQueuedForDeletion() || ship.Health <= 0 || !InRange(ship)
-            || GetTree().Paused || GetTree().GetFirstNodeInGroup("player_base") is not FactionBase { IsDestroyed: false }) return false;
+            || GetTree().Paused || ship.HomeBase is not { IsDestroyed: false }) return false;
         IsCollected = true;
         ship.Boons.SecureOffer(_random, SkipAntimatter);
         Hide(); QueueFree(); return true;

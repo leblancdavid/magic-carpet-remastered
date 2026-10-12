@@ -9,6 +9,63 @@ namespace MagicCarpetRemastered.Scripts.Player;
 
 public partial class ShipFlightController : CharacterBody3D
 {
+    [Export] public bool IsPlayerControlled { get; set; } = true;
+    public AntimatterOwnership Ownership => IsPlayerControlled ? AntimatterOwnership.Player : AntimatterOwnership.Enemy;
+    public FactionBase? HomeBase => IsInstanceValid(_homeBase) ? _homeBase : null;
+    public event System.Action? Defeated;
+    public Node3D? LastAttacker { get; private set; }
+    public Vector3 AimOrigin => IsPlayerControlled ? _camera.GlobalPosition : GlobalPosition + LocalUp * 1.45f - _autonomousAim * 0.45f;
+    public Vector3 AimDirection => IsPlayerControlled ? -_camera.GlobalBasis.Z.Normalized() : _autonomousAim;
+    private Vector3 _autonomousMovement;
+    private Vector3 _autonomousAim = Vector3.Forward;
+    private Label3D? _pilotLabel;
+
+    public void SetAutonomousControls(Vector3 movement, Vector3 aim)
+    {
+        if (IsPlayerControlled) return;
+        _autonomousMovement = movement.IsFinite() ? movement : Vector3.Zero;
+        if (!aim.IsFinite() || aim.LengthSquared() < 0.0001f) return;
+        Vector3 tangent = _arena?.Tangent(aim, GlobalPosition) ?? new Vector3(aim.X, 0, aim.Z);
+        Vector3 horizontal = tangent.Normalized();
+        if (horizontal.LengthSquared() < 0.0001f) horizontal = -GlobalBasis.Z;
+        float pitch = Mathf.Clamp(Mathf.Atan2(aim.Dot(LocalUp), tangent.Length()), -1.2f, 0.6f);
+        _autonomousAim = (horizontal * Mathf.Cos(pitch) + LocalUp * Mathf.Sin(pitch)).Normalized();
+    }
+
+    public bool TrySelectEquipmentSlot(int slot)
+    {
+        if (slot < 0 || slot >= 4 || Health <= 0 || GetTree().Paused || GameplayInputBlocked) return false;
+        _selectedEquipmentSlot = slot; return true;
+    }
+
+    public bool TrySelectEquipmentFromInterface(int slot)
+    {
+        if (!IsPlayerControlled || !TrySelectEquipmentSlot(slot)) return false;
+        _waitForEquipmentRelease = true;
+        return true;
+    }
+
+    public float EquipmentCooldownRemaining(string id) => id switch
+    {
+        "plasma-bolt" => _fireCooldown, "pulse-burst" => _areaEquipmentCooldown,
+        "energy-shield" => _shieldEquipmentCooldown, "dash" => _mobilityEquipmentCooldown,
+        "guardian-drone" => _summonEquipmentCooldown, _ => 0
+    };
+
+    public bool TryActivateEquipmentSlot(int slot)
+    {
+        if (!TrySelectEquipmentSlot(slot) || (IsPlayerControlled && _waitForEquipmentRelease)
+            || GetSelectedQuickEquipment() is not { } item || !CanActivateEquipment(item)
+            || Energy < item.EnergyCost || EquipmentCooldownRemaining(item.Id) > 0) return false;
+        int before = Energy; CastSelectedQuickEquipment(); return Energy < before;
+    }
+
+    public bool TryActivateClaim()
+    {
+        if (Health <= 0 || GetTree().Paused || GameplayInputBlocked || (IsPlayerControlled && _waitForEquipmentRelease)
+            || _claimCooldown > 0 || Energy < _claimEquipment.EnergyCost) return false;
+        CastClaimEquipment(); _claimCooldown = _claimEquipment.CooldownSeconds; return true;
+    }
     private enum TerrainEquipmentMode
     {
         Crater,
@@ -18,7 +75,6 @@ public partial class ShipFlightController : CharacterBody3D
     }
 
     [Export] public float MoveSpeed { get; set; } = 24.0f;
-    [Export] public float VerticalSpeed { get; set; } = 11.0f;
     [Export] public float Acceleration { get; set; } = 28.0f;
     [Export] public float Drag { get; set; } = 9.0f;
     [Export] public float BankDegrees { get; set; } = 24.0f;
@@ -26,8 +82,13 @@ public partial class ShipFlightController : CharacterBody3D
     [Export] public float BankSmoothing { get; set; } = 8.0f;
     [Export] public float MouseSensitivity { get; set; } = 0.0025f;
     [Export] public float MinimumAltitude { get; set; } = 2.0f;
-    [Export] public float GroundProbeHeight { get; set; } = 24.0f;
-    [Export] public float GroundProbeDepth { get; set; } = 96.0f;
+    [Export] public int JumpEnergyCost { get; set; } = 2;
+    [Export] public float JumpHeight { get; set; } = 4;
+    [Export] public float HoverGravity { get; set; } = 18;
+    [Export] public float MaximumHoverSlopeDegrees { get; set; } = 40;
+    private readonly ShipHoverMotion _hover = new();
+    private float _jumpBuffer;
+    public bool IsHoverSupported => _hover.Supported;
     [Export] public float FireCooldownSeconds { get; set; } = 0.25f;
     [Export] public float TerrainEquipmentCooldownSeconds { get; set; } = 0.75f;
     [Export] public float TerrainEquipmentRange { get; set; } = 90.0f;
@@ -35,7 +96,6 @@ public partial class ShipFlightController : CharacterBody3D
     [Export] public float TerrainEquipmentDepth { get; set; } = 5.0f;
     [Export] public float TerrainEquipmentHeight { get; set; } = 4.0f;
     [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
-    [Export] public float TerrainFollowStrength { get; set; } = 4.5f;
     [Export] public float TerrainFollowMaxLiftSpeed { get; set; } = 10.0f;
     [Export] public int InitialEnergy { get; set; } = 40;
     [Export] public float EnergyRegenFractionPerSecond { get; set; } = 0.04f;
@@ -130,7 +190,7 @@ public partial class ShipFlightController : CharacterBody3D
     public bool GameplayInputBlocked
     {
         get => _gameplayInputBlocked;
-        set { _gameplayInputBlocked = value; if (value) { _waitForEquipmentRelease = true; _boosterTimer = 0; } }
+        set { _gameplayInputBlocked = value; if (value) { _waitForEquipmentRelease = true; _boosterTimer = 0; _jumpBuffer = 0; } }
     }
     public float EnergyRechargePerSecond => EnergyCapacity * EnergyRegenFractionPerSecond
         * (IsInstanceValid(_homeBase) ? _homeBase!.EnergyRechargeMultiplier : 1) * Boons.Multiplier("recharge");
@@ -158,7 +218,7 @@ public string SummonEquipmentName => _summonEquipment?.RankedName ?? "Guardian D
         ? "Equipment: loading"
         : $"LMB: {PrimaryEquipmentName} · 1–4 select slot · Tab cycles installed\n"
             + string.Join(" · ", _equipmentSlots.Select((id, i) => $"{i + 1}: {(id == null ? "Empty" : FindEquipment(id)!.RankedName)}"))
-            + "\nRMB Claim · Shift boost · B research/install at home";
+            + "\nRMB Claim · Shift boost · Space jump · B research/install at home";
     public string StatusMessage { get; private set; } = "Claim antimatter and matter for your collector drone and defend your base.";
     public string ActiveFeedbackMessage => _feedbackTimer > 0.0f ? StatusMessage : string.Empty;
     public string DiscoveryFeedbackMessage => _discoveryFeedbackTimer > 0 ? _discoveryFeedback : string.Empty;
@@ -244,8 +304,9 @@ private EquipmentDefinition _summonEquipment = null!;
 
     public override void _Ready()
     {
-        AddToGroup("player");
-        Input.MouseMode = Input.MouseModeEnum.Captured;
+        AddToGroup("pilots");
+        AddToGroup(IsPlayerControlled ? "player" : "rival_ship");
+        if (IsPlayerControlled) Input.MouseMode = Input.MouseModeEnum.Captured;
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         _arena?.Orient(this);
         _antimatterSource = GetTree().GetFirstNodeInGroup("antimatter_source") as AntimatterSource;
@@ -258,31 +319,53 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
         _terrainEquipment = new EquipmentDefinition("terrain-shape", "Terrain Shape", EquipmentKind.Terrain, TerrainEquipmentEnergyCost, TerrainEquipmentCooldownSeconds, "Shape terrain using the selected terrain mode.");
         _claimEquipment = new EquipmentDefinition("claim", "Claim", EquipmentKind.Economy, ClaimEquipmentEnergyCost, ClaimEquipmentCooldownSeconds, "Fire a terrain-following bolt to claim neutral or rival antimatter/material crates.");
 
-        _cameraPivot = new Node3D { Name = "CameraPivot" };
-        AddChild(_cameraPivot);
-        _cameraPivot.Position = new Vector3(0.0f, 1.2f, 0.0f);
-
-        _camera = new Camera3D
+        if (IsPlayerControlled)
         {
-            Name = "Camera3D",
-            Current = true,
-            Position = new Vector3(0.0f, 2.0f, 8.0f),
-            Fov = 75.0f,
-            Far = 8000
-        };
-        _cameraPivot.AddChild(_camera);
-        _camera.LookAt(_cameraPivot.GlobalPosition, LocalUp);
+            _cameraPivot = new Node3D { Name = "CameraPivot" };
+            AddChild(_cameraPivot);
+            _cameraPivot.Position = new Vector3(0.0f, 1.2f, 0.0f);
+
+            _camera = new Camera3D
+            {
+                Name = "Camera3D",
+                Current = true,
+                Position = new Vector3(0.0f, 2.0f, 8.0f),
+                Fov = 75.0f,
+                Far = 8000
+            };
+            _cameraPivot.AddChild(_camera);
+            _camera.LookAt(_cameraPivot.GlobalPosition, LocalUp);
+        }
 
         AddShipVisual();
         _aliveCollisionLayer = CollisionLayer;
         _aliveCollisionMask = CollisionMask;
         _arena?.ClampFlightBody(this, MinimumAltitude);
+        ConfigureHover();
+        _hover.Reset(_arena, GlobalPosition);
+        if (!IsPlayerControlled)
+        {
+            _pilotLabel = new Label3D { Name = "PilotLabel", Text = "RIVAL PILOT", Position = Vector3.Up * 2,
+                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, FontSize = 32, PixelSize = 0.012f,
+                Modulate = new Color(1, 0.35f, 0.6f), VisibilityRangeEnd = 160 };
+            AddChild(_pilotLabel);
+        }
         UpdateCamera(1.0f);
     }
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (GameplayInputBlocked) return;
+        if (!IsPlayerControlled || GameplayInputBlocked) return;
+        if (@event.IsActionPressed("jump") && !@event.IsEcho())
+        {
+            if (Health > 0 && !GetTree().Paused)
+            {
+                _jumpBuffer = 0.12f;
+                if (TryActivateJump()) _jumpBuffer = 0;
+            }
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (@event.IsActionPressed("activate_booster") && !@event.IsEcho())
         {
             TryActivateBooster();
@@ -330,7 +413,7 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
 
     public override void _PhysicsProcess(double delta)
     {
-        if (Health <= 0) return;
+        if (Health <= 0 || GetTree().Paused) return;
         float deltaF = (float)delta;
         _discoveryFeedbackTimer = Mathf.Max(0, _discoveryFeedbackTimer - deltaF);
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
@@ -347,23 +430,32 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         _damageInvulnerabilityTimer = Mathf.Max(0.0f, _damageInvulnerabilityTimer - deltaF);
         RegenerateEnergy(deltaF);
         if (GameplayInputBlocked) _waitForEquipmentRelease = true;
-        else if (_waitForEquipmentRelease && !Input.IsActionPressed("activate_primary") && !Input.IsActionPressed("activate_claim")) _waitForEquipmentRelease = false;
+        else if (IsPlayerControlled && _waitForEquipmentRelease && !Input.IsActionPressed("activate_primary") && !Input.IsActionPressed("activate_claim")) _waitForEquipmentRelease = false;
 
-        if (_arena?.IsSpherical == true)
+        if (!IsPlayerControlled)
+        {
+            Vector3 forward = (_arena?.Tangent(_autonomousAim, GlobalPosition) ?? new Vector3(_autonomousAim.X, 0, _autonomousAim.Z)).Normalized();
+            if (_arena?.IsSpherical == true) _arena.Orient(this, forward);
+            else if (forward.LengthSquared() > 0.0001f) Rotation = new Vector3(0, Mathf.Atan2(-forward.X, -forward.Z), 0);
+        }
+        else if (_arena?.IsSpherical == true)
         {
             _arena.Orient(this, (-GlobalBasis.Z).Rotated(LocalUp, _yaw - _appliedYaw));
             _appliedYaw = _yaw;
         }
         else Rotation = new Vector3(0.0f, _yaw, 0.0f);
-        _cameraPivot.Rotation = new Vector3(_pitch, 0.0f, 0.0f);
+        if (IsPlayerControlled) _cameraPivot.Rotation = new Vector3(_pitch, 0.0f, 0.0f);
         UpdateCamera(deltaF);
 
         Vector3 localInput = Vector3.Zero;
         if (!GameplayInputBlocked)
         {
-            localInput.X = Input.GetActionStrength("move_right") - Input.GetActionStrength("move_left");
-            localInput.Z = Input.GetActionStrength("move_back") - Input.GetActionStrength("move_forward");
-            localInput.Y = Input.GetActionStrength("ascend") - Input.GetActionStrength("descend");
+            if (!IsPlayerControlled) localInput = GlobalBasis.Inverse() * _autonomousMovement;
+            else
+            {
+                localInput.X = Input.GetActionStrength("move_right") - Input.GetActionStrength("move_left");
+                localInput.Z = Input.GetActionStrength("move_back") - Input.GetActionStrength("move_forward");
+            }
         }
 
         Vector3 horizontalInput = new(localInput.X, 0.0f, localInput.Z);
@@ -377,39 +469,51 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         {
             // Forward surface-relative thrust; no camera-pitch lift or diagonal speed stacking.
             horizontal = -GlobalBasis.Z * EffectiveBoosterSpeed;
-            Vector3 up = LocalUp;
-            Velocity = horizontal + up * Velocity.Dot(up);
         }
-        Vector3 desiredVelocity = horizontal + LocalUp * localInput.Y * VerticalSpeed;
-        ApplyTerrainFollow(ref desiredVelocity);
-        bool isAccelerating = horizontalInput.LengthSquared() > 0.001f || Mathf.Abs(localInput.Y) > 0.001f;
-        Velocity = Velocity.MoveToward(desiredVelocity, (isAccelerating ? Acceleration : Drag) * deltaF);
-        GameAudio.Instance?.SetFlightIntensity(Mathf.Clamp(Velocity.Length() / MoveSpeed, 0.0f, 1.0f));
+        ConfigureHover();
+        if (_arena != null)
+            Velocity = _hover.Step(_arena, GlobalPosition, Velocity, horizontal, Acceleration, Drag,
+                IsBoosting && !GameplayInputBlocked, deltaF);
+        else Velocity = Velocity.MoveToward(horizontal, Acceleration * deltaF);
+        if (_jumpBuffer > 0)
+        {
+            if (TryActivateJump()) _jumpBuffer = 0;
+            else _jumpBuffer = Mathf.Max(0, _jumpBuffer - deltaF);
+        }
+        if (IsPlayerControlled) GameAudio.Instance?.SetFlightIntensity(Mathf.Clamp(Velocity.Length() / MoveSpeed, 0.0f, 1.0f));
         UpdateShipBank(deltaF);
         if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
 
-        ClampAboveGround();
-        if (_arena?.IsSpherical == true)
+        // The ocean has no solid collider. Treat its plane as a landing surface,
+        // without teleporting onto terrain or imposing a ceiling above a drop.
+        if (_arena != null && _arena.HeightAt(GlobalPosition) <= _arena.WaterHeight
+            && _arena.Clearance(GlobalPosition) < 0.3f)
+        {
+            GlobalPosition = _arena.OnSurface(GlobalPosition, 0.3f);
+            Vector3 up = LocalUp;
+            Velocity -= up * Mathf.Min(0, Velocity.Dot(up));
+        }
+
+        if (IsPlayerControlled && _arena?.IsSpherical == true)
         {
             Vector3 safeCamera = _arena.OnSurface(_camera.GlobalPosition, 0.5f);
             if (_arena.Clearance(_camera.GlobalPosition) < 0.5f) _camera.GlobalPosition = safeCamera;
         }
-        if (GameplayInputBlocked || _waitForEquipmentRelease) return;
+        if (!IsPlayerControlled || GameplayInputBlocked || _waitForEquipmentRelease) return;
         if (Input.IsActionPressed("activate_primary"))
         {
-            CastSelectedQuickEquipment();
+            TryActivateEquipmentSlot(_selectedEquipmentSlot);
         }
 
         if (Input.IsActionPressed("activate_claim") && _claimCooldown <= 0.0f)
         {
-            _claimCooldown = _claimEquipment.CooldownSeconds;
-            CastClaimEquipment();
+            TryActivateClaim();
         }
     }
 
     public void RefreshBaseEnergyLimit()
     {
-        var home = GetTree().GetFirstNodeInGroup("player_base") as FactionBase;
+        var home = GetTree().GetFirstNodeInGroup(IsPlayerControlled ? "player_base" : "enemy_base") as FactionBase;
         _homeBase = home;
         int previous = EnergyCapacity;
         EnergyCapacity = home != null && !home.IsDestroyed && !home.IsQueuedForDeletion() ? home.StoredAntimatter : 0;
@@ -426,7 +530,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
                 ? $"Energy limit +{EnergyCapacity - previous}"
                 : $"Energy limit lost: {previous - EnergyCapacity}";
             _feedbackTimer = 1.5f;
-            if (EnergyCapacity > previous) GameAudio.Instance?.PlayPickup();
+            if (IsPlayerControlled && EnergyCapacity > previous) GameAudio.Instance?.PlayPickup();
         }
     }
 
@@ -461,7 +565,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         Energy = Mathf.Min(EnergyCapacity, Energy + regenerated);
     }
 
-    public void ApplyDamage(int amount)
+    public void ApplyDamage(int amount, Node3D? attacker = null)
     {
         if (amount <= 0 || IsInvulnerable || Health == 0)
         {
@@ -470,6 +574,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
 
         int finalAmount = IsShielded ? Mathf.Max(1, Mathf.RoundToInt(amount * (1.0f - ShieldDamageReduction))) : amount;
         Health = Mathf.Max(0, Health - finalAmount);
+        LastAttacker = IsInstanceValid(attacker) ? attacker : null;
         StatusMessage = IsShielded ? $"Shield absorbed {amount - finalAmount}" : $"Hit for {finalAmount}";
         _feedbackTimer = 0.35f;
         _damageInvulnerabilityTimer = DamageInvulnerabilitySeconds;
@@ -481,9 +586,12 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
             Velocity = Vector3.Zero;
             _shieldTimer = 0;
             _boosterTimer = 0;
+            _jumpBuffer = 0;
             CollisionLayer = 0;
             CollisionMask = 0;
             _shipVisual.Visible = false;
+            if (_pilotLabel != null) _pilotLabel.Visible = false;
+            Defeated?.Invoke();
         }
     }
 
@@ -494,6 +602,8 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         RefreshBaseEnergyLimit();
         Energy = EnergyCapacity;
         Velocity = Vector3.Zero;
+        _autonomousMovement = Vector3.Zero;
+        LastAttacker = null;
         _shieldTimer = 0;
         _boosterTimer = _boosterCooldown = 0;
         _energyRegenAccumulator = 0;
@@ -502,7 +612,11 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         CollisionLayer = _aliveCollisionLayer;
         CollisionMask = _aliveCollisionMask;
         _shipVisual.Visible = true;
+        if (_pilotLabel != null) _pilotLabel.Visible = true;
         _arena?.ClampFlightBody(this, MinimumAltitude);
+        _jumpBuffer = 0;
+        ConfigureHover();
+        _hover.Reset(_arena, GlobalPosition);
         StatusMessage = "Respawned at your base";
         _feedbackTimer = 2.0f;
     }
@@ -591,13 +705,13 @@ private void CycleQuickEquipment()
         SpendEnergy(_primaryEquipment.EnergyCost);
         StatusMessage = _primaryEquipment.DisplayName;
         _feedbackTimer = 0.35f;
-        GameAudio.Instance?.PlayEquipmentCast();
+        PlayEquipmentSound();
 
         var projectile = new WeaponProjectile { Damage = PlasmaBoltDamage, Speed = EffectiveProjectileSpeed };
-        GetTree().CurrentScene.AddChild(projectile);
+        GetParent().AddChild(projectile);
 
-        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
-        projectile.GlobalPosition = _camera.GlobalPosition + direction * 1.5f;
+        Vector3 direction = AimDirection;
+        projectile.GlobalPosition = AimOrigin + direction * 1.5f;
         projectile.Launch(direction, this);
     }
 
@@ -611,8 +725,8 @@ private void CycleQuickEquipment()
             return;
         }
 
-        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
-        Vector3 origin = _camera.GlobalPosition;
+        Vector3 direction = AimDirection;
+        Vector3 origin = AimOrigin;
         Vector3 target = origin + direction * AreaEquipmentRange;
         if (!TryFindTerrainHit(origin, target, out Vector3 hitPosition))
         {
@@ -624,7 +738,7 @@ private void CycleQuickEquipment()
         SpawnAreaEquipmentBurst(hitPosition);
         StatusMessage = $"{_areaEquipment.DisplayName}: {hits} hit";
         _feedbackTimer = 0.7f;
-        GameAudio.Instance?.PlayEquipmentCast();
+        PlayEquipmentSound();
     }
 
     private void CastShieldEquipment()
@@ -643,7 +757,7 @@ private void CycleQuickEquipment()
         _feedbackTimer = 0.9f;
         _shipMaterial.AlbedoColor = new Color(0.2f, 0.85f, 1.0f);
         SpawnShieldBurst();
-        GameAudio.Instance?.PlayEquipmentCast();
+        PlayEquipmentSound();
     }
 
     public bool TryActivateBooster()
@@ -660,7 +774,28 @@ private void CycleQuickEquipment()
         _boosterCooldown = BoosterCooldownSeconds;
         StatusMessage = "Booster active";
         _feedbackTimer = BoosterDurationSeconds;
-        GameAudio.Instance?.PlayEquipmentCast();
+        PlayEquipmentSound();
+        return true;
+    }
+
+    private void ConfigureHover()
+    {
+        _hover.HoverHeight = MinimumAltitude;
+        _hover.Gravity = Mathf.Max(1, HoverGravity);
+        _hover.JumpHeight = Mathf.Max(0.1f, JumpHeight);
+        _hover.MaximumSlopeDegrees = Mathf.Clamp(MaximumHoverSlopeDegrees, 1, 80);
+        _hover.MaximumClimbSpeed = Mathf.Max(1, TerrainFollowMaxLiftSpeed);
+    }
+
+    public bool TryActivateJump()
+    {
+        if (Health <= 0 || GameplayInputBlocked || GetTree().Paused || !_hover.CanJump
+            || Energy < Mathf.Max(1, JumpEnergyCost)) return false;
+        ConfigureHover();
+        SpendEnergy(Mathf.Max(1, JumpEnergyCost));
+        Velocity = _hover.Launch(Velocity, LocalUp);
+        StatusMessage = "Jump";
+        _feedbackTimer = 0.5f;
         return true;
     }
 
@@ -676,14 +811,17 @@ private void CycleQuickEquipment()
 
         SpendEnergy(_mobilityEquipment.EnergyCost);
         _boosterTimer = 0; // Dash supersedes thrust instead of stacking speeds or being pulled back to boost speed.
-        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
+        _jumpBuffer = 0;
+        _hover.LeaveSupport();
+        Vector3 direction = AimDirection;
         Vector3 up = LocalUp;
         Velocity = (direction - up * direction.Dot(up)) * EffectiveDashSpeed
-            + up * Mathf.Max(Velocity.Dot(up), direction.Dot(up) * EffectiveDashSpeed + MobilityDashLift);
+            + up * Mathf.Max(Velocity.Dot(up), Mathf.Clamp(direction.Dot(up) * EffectiveDashSpeed + MobilityDashLift,
+                MobilityDashLift, Mathf.Max(MobilityDashLift, Mathf.Sqrt(2 * Mathf.Max(1, HoverGravity) * Mathf.Max(0.1f, JumpHeight)))));
         StatusMessage = _mobilityEquipment.DisplayName;
         _feedbackTimer = 0.6f;
         SpawnMobilityBurst();
-        GameAudio.Instance?.PlayEquipmentCast();
+        PlayEquipmentSound();
     }
 
     private void CastSummonEquipment()
@@ -697,27 +835,38 @@ private void CycleQuickEquipment()
         }
 
         SpendEnergy(_summonEquipment.EnergyCost);
-        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
+        Vector3 direction = AimDirection;
         var guardian = new GuardianDrone
         {
+            OwnerPilot = this,
             Name = "GuardianDrone",
             Damage = EffectiveGuardianDamage,
             LifetimeSeconds = 12 + 6 * Mathf.Max(0, GetEquipmentRank("guardian-drone") - 1)
         };
-        GetTree().CurrentScene.AddChild(guardian);
+        GetParent().AddChild(guardian);
         guardian.GlobalPosition = GlobalPosition + direction * SummonDistance + LocalUp;
         _arena?.ClampFlightBody(guardian);
         SpawnSummonBurst(guardian.GlobalPosition);
         StatusMessage = $"Summoned {_summonEquipment.DisplayName}";
         _feedbackTimer = 0.8f;
-GameAudio.Instance?.PlayEquipmentCast();
+        PlayEquipmentSound();
     }
 
     private bool CanActivateEquipment(EquipmentDefinition equipment) => Health > 0 && !GameplayInputBlocked
         && !GetTree().Paused && IsEquipmentInstalled(equipment.Id) && EnergyCapacity >= equipment.EnergyCost;
 
+    private void PlayEquipmentSound()
+    {
+        // The placeholder mixer is non-spatial. Remote AI casts must not sound
+        // like the human's own actions from the opposite side of the planet.
+        if (IsPlayerControlled || (GetTree().GetFirstNodeInGroup("player") is Node3D listener
+            && (_arena?.SurfaceDistance(GlobalPosition, listener.GlobalPosition) ?? GlobalPosition.DistanceTo(listener.GlobalPosition)) < 120))
+            GameAudio.Instance?.PlayEquipmentCast();
+    }
+
     private void CastClaimEquipment()
     {
+        if (Health <= 0 || GetTree().Paused || GameplayInputBlocked) return;
         if (Energy < _claimEquipment.EnergyCost)
         {
             StatusMessage = $"Not enough energy for {_claimEquipment.DisplayName.ToLowerInvariant()}.";
@@ -726,8 +875,8 @@ GameAudio.Instance?.PlayEquipmentCast();
         }
 
         SpendEnergy(_claimEquipment.EnergyCost);
-        Vector3 direction = -_camera.GlobalBasis.Z.Normalized();
-        var projectile = new ClaimProjectile { Name = "ClaimProjectile", MaxRange = EffectiveClaimRange };
+        Vector3 direction = AimDirection;
+        var projectile = new ClaimProjectile { Name = "ClaimProjectile", MaxRange = EffectiveClaimRange, Ownership = Ownership };
         projectile.AntimatterClaimed += OnAntimatterClaimed;
         projectile.MatterClaimed += amount =>
         {
@@ -735,12 +884,12 @@ GameAudio.Instance?.PlayEquipmentCast();
             StatusMessage = $"Claimed {amount} matter";
             _feedbackTimer = 0.8f;
         };
-        GetTree().CurrentScene.AddChild(projectile);
-        projectile.GlobalPosition = _camera.GlobalPosition + direction * 1.5f;
+        GetParent().AddChild(projectile);
+        projectile.GlobalPosition = AimOrigin + direction * 1.5f;
         projectile.Launch(direction);
         StatusMessage = "Claim";
         _feedbackTimer = 0.6f;
-        GameAudio.Instance?.PlayEquipmentCast();
+        PlayEquipmentSound();
     }
 
     private void OnAntimatterClaimed(int amount)
@@ -945,7 +1094,7 @@ GameAudio.Instance?.PlayEquipmentCast();
             { wreck.ApplyDamage(damage); hits++; }
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
         {
-            if (node is not EnemyEcosystemEnemy enemy || enemy.Health <= 0)
+            if (node is not EnemyEcosystemEnemy enemy || !FactionCombat.CanDamage(enemy, Ownership))
             {
                 continue;
             }
@@ -955,7 +1104,7 @@ GameAudio.Instance?.PlayEquipmentCast();
                 continue;
             }
 
-            enemy.ApplyDamage(damage);
+            enemy.ApplyDamage(damage, this);
             hits++;
         }
 
@@ -972,7 +1121,7 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
 
         foreach (Node node in GetTree().GetNodesInGroup("drone"))
         {
-            if (node is not CollectorDrone drone || drone.UsePlayerAntimatter || drone.GlobalPosition.DistanceTo(center) > radius)
+            if (node is not CollectorDrone drone || !FactionCombat.CanDamage(drone, Ownership) || drone.GlobalPosition.DistanceTo(center) > radius)
             {
                 continue;
             }
@@ -981,65 +1130,11 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
             hits++;
         }
 
+        foreach (Node node in GetTree().GetNodesInGroup("pilots"))
+            if (node is ShipFlightController ship && FactionCombat.CanDamage(ship, Ownership) && ship.GlobalPosition.DistanceTo(center) <= radius)
+            { ship.ApplyDamage(damage, this); hits++; }
+
         return hits;
-    }
-
-    private void ClampAboveGround()
-    {
-        _arena ??= GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
-
-        if (_arena != null)
-        {
-            _arena.ClampFlightBody(this, MinimumAltitude);
-            return;
-        }
-
-        Vector3 origin = GlobalPosition + Vector3.Up * GroundProbeHeight;
-        Vector3 target = GlobalPosition + Vector3.Down * GroundProbeDepth;
-        var query = PhysicsRayQueryParameters3D.Create(origin, target);
-        query.Exclude = new Godot.Collections.Array<Rid> { GetRid() };
-
-        var result = GetWorld3D().DirectSpaceState.IntersectRay(query);
-        if (result.Count == 0 || !result.ContainsKey("position"))
-        {
-            return;
-        }
-
-        float minimumY = ((Vector3)result["position"]).Y + MinimumAltitude;
-        if (GlobalPosition.Y >= minimumY)
-        {
-            return;
-        }
-
-        GlobalPosition = new Vector3(GlobalPosition.X, minimumY, GlobalPosition.Z);
-        Velocity = new Vector3(Velocity.X, Mathf.Max(0.0f, Velocity.Y), Velocity.Z);
-    }
-
-    private void ApplyTerrainFollow(ref Vector3 desiredVelocity)
-    {
-        _arena ??= GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
-        if (_arena == null)
-        {
-            return;
-        }
-
-        float surface = _arena.SurfaceHeight(GlobalPosition);
-        Vector3 up = LocalUp;
-        float vertical = desiredVelocity.Dot(up);
-        if (_arena.Elevation(GlobalPosition) >= surface + _arena.MaxFlightClearance)
-        {
-            desiredVelocity += up * (Mathf.Min(0, vertical) - vertical);
-            vertical = desiredVelocity.Dot(up);
-        }
-        float targetAltitude = surface + MinimumAltitude;
-        float altitudeError = targetAltitude - _arena.Elevation(GlobalPosition);
-        if (altitudeError <= 0.0f)
-        {
-            return;
-        }
-
-        float terrainLift = Mathf.Min(altitudeError * TerrainFollowStrength, TerrainFollowMaxLiftSpeed);
-        desiredVelocity += up * (Mathf.Max(vertical, terrainLift) - vertical);
     }
 
     private void RouteAntimatterToWell()
@@ -1069,6 +1164,12 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
 
     private void UpdateCamera(float delta)
     {
+        if (!IsPlayerControlled)
+        {
+            _shipVisual.Visible = Health > 0;
+            _shipMaterial.AlbedoColor = IsShielded ? new Color(0.2f, 0.85f, 1) : new Color(0.9f, 0.15f, 0.4f);
+            return;
+        }
         _shipVisual.Visible = !_firstPersonCamera;
         Vector3 targetPosition = _firstPersonCamera
             ? new Vector3(0.0f, 0.25f, -0.45f)

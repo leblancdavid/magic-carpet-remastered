@@ -83,6 +83,11 @@ public partial class HeightmapArena : Node3D
         else Orient(body);
     }
     public void RefreshPlanetDetail() => _planet?.RefreshDetail();
+    public void PreparePlanetLayout(PlanetLayout layout)
+    {
+        _planet?.PrepareLayout(layout);
+        SurfaceRevision++;
+    }
     public bool TrySurfaceHit(Vector3 from, Vector3 to, out Vector3 hit)
     {
         int steps = Mathf.Max(1, Mathf.CeilToInt(from.DistanceTo(to) / 0.5f));

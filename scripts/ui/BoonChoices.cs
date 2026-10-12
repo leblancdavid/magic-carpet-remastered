@@ -10,7 +10,6 @@ public partial class BoonChoices : CanvasLayer
     private ShipFlightController _player = null!;
     private FactionBase _home = null!;
     private Control _overlay = null!;
-    private Button _hint = null!;
     private Label _title = null!;
     private Label _summary = null!;
     private readonly Button[] _choices = new Button[3];
@@ -29,10 +28,6 @@ public partial class BoonChoices : CanvasLayer
         _home = (FactionBase)GetTree().GetFirstNodeInGroup("player_base");
         var root = new Control { MouseFilter = Control.MouseFilterEnum.Ignore }; AddChild(root);
         root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _hint = new Button { Text = "H  Boons", FocusMode = Control.FocusModeEnum.None }; root.AddChild(_hint);
-        _hint.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterBottom);
-        _hint.Position += new Vector2(-125, -86); _hint.CustomMinimumSize = new Vector2(250, 32);
-        _hint.Pressed += () => SetOpen(true);
         _overlay = new Control { Name = "BoonOverlay", Visible = false, MouseFilter = Control.MouseFilterEnum.Stop };
         root.AddChild(_overlay); _overlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         var shade = new ColorRect { Color = new Color(0.015f, 0.025f, 0.05f, 0.85f), MouseFilter = Control.MouseFilterEnum.Ignore };
@@ -114,7 +109,6 @@ public partial class BoonChoices : CanvasLayer
             + $"\n\nEffective: speed {_player.EffectiveMoveSpeed:0.#} · boost {_player.EffectiveBoosterSpeed:0.#} · Dash {_player.EffectiveDashSpeed:0.#}"
             + $"\nRecharge {_player.EnergyRechargePerSecond:0.##}/s · Plasma {_player.PlasmaBoltDamage} damage / {_player.EffectiveFireCooldown:0.###}s"
             + $"\nShip HP {_player.Health}/{_player.MaximumHealth}. Hull acquisition does not heal; respawn refills maximum HP.";
-        _hint.Text = count > 0 ? $"H  Secured boons · {count} pending" : "H  Match boons";
     }
     public override void _Process(double delta)
     {
@@ -124,7 +118,6 @@ public partial class BoonChoices : CanvasLayer
             || (GetTree().GetFirstNodeInGroup("tactical_map_ui") as TacticalMap)?.IsExpanded == true;
         if (count > _seenCount && !otherUi) SetOpen(true);
         _seenCount = count;
-        _hint.Visible = !IsOpen && !otherUi && !GetTree().Paused && !_home.IsDestroyed;
         _refreshTimer -= (float)delta;
         if (_refreshTimer <= 0) { _refreshTimer = 0.1f; Refresh(); }
     }

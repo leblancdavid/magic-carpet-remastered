@@ -19,6 +19,7 @@ public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Col
         if (Actor is AntimatterPickup orb && !orb.IsAvailable) return false;
         if (Actor is MatterPickup material && !material.IsAvailable) return false;
         if (Actor is EnemyEcosystemEnemy enemy && enemy.Health <= 0) return false;
+        if (Actor is ShipFlightController { IsPlayerControlled: false, Health: <= 0 }) return false;
         if (Actor is CollectorDrone drone && drone.Health <= 0) return false;
         if (Actor is EquipmentDiscovery discovery && discovery.IsCollected) return false;
         if (Actor is ExplorationWreck wreck && wreck.IsCollected) return false;
@@ -156,7 +157,10 @@ public partial class WorldNavigation : Node
         }
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
             if (node is EnemyEcosystemEnemy enemy && !enemy.IsQueuedForDeletion() && enemy.Health > 0 && Nearby(enemy))
-                Add(enemy, enemy.RoleText, MapMarkerKind.Enemy, new Color(1, 0.5f, 0.25f));
+                Add(enemy, enemy.RoleText, MapMarkerKind.Enemy, enemy.IsRaider ? Colors.OrangeRed : new Color(1, 0.5f, 0.25f), enemy.BehaviorText);
+        foreach (Node node in GetTree().GetNodesInGroup("rival_ship"))
+            if (node is ShipFlightController { Health: > 0 } ship && !ship.IsQueuedForDeletion() && Nearby(ship))
+                Add(ship, "Rival pilot", MapMarkerKind.Enemy, new Color(1, 0.25f, 0.5f));
     }
 
     private bool Nearby(Node3D actor) => Arena.SurfaceDistance(Player.GlobalPosition, actor.GlobalPosition) <= LocalRevealRange;

@@ -12,6 +12,7 @@ public partial class ClaimProjectile : Node3D
     [Export] public float MaxRange { get; set; } = 120.0f;
     [Export] public float SurfaceClearance { get; set; } = 0.9f;
     [Export] public float HitRadius { get; set; } = 1.3f;
+    public AntimatterOwnership Ownership { get; set; } = AntimatterOwnership.Player;
 
     public bool IsFollowingTerrain { get; private set; }
     public event Action<int>? AntimatterClaimed;
@@ -34,9 +35,9 @@ public partial class ClaimProjectile : Node3D
             Scale = new Vector3(1, 1, 3.5f),
             MaterialOverride = new StandardMaterial3D
             {
-                AlbedoColor = new Color(0.2f, 0.95f, 1),
+                AlbedoColor = Ownership == AntimatterOwnership.Enemy ? new Color(1, 0.25f, 0.35f) : new Color(0.2f, 0.95f, 1),
                 EmissionEnabled = true,
-                Emission = new Color(0.05f, 0.8f, 1),
+                Emission = Ownership == AntimatterOwnership.Enemy ? new Color(1, 0.08f, 0.2f) : new Color(0.05f, 0.8f, 1),
                 EmissionEnergyMultiplier = 3.0f
             }
         });
@@ -94,8 +95,8 @@ public partial class ClaimProjectile : Node3D
             if (hit != null)
             {
                 int amount = hit is AntimatterPickup orb ? orb.AntimatterAmount : ((MatterPickup)hit).MatterAmount;
-                if (hit is AntimatterPickup energy) energy.ReassignOwnership(AntimatterOwnership.Player);
-                else ((MatterPickup)hit).ReassignOwnership(AntimatterOwnership.Player);
+                if (hit is AntimatterPickup energy) energy.ReassignOwnership(Ownership);
+                else ((MatterPickup)hit).ReassignOwnership(Ownership);
                 EquipmentImpactPool.Prepare(GetTree().CurrentScene).Emit(hit.GlobalPosition,
                     new Color(0.2f, 0.9f, 1, 0.85f), new Color(0.05f, 0.7f, 1), 0.28f, 0.4f, 2.2f);
                 QueueFree();
@@ -129,7 +130,7 @@ public partial class ClaimProjectile : Node3D
         AntimatterNeighborhood.Query(GetTree(), (from + to) * 0.5f, HitRadius + segment.Length() * 0.5f, _candidates);
         foreach (AntimatterPickup pickup in _candidates)
         {
-            if (!pickup.IsAvailable || pickup.Ownership == AntimatterOwnership.Player)
+            if (!pickup.IsAvailable || pickup.Ownership == Ownership)
             {
                 continue;
             }
@@ -165,7 +166,7 @@ public partial class ClaimProjectile : Node3D
         }
         foreach (Node node in GetTree().GetNodesInGroup("matter_pickup"))
         {
-            if (node is not MatterPickup matter || !matter.IsAvailable || matter.Ownership == AntimatterOwnership.Player) continue;
+            if (node is not MatterPickup matter || !matter.IsAvailable || matter.Ownership == Ownership) continue;
             Vector3 offset = from - matter.GlobalPosition;
             float radius = HitRadius + 0.6f;
             float c = offset.LengthSquared() - radius * radius;

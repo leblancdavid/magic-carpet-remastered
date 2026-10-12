@@ -37,6 +37,9 @@ public partial class PlanetTerrain : Node3D
     private readonly Dictionary<CollisionShape3D, (int Ticks, bool FreeBody, bool FreeShape)> _retiringCollisions = new();
     private readonly List<CollisionShape3D> _retirementBuffer = new();
     private readonly FastNoiseLite _noise = new() { Seed = 27031, Frequency = 0.004f, FractalOctaves = 3 };
+    private readonly FastNoiseLite _continents = new() { Seed = 27031, Frequency = 0.008f, FractalOctaves = 3 };
+    private sealed record LandingPad(Vector3 Up, float Inner, float Outer, float Height);
+    private readonly List<LandingPad> _landingPads = new();
     private readonly StandardMaterial3D _material = new() { AlbedoColor = new Color(0.65f, 0.65f, 0.65f), VertexColorUseAsAlbedo = true, Roughness = 1 };
     private float _refreshTimer;
     public int PendingPatchCount => _dirty.Count;
@@ -45,6 +48,13 @@ public partial class PlanetTerrain : Node3D
     public double FrameRebuildMilliseconds { get; private set; }
     public int FrameRebuiltPatchCount { get; private set; }
     public int FrameLargestTileResolution { get; private set; }
+
+    public override void _ExitTree()
+    {
+        _noise.Dispose();
+        _continents.Dispose();
+        _material.Dispose();
+    }
 
     // Read only by diagnostic tools, outside the terrain rebuild hot path.
     public (int FineParents, int BuiltTiles, int PublishedMeshes) GetDetailCounts()
@@ -92,11 +102,24 @@ public partial class PlanetTerrain : Node3D
     public float HeightAt(Vector3 up)
     {
         Vector3 point = up * Arena.PlanetRadius;
-        float height = 4 + _noise.GetNoise3Dv(point) * 18;
-        // Guarantee a broad playable landmass around the initial strategic loop.
-        float homeDistance = Arena.PlanetRadius * Mathf.Acos(Mathf.Clamp(up.Dot(Vector3.Up), -1, 1));
-        height = Mathf.Lerp(height, 7 + Mathf.Sin(point.X * 0.028f) * 2 + Mathf.Cos(point.Z * 0.022f) * 2,
-            Mathf.Clamp(1 - (homeDistance - 90) / 120, 0, 1));
+        float continent = _continents.GetNoise3Dv(up * 320);
+        float relief = Mathf.Clamp(Arena.PlanetRadius * 0.15f, 15, 48);
+        float height = 1 + continent * 26 * Mathf.Min(1, Arena.PlanetRadius / 200);
+        // Fine ripples stay small; connected narrow geological belts, not a
+        // larger smooth-noise amplitude, create the route-shaping relief.
+        height += _noise.GetNoise3Dv(point * 6) * 2;
+        float land = Ease(0, 4, height);
+        height += land * (MountainBelt(up, new Vector3(0.48f, 0.72f, 0.5f).Normalized(), 9, 0.3f) * relief
+            + MountainBelt(up, new Vector3(-0.7f, 0.2f, 0.68f).Normalized(), 6, 1.7f) * relief * 0.65f);
+        // Small offshore islands rise only in shallow basins; deep oceans stay open.
+        float islands = _noise.GetNoise3Dv(point * 12 + Vector3.One * 137);
+        height += (1 - land) * Ease(-6, -1, height) * Ease(0.15f, 0.45f, islands) * 7;
+        foreach (LandingPad pad in _landingPads)
+        {
+            float distance = up.DistanceTo(pad.Up) * Arena.PlanetRadius;
+            if (distance < pad.Outer)
+                height = Mathf.Lerp(pad.Height, height, Ease(pad.Inner, pad.Outer, distance));
+        }
         if (!_editCells.TryGetValue(EditCell(point), out var edits)) return height;
         foreach (Edit edit in edits)
         {
@@ -108,6 +131,51 @@ public partial class PlanetTerrain : Node3D
                 : Mathf.Max(Arena.WaterHeight - 2, height + edit.Amount * weight);
         }
         return height;
+    }
+
+    private static float Ease(float low, float high, float value)
+    {
+        float t = Mathf.Clamp((value - low) / (high - low), 0, 1);
+        return t * t * (3 - 2 * t);
+    }
+
+    private float MountainBelt(Vector3 up, Vector3 normal, float width, float phase)
+    {
+        float across = Mathf.Abs(up.Dot(normal)) * Arena.PlanetRadius;
+        float ridge = 1 - Ease(0, width, across);
+        Basis frame = PlanetGeometry.Frame(normal, Vector3.Forward);
+        float along = Mathf.Atan2(up.Dot(frame.X), up.Dot(frame.Z));
+        // Five broad low saddles cut the otherwise connected belt into ranges.
+        float passes = Ease(0.08f, 0.35f, 0.5f + 0.5f * Mathf.Sin(along * 5 + phase));
+        return ridge * passes;
+    }
+
+    public void PrepareLayout(PlanetLayout layout)
+    {
+        _landingPads.Clear();
+        void Pad(Vector3 up, float inner, float outer, bool dry)
+        {
+            float natural = HeightAt(up);
+            // Floating destinations flatten the seabed below the water mesh;
+            // a terrain pad exactly at sea level produces coplanar z-fighting.
+            float height = dry ? Mathf.Max(Arena.WaterHeight + 4, natural)
+                : natural > Arena.WaterHeight ? natural : Mathf.Min(natural, Arena.WaterHeight - 0.5f);
+            _landingPads.Add(new LandingPad(up, inner, outer, height));
+        }
+        foreach (Vector3 up in layout.Starts) Pad(up, 20, 38, true);
+        foreach (var site in layout.EconomicSites) Pad(site.Up, 8, 18, false);
+        foreach (Vector3 up in layout.AntimatterFields) Pad(up, 14, 23, false);
+        foreach (Vector3 up in layout.MatterFields) Pad(up, 10, 18, false);
+        foreach (var site in layout.Landmarks) Pad(site.Up, 6, 14, false);
+        // Startup only: invalidate both visible fine surfaces and dormant coarse
+        // caches so later LOD changes cannot resurrect the pre-pad landscape.
+        foreach (Patch patch in _patches)
+        {
+            patch.Vertices = System.Array.Empty<Vector3>();
+            if (patch.Tiles.Count == 0) _dirty.Add(patch);
+            foreach (Patch tile in patch.Tiles) { tile.Vertices = System.Array.Empty<Vector3>(); _dirty.Add(tile); }
+        }
+        while (_dirty.Count > 0) RebuildDirty();
     }
 
     public override void _PhysicsProcess(double delta)
@@ -154,7 +222,7 @@ public partial class PlanetTerrain : Node3D
     public void RefreshDetail()
     {
         List<Vector3> observers = new();
-        foreach (string group in new[] { "player", "loose_antimatter", "ecosystem_enemy", "simple_monster", "drone", "guardian-drone" })
+        foreach (string group in new[] { "player", "rival_ship", "loose_antimatter", "ecosystem_enemy", "simple_monster", "drone", "guardian-drone" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
                 if (node is Node3D actor && !actor.IsQueuedForDeletion() && node is not AntimatterPickup { IsAvailable: false })
                     observers.Add(Arena.UpAt(actor.GlobalPosition));

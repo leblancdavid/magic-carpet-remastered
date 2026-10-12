@@ -90,8 +90,8 @@ public partial class PlanetGameplayChecks : Node3D
     {
         try
         {
-            Check(PlanetSizes.Radii.Length == 4 && PlanetSizes.Radii[0] == 500 && PlanetSizes.Radii[1] == 800
-                && PlanetSizes.Radii[2] == 1000 && PlanetSizes.Radii[3] == 1200, "Approved size presets must match");
+            Check(PlanetSizes.Radii.Length == 4 && PlanetSizes.Radii[0] == 100 && PlanetSizes.Radii[1] == 200
+                && PlanetSizes.Radii[2] == 300 && PlanetSizes.Radii[3] == 400, "Approved compact size presets must match");
             foreach (int radius in PlanetSizes.Radii)
             {
                 _room = new Node3D(); AddChild(_room);
@@ -248,7 +248,7 @@ public partial class PlanetGameplayChecks : Node3D
                 && _player.Velocity.Dot(_arena.UpAt(_player.GlobalPosition)) > 0, "Dash uses tangent speed plus radial lift");
             _player.RespawnAt(_player.GlobalPosition);
             Cast(_player, "CastSummonEquipment");
-            GuardianDrone summoned = GetChildren().OfType<GuardianDrone>().Last();
+            GuardianDrone summoned = _room.GetChildren().OfType<GuardianDrone>().Last();
             summoned.SetPhysicsProcess(false);
             Check(_arena.Clearance(summoned.GlobalPosition) >= 1 && summoned.GlobalBasis.Y.Dot(_arena.UpAt(summoned.GlobalPosition)) > 0.999f, "Actual guardian spawn is upright and above radial surface");
             Vector3 guardianUp = _arena.UpAt(summoned.GlobalPosition);
@@ -275,7 +275,13 @@ public partial class PlanetGameplayChecks : Node3D
 
             foreach (Vector3 hemisphere in new[] { Vector3.Right, Vector3.Forward, Vector3.Down })
             {
-                _player.RespawnAt(_arena.OnSurface(_arena.PlanetCenter + hemisphere * 800, 6));
+                Vector3 flightUp = Offset(hemisphere, 35, 800,
+                    Mathf.Abs(hemisphere.Dot(Vector3.Right)) < 0.9f ? Vector3.Right : Vector3.Forward);
+                Vector3 flightStart = _arena.OnSurface(_arena.PlanetCenter + flightUp * 800);
+                // This fixture verifies radial movement, not arbitrary terrain
+                // climbability after earlier deformation probes.
+                _arena.FlattenTerrain(flightStart, 50, _arena.SurfaceHeight(flightStart));
+                _player.RespawnAt(_arena.OnSurface(flightStart, 2));
                 Vector3 departure = _player.GlobalPosition;
                 _arena.RefreshPlanetDetail();
                 _player.SetPhysicsProcess(true);
@@ -285,8 +291,8 @@ public partial class PlanetGameplayChecks : Node3D
                 _player.SetPhysicsProcess(false);
                 Check(_arena.SurfaceDistance(departure, _player.GlobalPosition) > 8, "Actual gameplay ship advances around each hemisphere");
                 Check(_player.GlobalBasis.Y.Dot(_arena.UpAt(_player.GlobalPosition)) > 0.9999f
-                    && _arena.Clearance(_player.GlobalPosition) >= 1.99f && _arena.Clearance(_player.GlobalPosition) <= 12.01f,
-                    "Real flight maintains upright frame and clearance across faces");
+                    && _arena.Clearance(_player.GlobalPosition) >= 1.7f && _arena.Clearance(_player.GlobalPosition) <= 3,
+                    $"Real flight maintains upright frame and clearance across faces ({hemisphere}, up {_player.GlobalBasis.Y.Dot(_arena.UpAt(_player.GlobalPosition))}, clearance {_arena.Clearance(_player.GlobalPosition)})");
                 Check(_arena.Clearance(camera.GlobalPosition) >= 0.49f, "Gameplay chase camera remains outside planet terrain");
             }
             _player.Velocity = Vector3.Zero;
@@ -358,17 +364,22 @@ public partial class PlanetGameplayChecks : Node3D
             AddChild(game);
             Check(game.UseSphericalWorld, "Default playable scene must enable spherical terrain");
             var arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
-            Check(arena != null && arena.IsSpherical && arena.PlanetRadius == 800, "Medium world is the default");
+            Check(arena != null && arena.IsSpherical && arena.PlanetRadius == 200, "Compact Medium world is the default");
             Check(GetTree().GetNodesInGroup("equipment_discovery").Count == 0
                 && GetTree().GetNodesInGroup("exploration_wreck").Count == 12, "Random wrecks replace legacy discovery beacons");
             Check(GetTree().GetNodesInGroup("drone").Count == 2, "Both hub drones present");
-            Check(GetTree().GetNodesInGroup("ecosystem_enemy").Count == 5, "Initial creatures and one designated rival present");
+            Check(GetTree().GetNodesInGroup("ecosystem_enemy").Count == 4 && GetTree().GetNodesInGroup("rival_ship").Count == 1,
+                "Four initial creatures and one shared-mechanics rival ship present");
             Check(GetTree().GetNodesInGroup("level_objective").Count == 1 && GetTree().GetNodesInGroup("world_antimatter_tracker").Count == 1, "Objective and accounting present");
             Check(LooseTotal() > 0, "Initial neutral world antimatter present");
             await Frames(60);
             foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
                 if (node is EnemyEcosystemEnemy enemy)
                     Check(arena!.Clearance(enemy.GlobalPosition) >= enemy.GroundClearance - 0.01f && arena.Clearance(enemy.GlobalPosition) <= 12.01f, "Ecosystem retains radial clearance bounds");
+            var liveRival = game.GetNode<ShipFlightController>("RivalPilot");
+            Check(arena!.Clearance(liveRival.GlobalPosition) >= 0.25f && liveRival.GlobalPosition.IsFinite()
+                && liveRival.GlobalBasis.Y.Dot(arena.UpAt(liveRival.GlobalPosition)) > 0.999f,
+                $"Autonomous shared hover ship preserves physical surface clearance and orientation (clearance {arena.Clearance(liveRival.GlobalPosition)})");
             foreach (Node child in game.GetChildren())
                 if (child is PlanetSettings settings)
                 {

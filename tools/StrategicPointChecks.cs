@@ -159,7 +159,7 @@ public partial class StrategicPointChecks : Node3D
             }
             // Large repeated render worlds retain expensive GPU retirement work at
             // shutdown; headless checks cover all layouts, rendering covers Medium.
-            foreach (int radius in DisplayServer.GetName() == "headless" ? new[] { 500, 800, 1000, 1200 } : new[] { 800 })
+            foreach (int radius in DisplayServer.GetName() == "headless" ? PlanetSizes.Radii : new[] { 200 })
             {
                 Trace($"world {radius}");
                 PlanetSizes.SelectedIndex = Array.IndexOf(PlanetSizes.Radii, radius);
@@ -179,9 +179,9 @@ public partial class StrategicPointChecks : Node3D
                         $"{radius}: two neutral sites of each role reset without previous benefits");
                     float a = arena.SurfaceDistance(home.GlobalPosition, left!.GlobalPosition);
                     float b = arena.SurfaceDistance(rival.GlobalPosition, right!.GlobalPosition);
-                    Check(Mathf.Abs(a - b) < 35 && a > 70 && b > 70, $"{radius}: mirrored accessible opening distances are comparable and outside bases");
+                    Check(Mathf.Abs(a - b) < 1 && a > 30 && b > 30, $"{radius}: mirrored opening distances are comparable and outside bases");
                 }
-                if (radius == 800 && DisplayServer.GetName() != "headless")
+                if (radius == 200 && DisplayServer.GetName() != "headless")
                 {
                     var ship = (ShipFlightController)GetTree().GetFirstNodeInGroup("player");
                     var site = (StrategicPoint)points[0];
@@ -200,9 +200,9 @@ public partial class StrategicPointChecks : Node3D
                 Trace("world cleared");
             }
             PlanetSizes.SelectedIndex = 1;
-            // Drain managed wrappers while native runtime is still alive, after
-            // repeated full-world teardown rather than during process shutdown.
-            GC.Collect(); GC.WaitForPendingFinalizers(); await Frames(10);
+            // Allow queued native teardown to drain normally. Explicit forced
+            // GC/finalizer waits here can crash after all world assertions pass.
+            await Frames(10);
             GD.Print($"Strategic point checks passed: {_checks}"); GetTree().Quit();
         }
         catch (Exception error) { GD.PushError(error.ToString()); GetTree().Quit(1); }

@@ -69,6 +69,7 @@ public partial class EquipmentProgressionChecks : Node3D
             // Exercise real GUI signals and explicit replacement target.
             ui.Refresh();
             Find<TabContainer>(ui, "ProjectTabs").CurrentTab = 4;
+            Find<TabContainer>(ui, "ShipSections").CurrentTab = 1;
             for (int i = 0; i < 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var install = Find<Button>(ui, "Install_plasma-bolt");
             // The inventory is below the four slots: scroll into view before clicking.
@@ -168,7 +169,8 @@ public partial class EquipmentProgressionChecks : Node3D
             Check(!player.TryInstallEquipment("plasma-bolt", 0, out _), "Paused installation rejects"); GetTree().Paused = false;
 
             // Actual match restart resets inventory, research and installed slots.
-            foreach (Node child in GetChildren()) child.Free();
+            foreach (Node child in GetChildren()) child.QueueFree();
+            for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             var game = GD.Load<PackedScene>("res://scenes/Game.tscn").Instantiate();
             GetTree().Root.AddChild(game); GetTree().CurrentScene = game;
             var fresh = game.GetNode<ShipFlightController>("PlayerShip");
@@ -178,6 +180,10 @@ public partial class EquipmentProgressionChecks : Node3D
             await ToSignal(GetTree(), SceneTree.SignalName.SceneChanged);
             fresh = GetTree().CurrentScene.GetNode<ShipFlightController>("PlayerShip");
             Check(fresh.GetOwnedEquipmentRank("guardian-drone") == 0 && fresh.GetEquipmentRank("plasma-bolt") == 1, "R creates a fresh starter loadout");
+            Node restartedWorld = GetTree().CurrentScene;
+            GetTree().CurrentScene = null;
+            restartedWorld.QueueFree();
+            for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             GD.Print($"Equipment progression checks passed: {_checks}"); GetTree().Quit();
         }
         catch (Exception error) { GD.PushError(error.ToString()); GetTree().Quit(1); }

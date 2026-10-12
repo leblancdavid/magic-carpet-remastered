@@ -42,12 +42,12 @@ public partial class ExplorationBoonChecks : Node3D
                 foreach (var wreck in wrecks)
                 {
                     wreck.SetPhysicsProcess(false);
-                    Check(arena.SurfaceDistance(wreck.GlobalPosition, home.GlobalPosition) >= 180
-                        && arena.SurfaceDistance(wreck.GlobalPosition, rival.GlobalPosition) >= 180, "Both pole bases excluded");
+                    Check(arena.SurfaceDistance(wreck.GlobalPosition, home.GlobalPosition) >= director.BaseExclusionDistance
+                        && arena.SurfaceDistance(wreck.GlobalPosition, rival.GlobalPosition) >= director.BaseExclusionDistance, "Both pole bases excluded");
                     Check(Mathf.Abs(arena.Clearance(wreck.GlobalPosition) - 1) < 0.01f
                         && wreck.GlobalBasis.Y.Dot(arena.UpAt(wreck.GlobalPosition)) > 0.999f, "Reachable surface support / upright wreck");
                 }
-                Check(wrecks.SelectMany((w, i) => wrecks.Skip(i + 1).Select(other => arena.SurfaceDistance(w.GlobalPosition, other.GlobalPosition))).All(d => d >= 99.99f), "Initial spacing respected");
+                Check(wrecks.SelectMany((w, i) => wrecks.Skip(i + 1).Select(other => arena.SurfaceDistance(w.GlobalPosition, other.GlobalPosition))).All(d => d >= director.MinimumSpacing - 0.01f), "Initial spacing respected");
                 int nearHome = wrecks.Count(w => arena.SurfaceDistance(w.GlobalPosition, home.GlobalPosition) < arena.SurfaceDistance(w.GlobalPosition, rival.GlobalPosition));
                 Check(Math.Abs(nearHome - 6) <= 1, "Nearest-faction regions receive balanced initial placement");
                 director._PhysicsProcess(60);
@@ -55,8 +55,8 @@ public partial class ExplorationBoonChecks : Node3D
                 for (int i = 0; i < 7; i++) Check(director.TrySpawn(true), "Orbital arrival placed");
                 Check(!director.TrySpawn(true) && director.SpawnedCount == 20, "Active wreck/reward bound rejects without spawning");
                 foreach (var wreck in room.GetChildren().OfType<ExplorationWreck>())
-                    Check(arena.SurfaceDistance(wreck.GlobalPosition, home.GlobalPosition) >= 180
-                        && arena.SurfaceDistance(wreck.GlobalPosition, rival.GlobalPosition) >= 180, "Arrivals retain every-base exclusion");
+                    Check(arena.SurfaceDistance(wreck.GlobalPosition, home.GlobalPosition) >= director.BaseExclusionDistance
+                        && arena.SurfaceDistance(wreck.GlobalPosition, rival.GlobalPosition) >= director.BaseExclusionDistance, "Arrivals retain every-base exclusion");
                 var arrival = room.GetChildren().OfType<ExplorationWreck>().Last(); arrival.SetPhysicsProcess(false);
                 arrival.ApplyDamage(1000); Check(!arrival.IsRevealed && arrival.ArrivalRemaining == 3, "Harmless descent cannot be destroyed before landing");
                 arrival._PhysicsProcess(4); Check(arrival.ArrivalRemaining == 0 && Mathf.Abs(arena.Clearance(arrival.GlobalPosition) - 1) < 0.01f, "Arrival lands on surface without impact damage");
@@ -135,7 +135,7 @@ public partial class ExplorationBoonChecks : Node3D
                 "Rank-derived energy/explosive damage and overlapping deployable tag multiply consistently");
             ship.GlobalPosition = terrain.OnSurface(underside, 6); ship.RespawnAt(ship.GlobalPosition);
             Cast(ship, "CastPrimaryEquipment");
-            var actual = GetChildren().OfType<WeaponProjectile>().Last();
+            var actual = testRoom.GetChildren().OfType<WeaponProjectile>().Last();
             Check(actual.Damage == ship.PlasmaBoltDamage && Mathf.IsEqualApprox(actual.Speed, 46.2f), "Actual projectile uses boon damage and speed");
             Check(ship.Health == 120 && ship.Boons.Stacks("ship-hp") == 1, "Respawn restores boon max HP and retains stacks");
             hub.TryCompleteTierUpgrade(2);
@@ -172,12 +172,12 @@ public partial class ExplorationBoonChecks : Node3D
             if (button.Disabled) button = FindButton(ui, "SkipBoon");
             await Frames(2);
             Vector2 click = button.GetGlobalRect().GetCenter();
-            int projectileCount = GetChildren().OfType<WeaponProjectile>().Count();
+            int projectileCount = testRoom.GetChildren().OfType<WeaponProjectile>().Count();
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = click }, true);
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = click }, true);
             await Frames(2);
             Check(ship.Boons.Pending.Count == 1, "GUI selection consumes exactly one displayed reward");
-            Check(GetChildren().OfType<WeaponProjectile>().Count() <= projectileCount, "Choice click cannot also cast Plasma Bolt");
+            Check(testRoom.GetChildren().OfType<WeaponProjectile>().Count() <= projectileCount, "Choice click cannot also cast Plasma Bolt");
             string? capture = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--capture="))?.Substring(10);
             if (capture != null)
             {

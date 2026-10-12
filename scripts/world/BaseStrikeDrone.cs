@@ -17,6 +17,9 @@ public partial class BaseStrikeDrone : Node3D
     {
         AddToGroup("base_strike_drone");
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
+        if (_arena?.IsSpherical == true && IsInstanceValid(Target))
+            LifetimeSeconds = Mathf.Max(LifetimeSeconds,
+                _arena.SurfaceDistance(GlobalPosition, Target.GlobalPosition) / Mathf.Max(1, MoveSpeed) + 15);
         AddChild(new MeshInstance3D
         {
             Mesh = new CylinderMesh { TopRadius = 0.2f, BottomRadius = 0.7f, Height = 1.6f },

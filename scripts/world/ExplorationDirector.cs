@@ -26,6 +26,11 @@ public partial class ExplorationDirector : Node
         _arena = (HeightmapArena)GetTree().GetFirstNodeInGroup("heightmap_arena");
         _random.Randomize();
         if (!_arena.IsSpherical) { BaseExclusionDistance = 30; MinimumSpacing = 18; InitialCount = 5; MaximumActive = 8; }
+        else
+        {
+            if (BaseExclusionDistance == 180) BaseExclusionDistance = Mathf.Clamp(_arena.PlanetRadius * 0.25f, 30, 80);
+            if (MinimumSpacing == 100) MinimumSpacing = Mathf.Clamp(_arena.PlanetRadius * 0.2f, 20, 60);
+        }
         for (int i = 0; i < InitialCount; i++) if (!TrySpawn(false)) break;
         _arrivalTimer = ArrivalIntervalSeconds;
     }
@@ -54,6 +59,12 @@ public partial class ExplorationDirector : Node
     {
         if (GetTree().GetNodesInGroup("exploration_wreck").OfType<ExplorationWreck>().Count(w => !w.IsCollected && !w.IsQueuedForDeletion()) >= MaximumActive) return false;
         Vector3? best = null; ulong region = 0; int bestCount = int.MaxValue;
+        int bestPlanetCount = int.MaxValue;
+        var planetaryCounts = new int[PlanetLayout.RegionCount];
+        if (_arena.IsSpherical)
+            foreach (Node node in GetTree().GetNodesInGroup("exploration_wreck"))
+                if (node is ExplorationWreck existing && !existing.IsCollected && !existing.IsQueuedForDeletion())
+                    planetaryCounts[PlanetLayout.RegionFor(_arena.UpAt(existing.GlobalPosition))]++;
         var bases = Bases;
         for (int i = 0; i < PlacementAttempts; i++)
         {
@@ -73,8 +84,11 @@ public partial class ExplorationDirector : Node
             if (!IsValidPosition(position)) continue;
             ulong nearest = bases.OrderBy(b => _arena.SurfaceDistance(position, b.GlobalPosition)).FirstOrDefault()?.GetInstanceId() ?? 0;
             int count = _regionalCounts.GetValueOrDefault(nearest);
-            if (count >= bestCount) continue;
-            best = position; region = nearest; bestCount = count;
+            int planetCount = _arena.IsSpherical ? planetaryCounts[PlanetLayout.RegionFor(_arena.UpAt(position))] : 0;
+            // Fill sparsely occupied globe regions first; nearest-base cumulative
+            // fairness breaks ties. Arrivals refill explored regions as well.
+            if (planetCount > bestPlanetCount || (planetCount == bestPlanetCount && count >= bestCount)) continue;
+            best = position; region = nearest; bestCount = count; bestPlanetCount = planetCount;
         }
         if (!best.HasValue) return false;
         var wreck = new ExplorationWreck { Name = "ExplorationWreck", Position = GetParent<Node3D>().ToLocal(best.Value),

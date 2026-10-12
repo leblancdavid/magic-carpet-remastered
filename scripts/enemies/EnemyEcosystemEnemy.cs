@@ -26,7 +26,11 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public int RangedDamage { get; set; } = 8;
     [Export] public int AntimatterReserve { get; set; } = 0;
     [Export] public int NeutralAntimatterValue { get; set; } = 12;
-    [Export] public float AwarenessRadius { get; set; } = 48.0f;
+    [Export] public float AwarenessRadius { get; set; } = 25.0f;
+    [Export] public float RetaliationRadius { get; set; } = 65;
+    [Export] public float DisengagementRadius { get; set; } = 85;
+    [Export] public float HabitatLeashRadius { get; set; } = 120;
+    [Export] public float PatrolRadius { get; set; } = 12;
     [Export] public float AttackRadius { get; set; } = 2.0f;
     [Export] public float RangedMinDistance { get; set; } = 6.0f;
     [Export] public float RangedMaxDistance { get; set; } = 24.0f;
@@ -47,14 +51,24 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public float PilotVerticalSpeed { get; set; } = 6.0f;
 
     public event Action? Defeated;
+    public bool IsTerritorial => Role != EnemyRole.RivalShip;
+    public bool IsRaider => RaidTarget != null;
+    public FactionBase? RaidTarget { get; set; }
+    public float RaidLifetimeSeconds { get; set; } = 90;
+    public Vector3? HabitatPosition { get; set; }
+    public string HabitatId { get; set; } = string.Empty;
+    public NeutralTerritory? Territory { get; private set; }
+    public string BehaviorText => IsRaider ? $"Raid → {(IsInstanceValid(RaidTarget) && RaidTarget!.IsPlayerBase ? "your base" : "rival base")}"
+        : Territory?.State.ToString() ?? "Rival pilot";
+    private Node3D? CombatTarget => IsTerritorial ? Territory?.Target : _player;
 
     public string RoleText => Role switch
     {
         EnemyRole.FlyingSwarm => "Swarm",
         EnemyRole.GroundBeast => "Beast",
         EnemyRole.RangedCaster => "Caster",
-        EnemyRole.BaseAttacker => "Sieger",
-        EnemyRole.AntimatterThief => "Thief",
+        EnemyRole.BaseAttacker => IsRaider ? "Raider" : "Sieger",
+        EnemyRole.AntimatterThief => "Scavenger",
         EnemyRole.RivalShip => "Pilot",
         _ => "Enemy"
     };
@@ -69,6 +83,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     private float _attackCooldown;
     private float _rangedCooldown = 0.75f;
     private float _rangedWindup;
+    private Node3D? _rangedTarget;
+    private float _raidRemaining;
     private float _hitFlashTimer;
     private float _playerContactCooldown;
     private float _orbitPhase;
@@ -86,14 +102,43 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             AntimatterReserve += Mathf.Max(0, NeutralAntimatterValue);
         }
         _arena?.ClampFlightBody(this, GroundClearance);
+        if (IsTerritorial)
+        {
+            if (_arena?.IsSpherical == false)
+            {
+                // Substitute flat defaults for unchanged globe range values.
+                if (AwarenessRadius == 25) AwarenessRadius = 12;
+                if (RetaliationRadius == 65) RetaliationRadius = 30;
+                if (DisengagementRadius == 85) DisengagementRadius = 40;
+                if (HabitatLeashRadius == 120) HabitatLeashRadius = 50;
+                if (PatrolRadius == 12) PatrolRadius = 6;
+            }
+            else if (_arena != null && _arena.PlanetRadius <= 400)
+            {
+                if (AwarenessRadius == 25) AwarenessRadius = Mathf.Clamp(_arena.PlanetRadius * 0.08f, 16, 25);
+                if (RetaliationRadius == 65) RetaliationRadius = Mathf.Clamp(_arena.PlanetRadius * 0.15f, 30, 55);
+                if (DisengagementRadius == 85) DisengagementRadius = Mathf.Clamp(_arena.PlanetRadius * 0.2f, 40, 70);
+                if (HabitatLeashRadius == 120) HabitatLeashRadius = Mathf.Clamp(_arena.PlanetRadius * 0.3f, 60, 100);
+                if (PatrolRadius == 12) PatrolRadius = Mathf.Clamp(_arena.PlanetRadius * 0.04f, 6, 12);
+            }
+            Territory = new NeutralTerritory(this, _arena, HabitatPosition ?? GlobalPosition);
+        }
+        _raidRemaining = RaidLifetimeSeconds;
+        if (IsRaider)
+        {
+            AddToGroup("neutral_raider");
+            AddChild(new Label3D { Text = RaidTarget!.IsPlayerBase ? "RAIDER → YOUR BASE" : "RAIDER → RIVAL BASE",
+                Position = Vector3.Up * 2.5f, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                FontSize = 32, PixelSize = 0.012f, Modulate = Colors.OrangeRed, VisibilityRangeEnd = 140 });
+        }
     }
 
     public override void _PhysicsProcess(double delta)
     {
+        if (GetTree().Paused || !double.IsFinite(delta) || delta < 0) return;
         float deltaF = (float)delta;
         _attackCooldown = Mathf.Max(0.0f, _attackCooldown - deltaF);
         _rangedCooldown = Mathf.Max(0.0f, _rangedCooldown - deltaF);
-        _rangedWindup = Mathf.Max(0.0f, _rangedWindup - deltaF);
         _hitFlashTimer = Mathf.Max(0.0f, _hitFlashTimer - deltaF);
         _playerContactCooldown = Mathf.Max(0.0f, _playerContactCooldown - deltaF);
 
@@ -109,10 +154,17 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             return;
         }
 
+        if (IsRaider)
+        {
+            _raidRemaining -= deltaF;
+            if (!IsInstanceValid(RaidTarget) || RaidTarget!.IsDestroyed || _raidRemaining <= 0)
+            { ApplyDamage(Health); return; }
+        }
+        Territory?.Update(deltaF);
         Vector3 move = GetDesiredMove(deltaF);
         if (move.LengthSquared() > 0.0001f)
         {
-            Velocity = move.Normalized() * GetMoveSpeed();
+            Velocity = move.Normalized() * (IsTerritorial ? Mathf.Min(move.Length(), GetMoveSpeed()) : GetMoveSpeed());
         }
         else
         {
@@ -135,7 +187,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         HandleAttacks(deltaF);
     }
 
-    public void ApplyDamage(int damage)
+    public void ApplyDamage(int damage, Node3D? attacker = null)
     {
         if (damage <= 0 || Health <= 0)
         {
@@ -143,6 +195,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         }
 
         Health = Mathf.Max(0, Health - damage);
+        if (Health > 0) Territory?.OnDamage(attacker);
         _hitFlashTimer = 0.14f;
         GameAudio.Instance?.PlayHit();
 
@@ -223,13 +276,37 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
     private float GetMoveSpeed()
     {
-        return Role == EnemyRole.FlyingSwarm && _player != null && GlobalPosition.DistanceTo(_player.GlobalPosition) < 12.0f
+        return Role == EnemyRole.FlyingSwarm && NeutralTerritory.IsLivingPilot(CombatTarget) && GlobalPosition.DistanceTo(CombatTarget!.GlobalPosition) < 12.0f
             ? MoveSpeed * 1.2f
             : MoveSpeed;
     }
 
     private Vector3 GetDesiredMove(float delta)
     {
+        if (IsTerritorial)
+        {
+            if (Territory!.State == NeutralTerritory.BehaviorState.Pursuit && NeutralTerritory.IsLivingPilot(CombatTarget))
+            {
+                _targetOrb = null;
+                Vector3 chaseDirection = HorizontalDirectionTo(CombatTarget!.GlobalPosition);
+                float chaseDistance = HorizontalDistanceTo(CombatTarget.GlobalPosition);
+                return Role switch
+                {
+                    EnemyRole.FlyingSwarm => MoveFlyingSwarm(chaseDirection, chaseDistance),
+                    EnemyRole.RangedCaster => MoveRangedCaster(chaseDirection, chaseDistance),
+                    _ => MoveGroundBeast(chaseDirection, chaseDistance)
+                };
+            }
+            if (IsRaider && IsInstanceValid(RaidTarget) && !RaidTarget!.IsDestroyed)
+                return MoveBaseAttacker(HorizontalDirectionTo(RaidTarget.GlobalPosition), HorizontalDistanceTo(RaidTarget.GlobalPosition));
+            if (Role == EnemyRole.AntimatterThief && Territory.State == NeutralTerritory.BehaviorState.Patrol && AntimatterReserve < 12)
+            {
+                AcquireTargetOrb(preferPlayerOwned: true);
+                if (IsInstanceValid(_targetOrb) && IsEligibleOrb(_targetOrb!))
+                    return HorizontalDistanceTo(_targetOrb.GlobalPosition) > AntimatterStealRadius ? HorizontalDirectionTo(_targetOrb.GlobalPosition) * MoveSpeed : Vector3.Zero;
+            }
+            return Territory.IdleMove();
+        }
         if (ShouldRetreat())
         {
             return GetRetreatVector();
@@ -244,32 +321,21 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             return _wanderDirection * MoveSpeed * 0.25f;
         }
 
-        Vector3 toTarget = targetPosition - GlobalPosition;
         float distance = HorizontalDistanceTo(targetPosition);
         Vector3 direction = HorizontalDirectionTo(targetPosition);
-
-        return Role switch
-        {
-            EnemyRole.FlyingSwarm => MoveFlyingSwarm(direction, distance),
-            EnemyRole.GroundBeast => MoveGroundBeast(direction, distance),
-            EnemyRole.RangedCaster => MoveRangedCaster(direction, distance),
-            EnemyRole.BaseAttacker => MoveBaseAttacker(direction, distance),
-            EnemyRole.AntimatterThief => MoveAntimatterThief(direction, distance),
-            EnemyRole.RivalShip => MoveRivalShip(direction, distance),
-            _ => direction * MoveSpeed
-        };
+        return MoveRivalShip(direction, distance);
     }
 
     private Vector3 MoveFlyingSwarm(Vector3 direction, float distance)
     {
         Vector3 orbit = Vector3.Zero;
-        if (_player != null)
+        if (NeutralTerritory.IsLivingPilot(CombatTarget))
         {
-            Vector3 toPlayer = _player.GlobalPosition - GlobalPosition;
+            Vector3 toPlayer = CombatTarget!.GlobalPosition - GlobalPosition;
             Vector3 lateral = toPlayer.Cross(LocalUp).Normalized();
             orbit = lateral * Mathf.Sin(Time.GetTicksMsec() * 0.003f + GlobalPosition.X * 0.07f) * 4.0f;
 
-            if (distance < AttackRadius * 1.6f)
+            if (distance < AttackRadius * 1.6f && _playerContactCooldown > 0)
             {
                 return (-direction * MoveSpeed * 1.1f) + orbit;
             }
@@ -295,7 +361,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
     private Vector3 MoveRangedCaster(Vector3 direction, float distance)
     {
-        if (_player == null)
+        if (!NeutralTerritory.IsLivingPilot(CombatTarget))
         {
             return direction * MoveSpeed;
         }
@@ -316,7 +382,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
     private Vector3 MoveBaseAttacker(Vector3 direction, float distance)
     {
-        if (_playerBase == null)
+        if (!IsInstanceValid(RaidTarget))
         {
             return direction * MoveSpeed;
         }
@@ -330,34 +396,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         return direction * MoveSpeed;
     }
 
-private Vector3 MoveAntimatterThief(Vector3 direction, float distance)
-    {
-        if (AntimatterReserve >= 12)
-        {
-            return GetRetreatVector();
-        }
-
-        if (_targetOrb != null && IsInstanceValid(_targetOrb))
-        {
-            if (distance > AntimatterStealRadius)
-            {
-                return direction * (MoveSpeed * 1.15f);
-            }
-
-            return Vector3.Zero;
-        }
-
-        _targetOrb = null;
-
-        if (_playerBase != null)
-        {
-            return direction * (MoveSpeed * 0.55f);
-        }
-
-        return direction * (MoveSpeed * 0.7f);
-    }
-
-private Vector3 MoveRivalShip(Vector3 direction, float distance)
+    private Vector3 MoveRivalShip(Vector3 direction, float distance)
     {
         if (_targetOrb != null && IsInstanceValid(_targetOrb) && AntimatterReserve < RetreatAntimatterThreshold)
         {
@@ -395,11 +434,11 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
         if (_arena?.IsSpherical == true)
         {
             Vector3 tangent = _arena.Tangent(desiredMove, GlobalPosition);
-            tangent = tangent.LengthSquared() > 0.0001f ? tangent.Normalized() * MoveSpeed : Vector3.Zero;
+            tangent = tangent.LengthSquared() > 0.0001f ? tangent.Normalized() * (IsTerritorial ? Mathf.Min(desiredMove.Length(), GetMoveSpeed()) : MoveSpeed) : Vector3.Zero;
             float limit = Mathf.Min(PilotMaxFlightClearance, _arena.MaxFlightClearance);
             float clearance = Mathf.Min(PilotHoverClearance, limit);
-            if (_targetOrb == null && !ShouldRetreat() && _player != null && _player.Health > 0)
-                clearance = Mathf.Clamp(_arena.Clearance(_player.GlobalPosition), clearance, limit);
+            if (_targetOrb == null && !ShouldRetreat() && NeutralTerritory.IsLivingPilot(CombatTarget))
+                clearance = Mathf.Clamp(_arena.Clearance(CombatTarget!.GlobalPosition), Role == EnemyRole.FlyingSwarm ? GroundClearance : clearance, limit);
             float radialSpeed = Mathf.Clamp((clearance - _arena.Clearance(GlobalPosition)) * 2, -PilotVerticalSpeed, PilotVerticalSpeed);
             Velocity = tangent + LocalUp * radialSpeed;
             _arena.Orient(this, tangent.LengthSquared() > 0.0001f ? tangent : null);
@@ -408,13 +447,13 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
         // Horizontal steering and altitude correction must not be normalized together:
         // a tiny upward hover bias otherwise becomes full-speed perpetual ascent.
         Vector3 horizontal = new(desiredMove.X, 0, desiredMove.Z);
-        horizontal = horizontal.LengthSquared() > 0.0001f ? horizontal.Normalized() * MoveSpeed : Vector3.Zero;
+        horizontal = horizontal.LengthSquared() > 0.0001f ? horizontal.Normalized() * (IsTerritorial ? Mathf.Min(horizontal.Length(), GetMoveSpeed()) : MoveSpeed) : Vector3.Zero;
         float surface = PilotSurfaceHeight();
         float maxClearance = Mathf.Min(PilotMaxFlightClearance, _arena?.MaxFlightClearance ?? 12.0f);
         float targetHeight = surface + Mathf.Min(PilotHoverClearance, maxClearance);
-        if (_targetOrb == null && !ShouldRetreat() && _player != null && _player.Health > 0)
+        if (_targetOrb == null && !ShouldRetreat() && NeutralTerritory.IsLivingPilot(CombatTarget))
         {
-            targetHeight = Mathf.Clamp(_player.GlobalPosition.Y, targetHeight, surface + maxClearance);
+            targetHeight = Mathf.Clamp(CombatTarget!.GlobalPosition.Y, Role == EnemyRole.FlyingSwarm ? surface + GroundClearance : targetHeight, surface + maxClearance);
         }
         float vertical = Mathf.Clamp((targetHeight - GlobalPosition.Y) * 2.0f, -PilotVerticalSpeed, PilotVerticalSpeed);
         Velocity = new Vector3(horizontal.X, vertical, horizontal.Z);
@@ -437,11 +476,6 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
 
     private bool ShouldRetreat()
     {
-        if (Role == EnemyRole.AntimatterThief && AntimatterReserve >= 12)
-        {
-            return true;
-        }
-
         return Role == EnemyRole.RivalShip && AntimatterReserve >= RetreatAntimatterThreshold
             && _enemyBase != null && !_enemyBase.IsDestroyed;
     }
@@ -465,61 +499,20 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
 
     private Vector3 GetPriorityTargetPosition()
     {
-        switch (Role)
+        // Only the designated legacy rival retains its old strategic loop until
+        // phase 3. Ordinary roles are steered by their local territory above.
+        if (Role == EnemyRole.RivalShip)
         {
-            case EnemyRole.FlyingSwarm:
-                if (_player != null)
-                {
-                    return _player.GlobalPosition;
-                }
-                break;
-            case EnemyRole.GroundBeast:
-                if (_playerBase != null)
-                {
-                    return _playerBase.GlobalPosition;
-                }
-                break;
-            case EnemyRole.RangedCaster:
-                if (_player != null)
-                {
-                    return _player.GlobalPosition;
-                }
-                break;
-            case EnemyRole.BaseAttacker:
-                if (_playerBase != null && !_playerBase.IsDestroyed)
-                {
-                    return _playerBase.GlobalPosition;
-                }
-                break;
-            case EnemyRole.AntimatterThief:
-                AcquireTargetOrb(preferPlayerOwned: true);
+            if (AntimatterReserve < RetreatAntimatterThreshold)
+            {
+                AcquireTargetOrb(preferPlayerOwned: false);
                 if (_targetOrb != null && IsInstanceValid(_targetOrb))
                 {
                     return _targetOrb.GlobalPosition;
                 }
-                if (_playerBase != null)
-                {
-                    return _playerBase.GlobalPosition;
-                }
-                break;
-            case EnemyRole.RivalShip:
-                if (AntimatterReserve < RetreatAntimatterThreshold)
-                {
-                    AcquireTargetOrb(preferPlayerOwned: false);
-                    if (_targetOrb != null && IsInstanceValid(_targetOrb))
-                    {
-                        return _targetOrb.GlobalPosition;
-                    }
-                }
-                if (_playerBase != null && !_playerBase.IsDestroyed)
-                {
-                    return _playerBase.GlobalPosition;
-                }
-                if (_player != null)
-                {
-                    return _player.GlobalPosition;
-                }
-                break;
+            }
+            if (_playerBase != null && !_playerBase.IsDestroyed) return _playerBase.GlobalPosition;
+            if (_player != null) return _player.GlobalPosition;
         }
 
         return Vector3.Zero;
@@ -529,20 +522,22 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
     {
         if (_rangedWindup > 0.0f)
         {
-            _rangedWindup -= delta;
-            if (_rangedWindup <= 0.0f)
+            if (!CanShoot(_rangedTarget) || (IsTerritorial && _rangedTarget != CombatTarget))
+            { _rangedWindup = 0; _rangedTarget = null; }
+            else
             {
-                FireProjectile();
+                _rangedWindup -= delta;
+                if (_rangedWindup <= 0.0f) FireProjectile();
             }
         }
 
         if (Role is EnemyRole.AntimatterThief or EnemyRole.RivalShip)
         {
             TryAbsorbLooseAntimatter();
-            TryDepositAntimatterAtBase();
+            if (Role == EnemyRole.RivalShip) TryDepositAntimatterAtBase();
         }
 
-        if (Role == EnemyRole.BaseAttacker)
+        if (IsRaider && !NeutralTerritory.IsLivingPilot(CombatTarget))
         {
             TryRamBase();
         }
@@ -551,6 +546,7 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
 
         if (ShouldStartRangedAttack())
         {
+            _rangedTarget = CombatTarget;
             _rangedWindup = RangedWindupSeconds;
             _rangedCooldown = RangedAttackCooldownSeconds;
         }
@@ -558,7 +554,7 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
 
     private bool ShouldStartRangedAttack()
     {
-        if (_rangedCooldown > 0.0f)
+        if (_rangedCooldown > 0.0f || _rangedWindup > 0)
         {
             return false;
         }
@@ -568,30 +564,32 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
             return false;
         }
 
-        if (_player == null)
-        {
-            return false;
-        }
+        return CanShoot(CombatTarget);
+    }
 
-        float distance = HorizontalDistanceTo(_player.GlobalPosition);
+    private bool CanShoot(Node3D? target)
+    {
+        if (!NeutralTerritory.IsLivingPilot(target)) return false;
+        float distance = HorizontalDistanceTo(target!.GlobalPosition);
         if (distance < RangedMinDistance || distance > RangedMaxDistance) return false;
-        if (_arena?.IsSpherical == true)
+        if (target is CollisionObject3D collider)
         {
-            var ray = PhysicsRayQueryParameters3D.Create(GlobalPosition, _player.GlobalPosition);
-            ray.Exclude = new Godot.Collections.Array<Rid> { GetRid(), _player.GetRid() };
-            if (GetWorld3D().DirectSpaceState.IntersectRay(ray).Count > 0) return false;
+            using var ray = PhysicsRayQueryParameters3D.Create(GlobalPosition, target.GlobalPosition);
+            ray.Exclude = new Godot.Collections.Array<Rid> { GetRid(), collider.GetRid() };
+            using var hit = GetWorld3D().DirectSpaceState.IntersectRay(ray);
+            if (hit.Count > 0) return false;
         }
         return true;
     }
 
     private void FireProjectile()
     {
-        if (_player == null)
+        if (!CanShoot(_rangedTarget) || (IsTerritorial && _rangedTarget != CombatTarget))
         {
             return;
         }
 
-        Vector3 direction = (_player.GlobalPosition - GlobalPosition).Normalized();
+        Vector3 direction = (_rangedTarget!.GlobalPosition - GlobalPosition).Normalized();
         if (direction == Vector3.Zero)
         {
             direction = -GlobalBasis.Z;
@@ -602,7 +600,7 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
             Name = $"{RoleText}Projectile",
             Damage = RangedDamage
         };
-        GetTree().CurrentScene.AddChild(projectile);
+        GetParent().AddChild(projectile);
         projectile.GlobalPosition = GlobalPosition + direction * 1.3f;
         projectile.Launch(direction, this);
 
@@ -615,12 +613,13 @@ private Vector3 MoveRivalShip(Vector3 direction, float distance)
             StartScale = 0.3f,
             EndScale = 1.2f
         };
-        GetTree().CurrentScene.AddChild(launchBurst);
+        GetParent().AddChild(launchBurst);
         launchBurst.GlobalPosition = projectile.GlobalPosition;
     }
 
-private void TryAbsorbLooseAntimatter()
+    private void TryAbsorbLooseAntimatter()
     {
+        if (IsTerritorial && (Territory?.State != NeutralTerritory.BehaviorState.Patrol || AntimatterReserve >= 12)) return;
         if (ShouldRetreat() || _targetOrb == null || !IsInstanceValid(_targetOrb) || !_targetOrb.IsAvailable)
         {
             return;
@@ -632,8 +631,7 @@ private void TryAbsorbLooseAntimatter()
         }
 
         AntimatterPickup orb = _targetOrb;
-        bool eligible = orb.Ownership == AntimatterOwnership.Neutral
-            || (Role == EnemyRole.AntimatterThief && orb.Ownership == AntimatterOwnership.Player);
+        bool eligible = IsEligibleOrb(orb);
         if (!eligible)
         {
             _targetOrb = null;
@@ -656,9 +654,7 @@ private void TryAbsorbLooseAntimatter()
 
         if (_targetOrb != null && IsInstanceValid(_targetOrb))
         {
-            bool stillValid = preferPlayerOwned
-                ? _targetOrb.Ownership == AntimatterOwnership.Player || _targetOrb.Ownership == AntimatterOwnership.Neutral
-                : _targetOrb.Ownership == AntimatterOwnership.Neutral;
+            bool stillValid = IsEligibleOrb(_targetOrb);
             if (stillValid && _targetOrb.IsAvailable)
             {
                 return;
@@ -674,7 +670,7 @@ private void TryAbsorbLooseAntimatter()
 
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {
-            if (node is not AntimatterPickup pickup || !pickup.IsAvailable)
+            if (node is not AntimatterPickup pickup || !IsEligibleOrb(pickup))
             {
                 continue;
             }
@@ -685,7 +681,7 @@ private void TryAbsorbLooseAntimatter()
                 continue;
             }
 
-            if (pickup.Ownership == AntimatterOwnership.Player && distance < bestPlayerDistance)
+            if (pickup.Ownership != AntimatterOwnership.Neutral && distance < bestPlayerDistance)
             {
                 bestPlayerDistance = distance;
                 bestPlayer = pickup;
@@ -710,18 +706,18 @@ private void TryAbsorbLooseAntimatter()
 
     private void TryRamBase()
     {
-        if (_playerBase == null || _playerBase.IsDestroyed || _attackCooldown > 0.0f)
+        if (!IsRaider || !IsInstanceValid(RaidTarget) || RaidTarget!.IsDestroyed || _attackCooldown > 0.0f)
         {
             return;
         }
 
         float ramDistance = AttackRadius + 4.0f;
-        if (HorizontalDistanceTo(_playerBase.GlobalPosition) > ramDistance)
+        if (HorizontalDistanceTo(RaidTarget.GlobalPosition) > ramDistance)
         {
             return;
         }
 
-        _playerBase.ApplyDamage(ContactDamage);
+        RaidTarget.ApplyDamage(ContactDamage);
         _attackCooldown = AttackCooldownSeconds;
     }
 
@@ -749,18 +745,22 @@ private void TryAbsorbLooseAntimatter()
 
     private void TryDamagePlayerOnContact()
     {
-        if (_player == null || _player.Health <= 0 || _playerContactCooldown > 0.0f)
+        Node3D? target = CombatTarget;
+        if (!NeutralTerritory.IsLivingPilot(target) || _playerContactCooldown > 0.0f)
         {
             return;
         }
 
         float contactDistance = Role == EnemyRole.FlyingSwarm ? AttackRadius * 1.5f : AttackRadius;
-        if (HorizontalDistanceTo(_player.GlobalPosition) > contactDistance)
+        if (HorizontalDistanceTo(target!.GlobalPosition) > contactDistance
+            || Mathf.Abs((_arena?.Elevation(target.GlobalPosition) ?? target.GlobalPosition.Y)
+                - (_arena?.Elevation(GlobalPosition) ?? GlobalPosition.Y)) > contactDistance + 0.8f)
         {
             return;
         }
 
-        _player.ApplyDamage(ContactDamage);
+        if (target is ShipFlightController ship) ship.ApplyDamage(ContactDamage, this);
+        else if (target is EnemyEcosystemEnemy pilot) pilot.ApplyDamage(ContactDamage, this);
         _playerContactCooldown = PlayerContactCooldownSeconds;
     }
 
@@ -890,7 +890,7 @@ private void TryAbsorbLooseAntimatter()
             return;
         }
 
-        AntimatterOwnership dropOwnership = Role is EnemyRole.AntimatterThief or EnemyRole.RivalShip
+        AntimatterOwnership dropOwnership = Role == EnemyRole.RivalShip
             ? AntimatterOwnership.Enemy
             : AntimatterOwnership.Neutral;
         int amount = AntimatterReserve;
@@ -918,6 +918,11 @@ private void TryAbsorbLooseAntimatter()
         Vector2 delta = new Vector2(GlobalPosition.X - target.X, GlobalPosition.Z - target.Z);
         return delta.Length();
     }
+
+    private bool IsEligibleOrb(AntimatterPickup pickup) => pickup.IsAvailable
+        && (Role == EnemyRole.AntimatterThief || pickup.Ownership == AntimatterOwnership.Neutral)
+        && (!IsTerritorial || (Territory != null
+            && Territory.Distance(Territory.Home, pickup.GlobalPosition) <= Mathf.Min(MaxOrbSeekRadius, HabitatLeashRadius * 0.5f)));
 
     private Vector3 HorizontalDirectionTo(Vector3 target)
     {

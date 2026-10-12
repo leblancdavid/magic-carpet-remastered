@@ -78,13 +78,17 @@ The live-management starter catalog now includes **Claim range calibration**: 15
 - It costs a small amount of current antimatter energy, competing with attacks and other equipment use.
 - Boosting does not consume stored construction resources or permanently lower the energy limit.
 - Provisional defaults: **36 units/second**, **0.65 seconds** of thrust, **4 current energy**, **2-second cooldown from activation**. Tuning is exported on `ShipFlightController`. Recharge follows the normal storage-backed rules during/after boost; no resource refill occurs.
-- Thrust follows ship heading, ignores camera pitch and does not add diagonal input speed or special lift. Space/C and normal terrain follow/flight ceiling remain active. After thrust ends, normal acceleration/drag governs momentum.
+- Thrust follows ship heading, ignores camera pitch and does not add diagonal input speed or special lift. Shared hover suspension/gravity remains active and preserves jump/ramp vertical momentum. Space is a paid jump; C no longer controls gameplay altitude. After thrust ends, normal acceleration/drag governs horizontal momentum.
 - Pause freezes thrust/cooldown. Management/survey input ownership ends active thrust and blocks activation; closing UI with Shift held does not retrigger. Death ends thrust; respawn clears booster timers. Insufficient energy rejects atomically without starting cooldown.
 - HUD shows active time, cooldown or energy requirement. The Ship tab lists the built-in mobility tuning outside the equipment slots.
 
 ## Dash Equipment
 
-Dash occupies a slot and costs **10 energy** with its existing **3-second cooldown**. It delivers an immediate camera-aimed impulse with **5 units/second lift** at rank speeds **46 / 55.2 / 64.4**; normal drag/acceleration follows. This contrasts with the cheaper short forward thrust, which provides no special lift. Activating Dash ends active boost so speeds cannot stack and booster thrust cannot overwrite the Dash impulse on the next frame. Research choices remain sequential ranks, with speed improving 20% of rank-I speed each rank; branching upgrades are deferred. Initial prices/effects remain provisional pending hands-on balance feedback.
+Dash occupies a slot and costs **10 energy** with its existing **3-second cooldown**. It delivers an immediate aimed tangent impulse at rank speeds **46 / 55.2 / 64.4**; normal acceleration/drag and radial gravity follow. Lift is at least **5 units/second**, with aimed lift capped at the ordinary jump launch speed (default **12**); existing greater ramp momentum is preserved. Activating Dash leaves hover support, clears buffered jumps and ends active boost so speeds cannot stack and booster thrust cannot overwrite the Dash impulse. This contrasts with the cheaper short forward thrust, which provides no special lift. Research choices remain sequential ranks, with speed improving 20% of rank-I speed each rank; branching upgrades are deferred. Initial prices/effects remain provisional pending hands-on balance feedback.
+
+## Built-in Jump And Hover — 2026-10-12
+
+Space is a fresh-press jump costing **2 current energy**, independent of slots/storage/construction. Level-ground launch is **12 units/second** under **18 units/second² radial gravity**, about **4 m above 2 m hovering**. Damped suspension follows gentle terrain/water; steep uphill faces block traversal. Natural ramp/drop launches are free and preserve momentum. No fall damage or airborne ground-relative ceiling clamp. Short **0.12s input buffer / 0.1s edge grace** permits forgiving launches without double jumps. Pause/UI/death reject payment; UI/death/respawn clear pending input. Both factions share movement/action rules. F6's diagnostic lab retains its old altitude controls. See `TERRAIN_HOVER_PLAN.md` for later compact terrain/routing/difficulty stages and verification.
 
 ## Ship UI
 

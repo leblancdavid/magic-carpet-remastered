@@ -53,7 +53,7 @@ public partial class StrategicNavigationChecks : Node
                 var geometry = new HeightmapArena { IsSpherical = true, PlanetRadius = radius };
                 var sites = PlanetLayout.Sites(geometry);
                 Check(sites.Length == 5 && sites.Select(site => site.EquipmentId).Distinct().Count() == 5,
-                    "Every approved radius has five distinct sites and equipment upgrades");
+                    "Every approved radius has five distinct landmark identities");
                 Check(sites.All(site => Mathf.Abs(site.Up.Length() - 1) < 0.00001f), "Site directions remain unit-length");
                 Check(Mathf.Acos(sites[^1].Up.Dot(Vector3.Up)) > 2, "Far-side upgrade is genuinely distributed beyond the starting hemisphere");
                 geometry.Free();
@@ -87,8 +87,9 @@ public partial class StrategicNavigationChecks : Node
                 && navigation.Markers.Count(marker => marker.Kind == MapMarkerKind.RivalBase) == 1, "Both bases are known from the start");
             Check(navigation.Markers.Count(marker => marker.Kind == MapMarkerKind.Landmark && !marker.Charted) == 5,
                 "Unknown sites are chart hints without revealed names");
-            navigation.SetWaypoint(Vector3.Down, "Far side");
-            Check(navigation.TargetDistance > 1200 && float.IsFinite(navigation.TargetDistance), "Waypoint distance uses the spherical surface rather than world X/Z");
+            navigation.SetWaypoint(-arena.UpAt(player.GlobalPosition), "Far side");
+            Check(Mathf.Abs(navigation.TargetDistance - Mathf.Pi * arena.PlanetRadius) < 1
+                && float.IsFinite(navigation.TargetDistance), "Antipodal waypoint distance equals half the circumference rather than world X/Z");
             navigation.SetWaypoint(Vector3.Zero);
             Check(navigation.WaypointName == "Far side", "Invalid waypoint direction cannot corrupt navigation");
             navigation.ClearWaypoint();
@@ -127,7 +128,7 @@ public partial class StrategicNavigationChecks : Node
             hauler.SetPhysicsProcess(false);
             float distanceBefore = arena.SurfaceDistance(hauler.GlobalPosition, owned.GlobalPosition);
             hauler._PhysicsProcess(0.5);
-            Check(distanceBefore > 350 && arena.SurfaceDistance(hauler.GlobalPosition, owned.GlobalPosition) < distanceBefore,
+            Check(distanceBefore > arena.PlanetRadius * 0.8f && arena.SurfaceDistance(hauler.GlobalPosition, owned.GlobalPosition) < distanceBefore,
                 "Actual hauler starts a curved route to claimed far-side antimatter rather than stranding it");
             nearby.ReassignOwnership(AntimatterOwnership.Enemy);
             navigation.Refresh();
@@ -153,20 +154,11 @@ public partial class StrategicNavigationChecks : Node
             navigation.Refresh();
             Check(navigation.Markers.Any(marker => marker.Actor == chartedWreck && marker.Kind == MapMarkerKind.Wreck), "Nearby wreck becomes charted");
             Check(navigation.Markers.Any(marker => marker.Title == "Neutral antimatter · 98"), "Remote resources reveal when approached on the other hemisphere");
-            object zone = typeof(EnemyEcosystemDirector).GetMethod("SelectSpawnZone", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(director, null)!;
-            var habitat = (WorldLandmark?)typeof(EnemyEcosystemDirector).GetField("_habitat", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(director);
-            Check(habitat == remoteSite, "Ecosystem selects the nearest visited habitat");
-            object siegeZone = Activator.CreateInstance(zone.GetType(), new object[] { "Base Ruins", Vector3.Zero, 0.85f })!;
-            var roleMethod = typeof(EnemyEcosystemDirector).GetMethod("SelectRole", BindingFlags.NonPublic | BindingFlags.Instance)!;
-            GD.Seed(901);
-            int favored = 0;
-            for (int i = 0; i < 100; i++)
-                if ((EnemyEcosystemEnemy.EnemyRole)roleMethod.Invoke(director, new object[] { siegeZone, false, 0 })! == remoteSite.Habitat) favored++;
-            Check(favored >= 45 && favored <= 85, "Habitat bias applies even to high-pressure zones while preserving encounter variation");
-            Vector3 spawn = (Vector3)typeof(EnemyEcosystemDirector).GetMethod("SpawnPosition", BindingFlags.NonPublic | BindingFlags.Instance)!
-                .Invoke(director, new object[] { zone, EnemyEcosystemEnemy.EnemyRole.RangedCaster })!;
-            Check(arena.SurfaceDistance(remoteSite.GlobalPosition, spawn) > 23 && arena.SurfaceDistance(remoteSite.GlobalPosition, spawn) < 41
-                && Mathf.Abs(arena.Clearance(spawn) - 5.5f) < 0.001f, "Habitat spawning uses its radial local frame on the far side");
+            Check(director.TrySpawnNeutral(), "Stable habitat populations can fill an empty region while the player explores");
+            var mobs = game.GetChildren().OfType<EnemyEcosystemEnemy>().Where(e => e.IsTerritorial).ToArray();
+            Check(mobs.Select(e => e.HabitatId).Distinct().Count() == 5, "Initial replacements balance stable habitats rather than following the player");
+            Check(mobs.All(e => e.Territory != null && arena.SurfaceDistance(e.Territory.Home, e.GlobalPosition) < 41),
+                "Habitat spawning uses local radial coordinates on all hemispheres");
             player.GlobalPosition = start;
             navigation.Refresh();
             Check(navigation.Markers.Any(marker => marker.Actor == chartedWreck), "Discovered wreck remains charted after leaving the site");
@@ -180,11 +172,12 @@ public partial class StrategicNavigationChecks : Node
             Check(!canvas.SelectDestination(Vector2.Zero), "Clicks outside the survey cannot create invalid waypoints");
             Vector2 click = canvas.SurveyRect.Position + MapProjection.Project(arena.UpAt(remoteSite.GlobalPosition)) * canvas.SurveyRect.Size;
             Check(canvas.SelectDestination(click) && navigation.WaypointName == "Starfall Observatory", "Clicking a charted landmark selects its waypoint");
-            float intensity = director.Intensity;
+            float raidTime = director.RaidRemaining;
             director.SetPhysicsProcess(true);
             player.SetPhysicsProcess(true);
             await Frames(4);
-            Check(director.Intensity > intensity && player.Speed < 0.1f, "Real-time survey advances the ecosystem while ship input is blocked");
+            Check(director.RaidRemaining < raidTime && arena.Tangent(player.Velocity, player.GlobalPosition).Length() < 0.1f,
+                "Real-time survey advances raid pacing while steering input is blocked and hover/gravity remain live");
             director.SetPhysicsProcess(false);
             player.SetPhysicsProcess(false);
 

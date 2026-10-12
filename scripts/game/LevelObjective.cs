@@ -23,9 +23,19 @@ public partial class LevelObjective : Node
     private FactionBase? _playerBase;
     private FactionBase? _rivalBase;
     private EnemyEcosystemEnemy? _rivalPilot;
+    private ShipFlightController? _rivalShip;
+    private bool _usesSharedRival;
     private bool _playerWaiting;
 
     public override void _Ready() => AddToGroup("level_objective");
+
+    public void Initialize(ShipFlightController player, FactionBase playerBase,
+        FactionBase rivalBase, ShipFlightController rivalShip)
+    {
+        _player = player; _playerBase = playerBase; _rivalBase = rivalBase; _rivalShip = rivalShip;
+        _usesSharedRival = true;
+        rivalShip.Defeated += OnRivalDefeated;
+    }
 
     public void Initialize(ShipFlightController player, FactionBase playerBase,
         FactionBase rivalBase, EnemyEcosystemEnemy rivalPilot)
@@ -39,6 +49,7 @@ public partial class LevelObjective : Node
 
     public override void _ExitTree()
     {
+        if (IsInstanceValid(_rivalShip)) _rivalShip!.Defeated -= OnRivalDefeated;
         if (IsInstanceValid(_rivalPilot))
         {
             _rivalPilot!.Defeated -= OnRivalDefeated;
@@ -63,21 +74,33 @@ public partial class LevelObjective : Node
             RivalRespawnRemaining = Mathf.Max(0, RivalRespawnRemaining - (float)delta);
             if (RivalRespawnRemaining <= 0)
             {
-                if (IsInstanceValid(_rivalPilot))
+                if (_usesSharedRival)
                 {
-                    _rivalPilot!.Defeated -= OnRivalDefeated;
-                    _rivalPilot.Name = "DefeatedRival";
+                    if (IsInstanceValid(_rivalShip))
+                    {
+                        _rivalShip!.RespawnAt(RespawnPosition(_rivalBase!));
+                        RivalPilotDefeated = false;
+                    }
                 }
-                var rival = new EnemyEcosystemEnemy
+                else
                 {
-                    Name = "RivalPilot",
-                    Role = EnemyEcosystemEnemy.EnemyRole.RivalShip,
-                    Position = GetParent<Node3D>().ToLocal(RespawnPosition(_rivalBase!))
-                };
-                GetParent().AddChild(rival);
-                _rivalPilot = rival;
-                rival.Defeated += OnRivalDefeated;
-                RivalPilotDefeated = false;
+                    // Historical diagnostic fixtures retain their original archetype.
+                    if (IsInstanceValid(_rivalPilot))
+                    {
+                        _rivalPilot!.Defeated -= OnRivalDefeated;
+                        _rivalPilot.Name = "DefeatedRival";
+                    }
+                    var rival = new EnemyEcosystemEnemy
+                    {
+                        Name = "RivalPilot",
+                        Role = EnemyEcosystemEnemy.EnemyRole.RivalShip,
+                        Position = GetParent<Node3D>().ToLocal(RespawnPosition(_rivalBase!))
+                    };
+                    GetParent().AddChild(rival);
+                    _rivalPilot = rival;
+                    rival.Defeated += OnRivalDefeated;
+                    RivalPilotDefeated = false;
+                }
             }
         }
         Evaluate();

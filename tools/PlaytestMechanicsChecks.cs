@@ -307,9 +307,10 @@ public partial class PlaytestMechanicsChecks : Node3D
         player.CollisionLayer = player.CollisionMask = 0;
         Check(player.GlobalPosition.Y <= 12, "Player spawn clamps to the shared twelve-unit ceiling");
         Input.ActionPress("ascend");
-        await Frames(60);
+        await Frames(180);
         Input.ActionRelease("ascend");
-        Check(player.GlobalPosition.Y <= 12.01f && player.Velocity.Y <= 0.01f, "Holding ascend stops at ceiling without accumulating upward velocity");
+        Check(player.GlobalPosition.Y < 4 && Mathf.Abs(player.Velocity.Y) < 2,
+            "Legacy ascend cannot control ship altitude; gravity returns it to low hovering");
         player.SetPhysicsProcess(false);
         var enemies = new List<EnemyEcosystemEnemy>();
         foreach (var role in new[] { EnemyEcosystemEnemy.EnemyRole.FlyingSwarm, EnemyEcosystemEnemy.EnemyRole.RangedCaster,

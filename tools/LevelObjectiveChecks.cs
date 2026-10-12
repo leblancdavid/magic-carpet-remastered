@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Godot;
@@ -21,17 +22,23 @@ public partial class LevelObjectiveChecks : Node3D
         try
         {
             CheckVictory(hubFirst: true);
-            ClearActors();
+            await ClearActors();
             CheckVictory(hubFirst: false);
-            ClearActors();
+            await ClearActors();
             CheckDefeat();
-            ClearActors();
+            await ClearActors();
             CheckRespawns();
-            ClearActors();
+            await ClearActors();
             CheckArenaIntegration();
             GetTree().Paused = false;
-            ClearActors();
+            await ClearActors();
             await CheckRestart();
+            // Finish the reloaded world while the native runtime is alive rather
+            // than racing scene retirement against immediate process shutdown.
+            Node restartedWorld = GetTree().CurrentScene;
+            GetTree().CurrentScene = null;
+            restartedWorld.QueueFree();
+            for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
             GD.Print($"Level objective checks passed: {_checks}");
             GetTree().Quit();
         }
@@ -166,8 +173,10 @@ public partial class LevelObjectiveChecks : Node3D
         var game = AddActor(new MagicCarpetRemastered.Scripts.Game.Game());
         var objective = game.GetNode<LevelObjective>("LevelObjective");
         var director = game.GetNode<EnemyEcosystemDirector>("EnemyEcosystemDirector");
-        Check(!director.SpawnRivalShips, "Director cannot replace the designated rival");
-        var rival = game.GetNode<EnemyEcosystemEnemy>("RivalPilot");
+        for (int i = 0; i < 12; i++) director.TrySpawnNeutral();
+        Check(game.GetChildren().OfType<ShipFlightController>().Count(e => !e.IsPlayerControlled) == 1,
+            "Habitat population spawning cannot replace or duplicate the designated rival");
+        var rival = game.GetNode<ShipFlightController>("RivalPilot");
         Check(rival.Health > 0 && !objective.RivalPilotDefeated, "Arena begins with living rival");
         game.GetNode<FactionBase>("EnemyBase").ApplyDamage(1000);
         rival.ApplyDamage(1000);
@@ -196,7 +205,7 @@ public partial class LevelObjectiveChecks : Node3D
         GetTree().Root.AddChild(game);
         GetTree().CurrentScene = game;
         game.GetNode<FactionBase>("EnemyBase").ApplyDamage(1000);
-        game.GetNode<EnemyEcosystemEnemy>("RivalPilot").ApplyDamage(1000);
+        game.GetNode<ShipFlightController>("RivalPilot").ApplyDamage(1000);
         game.GetNode<LevelObjective>("LevelObjective").Evaluate();
         var spawned = new EnemyEcosystemEnemy();
         game.AddChild(spawned);
@@ -208,7 +217,7 @@ public partial class LevelObjectiveChecks : Node3D
         Check(restarted != null && restarted != game && !GetTree().Paused, "R reloads the actual arena and unpauses");
         Check(restarted!.GetNode<LevelObjective>("LevelObjective").State == LevelObjective.LevelState.Playing,
             "Restart resets terminal objective state");
-        Check(restarted.GetNode<EnemyEcosystemEnemy>("RivalPilot").Health > 0
+        Check(restarted.GetNode<ShipFlightController>("RivalPilot").Health > 0
             && !restarted.GetNode<FactionBase>("EnemyBase").IsDestroyed,
             "Restart restores rival pilot and hub");
         if (DisplayServer.GetName() != "headless")
@@ -217,9 +226,10 @@ public partial class LevelObjectiveChecks : Node3D
         }
     }
 
-    private void ClearActors()
+    private async Task ClearActors()
     {
-        foreach (Node child in GetChildren()) child.Free();
+        foreach (Node child in GetChildren()) child.QueueFree();
+        for (int i = 0; i < 10; i++) await ToSignal(GetTree(), SceneTree.SignalName.PhysicsFrame);
     }
 
     private void Check(bool condition, string message)

@@ -1,5 +1,7 @@
 # Spherical Worlds
 
+**Current redesign (2026-10-12):** gameplay ships use automatic low hovering, gravity/ramp momentum and a **2-current-energy Space jump** with no fall damage. Manual altitude control and the live ship ground-relative ceiling are superseded; non-ship actors and the F6 flight lab retain their existing flight bounds. **Compact 100/200/300/400 m presets and layered dramatic terrain are live:** oceans/islands/lowlands, narrow mountain belts/saddles and actual seeded-start landing pads. Slope-aware opening validation/rival routing is next. See `TERRAIN_HOVER_PLAN.md`; technical history below retains previous tuning.
+
 ## Terminology Update (2026-10-11)
 
 The behavior-preserving migration is complete. Current gameplay uses ships/pilots, bases, physical antimatter, rechargeable energy, collector drones, equipment and Claim. Tactical Radar replaces All-Seeing Eye. The migration retained scene paths, geometry, flight, cameras, tuning and controls. Subsequent explicit tiers, storage-backed energy, construction/siege/rebuilding and B-key real-time management/starter projects are documented in `BASE_DEVELOPMENT.md`. The M survey is now real time; owned equipment/home installation follows next. Technical history below retains its original vocabulary; current type/path/ID mappings and verification commands are in `TERMINOLOGY_MIGRATION.md` and `README.md`.

@@ -106,7 +106,7 @@ public partial class WorldAntimatterTracker : Node
         {
             if (node is EnemyEcosystemEnemy enemy)
             {
-                if (enemy.Role is EnemyEcosystemEnemy.EnemyRole.AntimatterThief or EnemyEcosystemEnemy.EnemyRole.RivalShip)
+                if (enemy.Role == EnemyEcosystemEnemy.EnemyRole.RivalShip)
                     EnemyControlledAntimatter += enemy.AntimatterReserve;
                 else
                     NeutralCreatureAntimatter += enemy.AntimatterReserve;

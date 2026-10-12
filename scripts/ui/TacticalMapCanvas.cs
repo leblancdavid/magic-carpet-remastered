@@ -17,7 +17,6 @@ public partial class TacticalMapCanvas : Control
     private static readonly Color PanelColor = new(0.025f, 0.045f, 0.07f, 0.94f);
     private static readonly Color LineColor = new(0.3f, 0.5f, 0.62f, 0.65f);
     private static readonly Color Gold = new(1, 0.8f, 0.2f);
-    private static readonly string RangeLabel = $"Local range {WorldNavigation.RadarRange:0} m";
 
     public Rect2 SurveyRect
     {
@@ -76,18 +75,15 @@ public partial class TacticalMapCanvas : Control
     {
         if (Navigation == null || !GodotObject.IsInstanceValid(Navigation.Player)) return;
         if (Expanded) DrawSurvey();
-        else DrawRadar();
+        else if (!Navigation.Player.GameplayInputBlocked && !GetTree().Paused) DrawRadar();
     }
 
     private void DrawRadar()
     {
-        // Leave space for the independent matter reserve in the four-line HUD.
-        DrawSetTransform(new Vector2(0, 30));
-        DrawRect(new Rect2(20, 130, 232, 282), PanelColor);
-        Text(new Vector2(34, 154), "TACTICAL RADAR", Colors.White, 16);
-        Text(new Vector2(177, 154), "M map", new Color(0.65f, 0.8f, 0.95f), 13);
-        Vector2 center = new(136, 254);
-        const float radius = 86;
+        DrawRect(new Rect2(16, 124, 196, 224), PanelColor);
+        Text(new Vector2(28, 146), $"RADAR · {WorldNavigation.RadarRange:0} m", Colors.White, 13);
+        Vector2 center = new(114, 227);
+        const float radius = 72;
         DrawCircle(center, radius, new Color(0.05f, 0.1f, 0.14f));
         DrawArc(center, radius, 0, Mathf.Tau, 64, LineColor, 1.5f, true);
         DrawArc(center, radius * 0.5f, 0, Mathf.Tau, 48, LineColor.Darkened(0.4f), 1, true);
@@ -108,11 +104,9 @@ public partial class TacticalMapCanvas : Control
         DrawLine(center, center + target.LimitLength(WorldNavigation.RadarRange) / WorldNavigation.RadarRange * radius, new Color(1, 0.8f, 0.2f, 0.5f), 1.5f);
         Cross(center + target.LimitLength(WorldNavigation.RadarRange) / WorldNavigation.RadarRange * radius, Gold);
         Arrow(center, Vector2.Up, Colors.White);
-        Text(new Vector2(103, 180), "FORWARD", new Color(0.6f, 0.7f, 0.8f), 11);
-        Text(new Vector2(34, 362), RangeLabel, new Color(0.65f, 0.75f, 0.85f), 13);
-        Text(new Vector2(34, 382), _targetTitle, Gold, 15);
-        Text(new Vector2(34, 402), _targetGuidance, Colors.White, 14);
-        DrawSetTransform(Vector2.Zero);
+        Text(new Vector2(86, 169), "FORWARD", new Color(0.6f, 0.7f, 0.8f), 10);
+        Text(new Vector2(28, 319), _targetTitle, Gold, 13, 172);
+        Text(new Vector2(28, 339), _targetGuidance, Colors.White, 12, 172);
     }
 
     private void DrawSurvey()
@@ -199,6 +193,6 @@ public partial class TacticalMapCanvas : Control
         DrawColoredPolygon(_arrow, color);
     }
 
-    private void Text(Vector2 point, string text, Color color, int size)
-        => DrawString(_font, point, text, HorizontalAlignment.Left, -1, size, color);
+    private void Text(Vector2 point, string text, Color color, int size, float width = -1)
+        => DrawString(_font, point, text, HorizontalAlignment.Left, width, size, color);
 }

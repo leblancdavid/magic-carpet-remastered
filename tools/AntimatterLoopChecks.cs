@@ -308,20 +308,28 @@ public partial class AntimatterLoopChecks : Node3D
         Check(tracker.TotalAntimatter == total, "Pilot absorption/deposit conserves antimatter");
         pilot._PhysicsProcess(pilot.AttackCooldownSeconds + 0.01);
         Check(pilot.AntimatterReserve == 0 && hub.StoredAntimatter == 19, "Pilot docks after collection cooldown");
+        pilot.GlobalPosition = new Vector3(100, 0, 0);
 
         var thief = AddActor(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.AntimatterThief });
         var owned = AddActor(new AntimatterPickup { Ownership = AntimatterOwnership.Player, AntimatterAmount = 15 });
         thief._PhysicsProcess(0.01);
         thief._PhysicsProcess(thief.AttackCooldownSeconds + 0.01);
-        Check(owned.AntimatterAmount == 0 && hub.StoredAntimatter == 34, "Thief collects and deposits antimatter");
+        Check(owned.AntimatterAmount == 0 && thief.AntimatterReserve == 15 && hub.StoredAntimatter == 19,
+            "Territorial scavenger retains stolen antimatter rather than funding the rival");
+        tracker.Refresh(); int thiefTotal = tracker.TotalAntimatter;
+        Check(tracker.NeutralCreatureAntimatter == 15, "Scavenged reserves belong to the neutral ecosystem");
+        thief.ApplyDamage(1000); tracker.Refresh();
+        Check(tracker.TotalAntimatter == thiefTotal && tracker.NeutralLooseAntimatter == 15,
+            "Scavenger death releases exact neutral salvage");
 
         pilot.AbsorbAntimatter(19);
         tracker.Refresh();
         total = tracker.TotalAntimatter;
+        int rivalTotal = tracker.EnemyControlledAntimatter;
         pilot.ApplyDamage(1000);
         tracker.Refresh();
         Check(pilot.AntimatterReserve == 0 && tracker.TotalAntimatter == total, "Death drops preserve remainder and clear reserve");
-        Check(tracker.EnemyControlledAntimatter == total, "Pilot drops retain rival ownership");
+        Check(tracker.EnemyControlledAntimatter == rivalTotal, "Pilot drops retain rival ownership");
         pilot.ApplyDamage(1000);
         tracker.Refresh();
         Check(tracker.TotalAntimatter == total, "Repeated death damage cannot duplicate drops");

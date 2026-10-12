@@ -15,6 +15,7 @@ public partial class WeaponProjectile : Area3D
 
     private Vector3 _direction = Vector3.Forward;
     private ShipFlightController? _owner;
+    private AntimatterOwnership _ownership = AntimatterOwnership.Player;
     private float _lifeRemaining;
     private HeightmapArena? _arena;
     private static readonly SphereMesh SharedMesh = new() { Radius = 0.35f, Height = 0.7f, RadialSegments = 12, Rings = 6 };
@@ -78,7 +79,7 @@ public partial class WeaponProjectile : Area3D
         float stepDistance = GlobalPosition.DistanceTo(previous);
         foreach (Node node in GetTree().GetNodesInGroup("drone"))
         {
-            if (node is not CollectorDrone drone || drone.UsePlayerAntimatter)
+            if (node is not CollectorDrone drone || !FactionCombat.CanDamage(drone, _ownership))
             {
                 continue;
             }
@@ -102,6 +103,7 @@ public partial class WeaponProjectile : Area3D
     {
         _direction = direction.Normalized();
         _owner = owner;
+        _ownership = owner.Ownership;
     }
 
     private void OnBodyEntered(Node3D body)
@@ -120,20 +122,8 @@ public partial class WeaponProjectile : Area3D
 
         if (body is ExplorationWreck wreck) wreck.ApplyDamage(Damage);
 
-        if (body is SimpleMonster monster)
-        {
-            monster.ApplyDamage(Damage);
-        }
-
-        if (body is EnemyEcosystemEnemy ecosystemEnemy)
-        {
-            ecosystemEnemy.ApplyDamage(Damage);
-        }
-
-        if (body is FactionBase { IsPlayerBase: false } hub)
-        {
-            hub.ApplyDamage(Damage);
-        }
+        if (FactionCombat.CanDamage(body, _ownership))
+            FactionCombat.Damage(body, Damage, IsInstanceValid(_owner) ? _owner : null);
 
         if (body.IsInGroup("deformable_terrain") && GetTree().GetFirstNodeInGroup("heightmap_arena") is HeightmapArena arena)
         {

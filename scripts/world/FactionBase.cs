@@ -307,11 +307,8 @@ public partial class FactionBase : StaticBody3D
     {
         UpdateBaseScale();
         UpdateVisualState();
-        if (IsPlayerBase)
-        {
-            var player = GetTree().GetFirstNodeInGroup("player") as ShipFlightController;
-            player?.RefreshBaseEnergyLimit();
-        }
+        foreach (Node node in GetTree().GetNodesInGroup("pilots"))
+            if (node is ShipFlightController ship && ship.IsPlayerControlled == IsPlayerBase) ship.RefreshBaseEnergyLimit();
     }
 
     private void SpillAntimatter(int amount)

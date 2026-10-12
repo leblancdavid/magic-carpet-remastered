@@ -12,6 +12,9 @@ namespace MagicCarpetRemastered.Scripts.Game;
 public partial class Game : Node3D
 {
     [Export] public bool UseSphericalWorld { get; set; }
+    [Export] public int LayoutSeed { get; set; } = 7319;
+    [Export] public float MinimumFactionStartAngle { get; set; } = PlanetLayout.DefaultMinimumStartAngle;
+    public PlanetLayout? Layout { get; private set; }
     private HeightmapArena _arena = null!;
     private FactionBase _playerBase = null!;
     private FactionBase _enemyBase = null!;
@@ -98,6 +101,14 @@ public partial class Game : Node3D
         _arena = new HeightmapArena { Name = "HeightmapArena", IsSpherical = UseSphericalWorld, PlanetRadius = PlanetSizes.SelectedRadius };
         AddChild(_arena);
 
+        if (UseSphericalWorld)
+        {
+            Layout = PlanetLayout.Create(_arena, LayoutSeed, MinimumFactionStartAngle);
+            _arena.PreparePlanetLayout(Layout);
+            foreach (Vector3 up in Layout.Scenery) AddPillar(PlanetLayout.Position(_arena, up, 1.5f));
+            return;
+        }
+
         for (int i = 0; i < 18; i++)
         {
             float angle = Mathf.Tau * i / 18.0f;
@@ -112,7 +123,7 @@ public partial class Game : Node3D
         _player = new ShipFlightController
         {
             Name = "PlayerShip",
-            Position = AboveTerrain(UseSphericalWorld ? -130 : 0, 14, 9)
+            Position = UseSphericalWorld ? BesideBase(_playerBase, new Vector3(12, 0, 4), 6) : AboveTerrain(0, 14, 9)
         };
         AddChild(_player);
     }
@@ -122,7 +133,7 @@ public partial class Game : Node3D
         var well = new AntimatterSource
         {
             Name = "AntimatterSource",
-            Position = AboveTerrain(3.0f, 3.0f, 1.5f)
+            Position = UseSphericalWorld ? PlanetLayout.Position(_arena, Layout!.Landmarks[1].Up, 1.5f) : AboveTerrain(3.0f, 3.0f, 1.5f)
         };
         AddChild(well);
     }
@@ -133,7 +144,7 @@ public partial class Game : Node3D
         {
             Name = "PlayerBase",
             IsPlayerBase = true,
-            Position = AboveTerrain(UseSphericalWorld ? -145 : -22, 8, 2)
+            Position = UseSphericalWorld ? PlanetLayout.Position(_arena, Layout!.Starts[0], 2) : AboveTerrain(-22, 8, 2)
         };
         AddChild(_playerBase);
 
@@ -141,8 +152,8 @@ public partial class Game : Node3D
         {
             Name = "EnemyBase",
             IsPlayerBase = false,
-            Position = AboveTerrain(UseSphericalWorld ? 145 : 22, -12, 2),
-            InitialStoredAntimatter = 48
+            Position = UseSphericalWorld ? PlanetLayout.Position(_arena, Layout!.Starts[1], 2) : AboveTerrain(22, -12, 2),
+            InitialStoredAntimatter = 30
         };
         AddChild(_enemyBase);
     }
@@ -153,7 +164,7 @@ public partial class Game : Node3D
         {
             Name = "PlayerDrone",
             UsePlayerAntimatter = true,
-            Position = AboveTerrain(UseSphericalWorld ? -130 : -16, 4, 5),
+            Position = UseSphericalWorld ? BesideBase(_playerBase, new Vector3(-12, 0, 4), 5) : AboveTerrain(-16, 4, 5),
             MaxSeekRadius = UseSphericalWorld ? Mathf.Pi * _arena.PlanetRadius : 46
         });
 
@@ -161,7 +172,7 @@ public partial class Game : Node3D
         {
             Name = "EnemyDrone",
             UsePlayerAntimatter = false,
-            Position = AboveTerrain(UseSphericalWorld ? 130 : 16, -8, 5),
+            Position = UseSphericalWorld ? BesideBase(_enemyBase, new Vector3(-12, 0, 4), 5) : AboveTerrain(16, -8, 5),
             MaxSeekRadius = UseSphericalWorld ? Mathf.Pi * _arena.PlanetRadius : 46
         });
     }
@@ -170,13 +181,14 @@ public partial class Game : Node3D
     {
         if (UseSphericalWorld)
         {
-            foreach (WorldLandmark landmark in _landmarks)
+            foreach (Vector3 field in Layout!.AntimatterFields)
             {
-                if (landmark.SiteId is not ("ridge" or "wellfield" or "shore")) continue;
+                Vector3 center = PlanetLayout.Position(_arena, field);
+                Basis frame = PlanetGeometry.Frame(field, Mathf.Abs(field.Z) < 0.9f ? Vector3.Forward : Vector3.Right);
                 for (int i = 0; i < 4; i++)
                 {
                     float angle = Mathf.Tau * i / 4;
-                    Vector3 position = landmark.GlobalPosition + landmark.GlobalBasis * new Vector3(Mathf.Cos(angle) * 12, 0, Mathf.Sin(angle) * 12);
+                    Vector3 position = center + frame * new Vector3(Mathf.Cos(angle) * 12, 0, Mathf.Sin(angle) * 12);
                     var orb = new AntimatterPickup { Name = "SiteAntimatter", AntimatterAmount = 12, Ownership = AntimatterOwnership.Neutral };
                     orb.Position = _arena.OnSurface(position, orb.Radius);
                     AddChild(orb);
@@ -223,18 +235,19 @@ public partial class Game : Node3D
 
     private void CreateEnemyEcosystem()
     {
-        AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector", SpawnRivalShips = false });
+        AddChild(new EnemyEcosystemDirector { Name = "EnemyEcosystemDirector" });
     }
 
     private void CreateLevelObjective()
     {
-        var rival = new EnemyEcosystemEnemy
+        var rival = new ShipFlightController
         {
             Name = "RivalPilot",
-            Role = EnemyEcosystemEnemy.EnemyRole.RivalShip,
-            Position = AboveTerrain(UseSphericalWorld ? 130 : 17, -17, 7)
+            IsPlayerControlled = false,
+            Position = UseSphericalWorld ? BesideBase(_enemyBase, new Vector3(12, 0, 4), 6) : AboveTerrain(17, -17, 7)
         };
         AddChild(rival);
+        rival.AddChild(new RivalPilotController { Name = "RivalAI" });
         var objective = new LevelObjective { Name = "LevelObjective" };
         objective.Initialize(_player, _playerBase, _enemyBase, rival);
         objective.Finished += () =>
@@ -247,7 +260,7 @@ public partial class Game : Node3D
 
     private void CreateLandmarks()
     {
-        foreach (var site in PlanetLayout.Sites(_arena))
+        foreach (var site in Layout!.Landmarks)
         {
             var landmark = new WorldLandmark
             {
@@ -262,6 +275,13 @@ public partial class Game : Node3D
 
     private void CreateStrategicPoints()
     {
+        if (UseSphericalWorld)
+        {
+            foreach (var site in Layout!.EconomicSites)
+                AddChild(new StrategicPoint { Name = $"StrategicPoint{site.Side}_{(int)site.Role}", Role = site.Role,
+                    Position = PlanetLayout.Position(_arena, site.Up), CaptureRadius = Mathf.Clamp(_arena.PlanetRadius * 0.06f, 8, 18) });
+            return;
+        }
         // Mirrored surface directions keep opening opportunities comparable for both bases.
         for (int side = -1; side <= 1; side += 2)
         for (int role = 0; role < 4; role++)
@@ -282,6 +302,7 @@ public partial class Game : Node3D
             Position = position
         };
         AddChild(pillar);
+        pillar.AddToGroup("scenery");
         _arena.Orient(pillar);
 
         pillar.AddChild(new CollisionShape3D
@@ -303,6 +324,11 @@ public partial class Game : Node3D
 
     private void CreateMatterFields()
     {
+        if (UseSphericalWorld)
+        {
+            foreach (Vector3 up in Layout!.MatterFields) MatterPickup.Spawn(this, PlanetLayout.Position(_arena, up), 60);
+            return;
+        }
         for (int side = -1; side <= 1; side += 2)
         {
             Vector3 home = side < 0 ? _playerBase.GlobalPosition : _enemyBase.GlobalPosition;
@@ -319,4 +345,7 @@ public partial class Game : Node3D
     {
         return _arena.FromMap(x, z, clearance);
     }
+
+    private Vector3 BesideBase(FactionBase home, Vector3 offset, float clearance)
+        => _arena.OnSurface(home.GlobalPosition + home.GlobalBasis * offset, clearance);
 }

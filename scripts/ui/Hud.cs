@@ -9,7 +9,10 @@ public partial class Hud : CanvasLayer
 {
     private Label _vitals = null!;
     private Label _objective = null!;
-    private Label _loadout = null!;
+    private EquipmentBar _equipmentBar = null!;
+    private HBoxContainer _actions = null!;
+    private Button _baseAction = null!, _boonAction = null!, _mapAction = null!;
+    private Control _root = null!;
     private Label _feedback = null!;
     private Label _debugHint = null!;
     private PanelContainer _feedbackPanel = null!;
@@ -30,17 +33,18 @@ public partial class Hud : CanvasLayer
     public override void _Ready()
     {
         var root = new Control { Name = "HudRoot", MouseFilter = Control.MouseFilterEnum.Ignore };
+        _root = root;
         AddChild(root);
         root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
         AddLabelPanel(root, "Vitals", Control.LayoutPreset.TopLeft,
-            new Vector2(20, 20), new Vector2(310, 132), out _vitals);
+            new Vector2(16, 16), new Vector2(270, 94), out _vitals, 15);
         AddLabelPanel(root, "Objective", Control.LayoutPreset.TopRight,
-            new Vector2(-300, 20), new Vector2(280, 86), out _objective);
-        AddLabelPanel(root, "Loadout", Control.LayoutPreset.BottomLeft,
-            new Vector2(20, -124), new Vector2(360, 104), out _loadout);
+            new Vector2(-236, 16), new Vector2(220, 62), out _objective, 14);
+        _equipmentBar = new EquipmentBar(); root.AddChild(_equipmentBar);
+        Place(_equipmentBar, Control.LayoutPreset.CenterBottom, new Vector2(-190, -144), new Vector2(380, 126));
         _feedbackPanel = AddLabelPanel(root, "Feedback", Control.LayoutPreset.BottomLeft,
-            new Vector2(20, -188), new Vector2(360, 54), out _feedback);
+            new Vector2(16, -110), new Vector2(300, 46), out _feedback, 14);
         _feedbackPanel.Visible = false;
 
         _resultPanel = AddLabelPanel(root, "LevelResult", Control.LayoutPreset.Center,
@@ -49,8 +53,16 @@ public partial class Hud : CanvasLayer
         _resultPanel.Visible = false;
 
         AddLabelPanel(root, "DebugHint", Control.LayoutPreset.BottomRight,
-            new Vector2(-230, -56), new Vector2(210, 36), out _debugHint, 14);
-        _debugHint.Text = "F3  Show debug / controls";
+            new Vector2(-122, -46), new Vector2(106, 30), out _debugHint, 12);
+        _debugHint.Text = "F3  Help";
+        _actions = new HBoxContainer { Name = "InterfaceActions", MouseFilter = Control.MouseFilterEnum.Ignore };
+        root.AddChild(_actions); Place(_actions, Control.LayoutPreset.BottomLeft, new Vector2(16, -46), new Vector2(252, 30));
+        _actions.AddThemeConstantOverride("separation", 5);
+        _baseAction = ActionButton("BaseAction", "B  Base", () => (GetTree().GetFirstNodeInGroup("base_management") as BaseManagement)?.SetOpen(true));
+        _mapAction = ActionButton("MapAction", "M  Map", () => (GetTree().GetFirstNodeInGroup("tactical_map_ui") as TacticalMap)?.SetExpanded(true));
+        _boonAction = ActionButton("BoonAction", "H  Boons", () => (GetTree().GetFirstNodeInGroup("boon_choices") as BoonChoices)?.SetOpen(true));
+        _actions.AddChild(_baseAction); _actions.AddChild(_mapAction); _actions.AddChild(_boonAction);
+        root.Resized += LayoutHud;
 
         _debugPanel = CreatePanel("DebugPanel");
         root.AddChild(_debugPanel);
@@ -85,7 +97,7 @@ public partial class Hud : CanvasLayer
         if (@event.IsActionPressed("toggle_debug_ui") && !@event.IsEcho())
         {
             _debugPanel.Visible = !_debugPanel.Visible;
-            _debugHint.Text = _debugPanel.Visible ? "F3  Hide debug / controls" : "F3  Show debug / controls";
+            _debugHint.Text = _debugPanel.Visible ? "F3  Close" : "F3  Help";
             _refreshTimer = 0;
             GetViewport().SetInputAsHandled();
         }
@@ -131,9 +143,8 @@ public partial class Hud : CanvasLayer
         }
 
         _vitals.Text = $"HP {_player.Health}/{_player.MaximumHealth}   Energy {_player.Energy}/{_player.EnergyCapacity}\n"
-            + (_player.Health <= 0 ? $"Respawn in {_levelObjective?.PlayerRespawnRemaining:0.0}s"
-                : _player.IsShielded ? _player.ShieldStatusText : _player.IsInvulnerable ? "Protected after hit" : "Ship ready")
-            + (_playerBase == null ? "" : $"\nBase T{_playerBase.Tier}   Antimatter {_playerBase.StoredAntimatter}/{_playerBase.EffectiveStorageCapacity}\nMatter {_playerBase.StoredMatter}/{_playerBase.EffectiveMatterCapacity}");
+            + (_playerBase == null ? "" : $"Base T{_playerBase.Tier} · HP {_playerBase.Health}/{_playerBase.MaxHealth}\nA {_playerBase.StoredAntimatter}/{_playerBase.EffectiveStorageCapacity} · M {_playerBase.StoredMatter}/{_playerBase.EffectiveMatterCapacity}")
+            + (_player.Health <= 0 ? $"\nRespawn {_levelObjective?.PlayerRespawnRemaining:0.0}s" : _player.IsShielded ? $"\n{_player.ShieldStatusText}" : "");
         _objective.Text = _levelObjective == null ? "Eliminate the rival\nDestroy base and pilot"
             : $"Rival base: {(_levelObjective.RivalBaseDestroyed ? "Destroyed" : $"{_enemyBase?.Health} HP")}\n"
                 + $"Rival pilot: {(_levelObjective.RivalPilotDefeated ? _levelObjective.RivalBaseDestroyed ? "Defeated" : $"Respawn {_levelObjective.RivalRespawnRemaining:0}s" : "Alive")}";
@@ -143,10 +154,20 @@ public partial class Hud : CanvasLayer
             _result.Text = $"{(_levelObjective!.State == LevelObjective.LevelState.Victory ? "VICTORY" : "DEFEAT")}\n"
                 + $"{_levelObjective.ResultMessage}\n\nPress R to restart";
         }
-        _loadout.Text = $"Slot {_player.SelectedEquipmentSlot + 1}: {_player.PrimaryEquipmentName}   ·   LMB activate\n1–4 select   ·   Tab cycle   ·   RMB Claim\nShift: {_player.BoosterStatusText}";
+        bool livePanel = _player.GameplayInputBlocked;
+        _debugHint.GetParent<PanelContainer>().Visible = !livePanel && !GetTree().Paused;
+        _actions.Visible = !GetTree().Paused && !livePanel && _player.Health > 0;
+        _baseAction.Text = _playerBase is { Health: var hp, MaxHealth: var max } && hp < max ? "B  Base !" : "B  Base";
+        _baseAction.TooltipText = "Remote research and base development. Install owned equipment at home in Ship → Loadout. Gameplay stays live.";
+        _mapAction.Visible = GetTree().GetFirstNodeInGroup("tactical_map_ui") != null;
+        _mapAction.TooltipText = "World survey / waypoint. Gameplay stays live.";
+        _boonAction.Text = _player.Boons.Pending.Count > 0 ? $"H  Boons {_player.Boons.Pending.Count}" : "H  Boons";
+        _boonAction.TooltipText = "Secured choices and permanent match bonuses. Gameplay stays live.";
+        _equipmentBar.Refresh(); LayoutHud();
         _feedback.Text = _player.Health <= 0 ? "Pilot down — your base will respawn you"
-            : !string.IsNullOrEmpty(_player.DiscoveryFeedbackMessage) ? _player.DiscoveryFeedbackMessage : _player.ActiveFeedbackMessage;
-        _feedbackPanel.Visible = !_resultPanel.Visible && !string.IsNullOrEmpty(_feedback.Text);
+            : !string.IsNullOrEmpty(_player.DiscoveryFeedbackMessage) ? _player.DiscoveryFeedbackMessage
+            : !string.IsNullOrEmpty(_enemyEcosystem?.RaidFeedbackMessage) ? _enemyEcosystem!.RaidFeedbackMessage : _player.ActiveFeedbackMessage;
+        _feedbackPanel.Visible = !_resultPanel.Visible && !livePanel && !string.IsNullOrEmpty(_feedback.Text);
 
         if (!_debugPanel.Visible)
         {
@@ -169,16 +190,17 @@ public partial class Hud : CanvasLayer
             + "Orange crates: Claim then drone hauling. Matter does not power equipment.\n\n"
             + Section("BASES / ENEMIES")
             + BaseDetails(_playerBase, "Player") + BaseDetails(_enemyBase, "Rival")
-            + (_enemyEcosystem?.StatusText.Replace("   Intensity", "\nIntensity") ?? "Ecosystem unavailable") + "\n\n"
+            + (_enemyEcosystem?.StatusText ?? "Ecosystem unavailable") + "\n\n"
+            + "Rival AI: " + ((GetTree().GetFirstNodeInGroup("rival_ai") as MagicCarpetRemastered.Scripts.Enemies.RivalPilotController)?.StatusText ?? "unavailable") + "\n\n"
             + Section("TERRAIN") + _player.TerrainDebugText.Replace("   ", "\n")
             + "\n\n"
             + Section("CONTROLS")
-            + "WASD — fly\nSpace / C — ascend / descend\nShift — built-in forward boost (fresh press)\nMouse — look\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nR — restart arena\n\n"
+            + "WASD — hover / steer\nSpace — jump (2 current energy, fresh press)\nShift — built-in forward boost (fresh press)\nMouse — look / aim\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nR — restart arena\n\n"
             + $"1–4 — select equipped slot (no activation)\nLMB — activate {_player.PrimaryEquipmentName}\nTab — cycle installed slots\n"
             + $"RMB — Claim ({_player.ClaimEquipmentEnergyCost} energy): aim at a globe/material crate or the ground before it; the bolt follows terrain after landing.\n\n"
             + Section("OWNERSHIP / ROLE GUIDE")
             + "Antimatter: gray neutral · cyan yours · red rival\nDrones haul owned antimatter to bases. Base damage reduces storage; excess spills neutral. Stored antimatter supports equipment power. Pop rivals to spill their cargo.\n\n"
-            + "Orange — swarm\nGreen — beast\nBlue — caster\nRed — sieger\nYellow — thief\nPurple — pilot";
+            + "Orange — swarm\nGreen — beast\nBlue — caster\nRed — occasional raider\nYellow — local neutral scavenger\nPurple — rival pilot";
         if (_debugText.Text != details)
         {
             VScrollBar scroll = _debugText.GetVScrollBar();
@@ -189,6 +211,19 @@ public partial class Hud : CanvasLayer
     }
 
     private static string Section(string title) => $"[b][color=#82dbea]{title}[/color][/b]\n";
+
+    private static Button ActionButton(string name, string text, System.Action action)
+    {
+        var button = new Button { Name = name, Text = text, FocusMode = Control.FocusModeEnum.None, CustomMinimumSize = new Vector2(76, 30) };
+        button.AddThemeFontSizeOverride("font_size", 13); button.ButtonDown += action; return button;
+    }
+    private void LayoutHud()
+    {
+        if (_actions == null) return;
+        bool narrow = _root.Size.X < 1000;
+        Place(_actions, Control.LayoutPreset.BottomLeft, new Vector2(16, narrow ? -186 : -46), new Vector2(252, 30));
+        Place(_feedbackPanel, Control.LayoutPreset.BottomLeft, new Vector2(16, narrow ? -240 : -110), new Vector2(300, 46));
+    }
 
     private static string BaseDetails(FactionBase? hub, string side) => hub == null
         ? $"{side} base: unavailable\n"

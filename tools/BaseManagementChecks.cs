@@ -62,8 +62,8 @@ public partial class BaseManagementChecks : Node3D
             int energy = player.Energy;
             Input.ActionPress("activate_primary"); Input.ActionPress("activate_claim"); Input.ActionPress("activate_shield"); Input.ActionPress("move_forward");
             await Frames(4);
-            Check(player.Energy >= energy && !player.IsShielded && !GetChildren().OfType<WeaponProjectile>().Any()
-                && !GetChildren().OfType<ClaimProjectile>().Any(),
+            Check(player.Energy >= energy && !player.IsShielded && !game.GetChildren().OfType<WeaponProjectile>().Any()
+                && !game.GetChildren().OfType<ClaimProjectile>().Any(),
                 "Polling combat input does not fire or spend while UI owns input");
             Key(Godot.Key.Escape); await Frames(2);
             Check(!panel.IsOpen && !player.GameplayInputBlocked && !GetTree().Paused, "Escape restores gameplay without pausing");
@@ -106,17 +106,21 @@ public partial class BaseManagementChecks : Node3D
             player.SpendEnergy(player.Energy);
             typeof(ShipFlightController).GetMethod("RegenerateEnergy", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, new object[] { 1f });
             Check(player.Energy == Mathf.FloorToInt(player.EnergyRechargePerSecond), "Actual energy regeneration uses researched multiplier");
-            typeof(ShipFlightController).GetMethod("CastClaimEquipment", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, null);
-            var claim = GetChildren().OfType<ClaimProjectile>().Single();
+            Check(!player.TryActivateClaim(), "Management owns built-in Claim input");
+            panel.SetOpen(false); player._PhysicsProcess(0);
+            Check(player.TryActivateClaim(), "Closed management allows the ordinary Claim action");
+            var claim = game.GetChildren().OfType<ClaimProjectile>().Single();
             claim.SetPhysicsProcess(false);
             Check(claim.MaxRange == 150, "Actual built-in Claim cast receives researched range");
             claim.QueueFree();
+            panel.SetOpen(true);
             Check(panel.OrderProject("strike-drone"), "Panel orders offensive unit");
             hub._PhysicsProcess(15);
             var strike = GetTree().GetNodesInGroup("base_strike_drone").OfType<BaseStrikeDrone>().Single();
             strike.SetPhysicsProcess(false);
             int rivalHealth = rival.Health;
-            for (int i = 0; i < 600 && !strike.IsQueuedForDeletion(); i++) strike._PhysicsProcess(0.1);
+            int routeTicks = (int)Math.Ceiling(strike.LifetimeSeconds / 0.1) + 1;
+            for (int i = 0; i < routeTicks && !strike.IsQueuedForDeletion(); i++) strike._PhysicsProcess(0.1);
             Check(rival.Health == rivalHealth - 45 && strike.IsQueuedForDeletion(), "Offensive drone travels the globe and hits rival base once");
             strike._PhysicsProcess(1);
             Check(rival.Health == rivalHealth - 45 && !hub.Construction.IsCompleted("strike-drone"), "Repeatable unit cannot hit twice or become one-time research");

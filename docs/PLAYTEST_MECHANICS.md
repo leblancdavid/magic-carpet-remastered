@@ -51,7 +51,7 @@ Current defaults for the playable arena (2026-10-10).
 2. Attack the rival castle enough to spill its reserve. Stop attacking for five seconds and watch its health recover. Claim the spill while it repairs.
 3. Kill the rival wizard while its castle is intact. Confirm the countdown and its return at that castle after ten seconds.
 4. Allow your wizard to die with your castle intact. Confirm automatic recovery without resetting the arena or mana economy.
-5. Hold Space and try an upward Wind Dash. Confirm the lower flight ceiling, and check that swarms/casters remain accessible.
+5. Press Space to jump (2 current energy); holding it must not repeat. Try an upward Dash and a steep drop: ships use suspension/gravity and bounded launch lift, not a live ground-relative ceiling. Swarms/casters and other non-ship actors retain their existing ceiling. Check landing without fall damage. See `TERRAIN_HOVER_PLAN.md` for the approved movement redesign.
 6. Destroy the rival castle and then its wizard. Confirm the final result still pauses gameplay and R restarts.
 
 Automated coverage: `tools/PlaytestMechanicsChecks.tscn`, `tools/LevelObjectiveChecks.tscn`, and the existing mana/physics/wizard checks. These verify behavior and conservation; burst readability, hauling speed with many small spheres, and combat/repair balance still need hands-on feedback.

@@ -1,5 +1,6 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Enemies;
+using MagicCarpetRemastered.Scripts.Player;
 using MagicCarpetRemastered.Scripts.World;
 
 namespace MagicCarpetRemastered.Scripts.Equipment;
@@ -12,15 +13,18 @@ public partial class GuardianDrone : CharacterBody3D
     [Export] public float TargetRadius { get; set; } = 42.0f;
     [Export] public float AttackCooldownSeconds { get; set; } = 0.75f;
     [Export] public int Damage { get; set; } = 12;
+    public Node3D? OwnerPilot { get; set; }
 
     private StandardMaterial3D _material = null!;
     private float _lifeRemaining;
     private float _attackCooldown;
     private HeightmapArena? _arena;
+    private AntimatterOwnership _ownership = AntimatterOwnership.Player;
 
     public override void _Ready()
     {
         AddToGroup("guardian-drone");
+        if (IsInstanceValid(OwnerPilot)) _ownership = FactionCombat.OwnershipOf(OwnerPilot!);
         _lifeRemaining = LifetimeSeconds;
         AddCollisionAndVisuals();
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
@@ -38,7 +42,7 @@ public partial class GuardianDrone : CharacterBody3D
             return;
         }
 
-        EnemyEcosystemEnemy? target = FindNearestTarget();
+        Node3D? target = FindNearestTarget();
         if (target == null)
         {
             Velocity = Velocity.MoveToward(Vector3.Zero, MoveSpeed * deltaF);
@@ -69,7 +73,7 @@ public partial class GuardianDrone : CharacterBody3D
             Velocity = Vector3.Zero;
             if (_attackCooldown <= 0.0f)
             {
-                target.ApplyDamage(Damage);
+                FactionCombat.Damage(target, Damage, IsInstanceValid(OwnerPilot) ? OwnerPilot : null);
                 _attackCooldown = AttackCooldownSeconds;
             }
         }
@@ -78,13 +82,13 @@ public partial class GuardianDrone : CharacterBody3D
         _arena?.ClampFlightBody(this);
     }
 
-    private EnemyEcosystemEnemy? FindNearestTarget()
+    private Node3D? FindNearestTarget()
     {
-        EnemyEcosystemEnemy? best = null;
+        Node3D? best = null;
         float bestDistance = TargetRadius;
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
         {
-            if (node is not EnemyEcosystemEnemy enemy || enemy.Health <= 0)
+            if (node is not EnemyEcosystemEnemy enemy || !FactionCombat.CanDamage(enemy, _ownership))
             {
                 continue;
             }
@@ -98,6 +102,11 @@ public partial class GuardianDrone : CharacterBody3D
             best = enemy;
             bestDistance = distance;
         }
+
+        foreach (Node node in GetTree().GetNodesInGroup("pilots"))
+            if (node is ShipFlightController ship && FactionCombat.CanDamage(ship, _ownership)
+                && GlobalPosition.DistanceTo(ship.GlobalPosition) < bestDistance)
+            { best = ship; bestDistance = GlobalPosition.DistanceTo(ship.GlobalPosition); }
 
         return best;
     }
