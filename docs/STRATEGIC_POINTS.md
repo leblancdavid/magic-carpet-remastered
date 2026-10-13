@@ -12,7 +12,7 @@ First playable implementation, 2026-10-11, including matter extractors after the
 - Each research station adds **25%** progress speed; bonuses add (two stations = 1.5×) across all five construction categories, including upgrades/rebuilds/repeatables and active projects. Payments, stored base durations, prerequisites, completed records and slots remain unchanged. Losing ownership immediately removes the rate bonus.
 - Matter extractors use the same **2 matter/second** fractional/partial/full/capture rules and independent material capacity. They do not change current energy or its limit. `GeneratedMatter` / `WorldMatterTracker.SiteGeneratedMatter` report only accepted new supply. Logistics now transfers mixed antimatter/material cargo with the shared three-object collector limit.
 - Neutral logistics stations activate exactly one drone on first capture. Neutralization suspends station-drone movement/pickup/deposit, preserving its old faction and attached cargo. Final capture resumes and transfers that same living drone, ownership groups/visuals, all attached cargo and destination; resets former seek/return/dock state; and applies the new base's collector upgrade. Cargo is retained at full storage and partly deposited when room exists. Destroyed drones are **not replaced** by recapture. Sites remain indestructible. Ownership persists when a base falls, but generation/capture for that base is disabled.
-- Sites are globally charted as ring/cross markers colored gray/cyan/red, orange contested. Hover gives full role/owner/benefit/progress; compact local feedback appears within capture radius + 12 (30 globe units). Rings/columns follow terrain/water. B/F3 summarize owned sites, maximum income, research modifiers and station drones separately from home collectors; F3 reports accepted supply. R/new scene resets site/drone state.
+- Sites use ring/cross markers colored gray/cyan/red, orange contested. Both maps show player-owned sites globally and all other sites only within 220 m ship sensing. Losing ownership removes global visibility. Hover gives full role/owner/benefit/progress; compact local feedback appears within capture radius + 12. Rings/columns follow terrain/water. B/F3 summarize owned sites, maximum income, research modifiers and station drones separately from home collectors; F3 reports accepted supply. R/new scene resets site/drone state.
 - A screen-space HUD bar above equipment shows role, current stage and percentage while the player is inside the zone, regardless of camera aim. Contested/restoration/owned states are explicit; live panels, pause, death and results hide it. Leaving hides the bar without erasing gameplay progress.
 
 ### Validation And Playtest
@@ -79,7 +79,7 @@ Current neutral activation, no replacement, new-owner upgrades and indestructibl
 - Evaluate spherical surface travel distances, terrain accessibility and comparable opportunities for each faction across all size presets.
 - Fixed strategic sites and random arriving wrecks are separate placement systems. Do not apply a wreck's base-exclusion rule to stations without a layout decision.
 - Radar/world-map markers show site role, ownership and benefit information; locally visible capture feedback shows progress and contest.
-- Current globally charted eight-site layout remains tunable.
+- Current eight-site layout and ship-only sensing remain tunable.
 - Base UI should summarize owned sites, income, research modifiers and station-controlled drones separately from purchased drones.
 
 ## Verification Requirements

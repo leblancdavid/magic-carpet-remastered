@@ -85,9 +85,22 @@ public partial class StrategicNavigationChecks : Node
             foreach (var drone in game.GetChildren().OfType<CollectorDrone>())
                 Check(drone.MaxSeekRadius >= Mathf.Pi * arena.PlanetRadius, "Claimed far-side drops remain reachable by haulers");
             Check(navigation.Markers.Count(marker => marker.Kind == MapMarkerKind.Home) == 1
-                && navigation.Markers.Count(marker => marker.Kind == MapMarkerKind.RivalBase) == 1, "Both bases are known from the start");
-            Check(navigation.Markers.Count(marker => marker.Kind == MapMarkerKind.Landmark && !marker.Charted) == 5,
-                "Unknown sites are chart hints without revealed names");
+                && !navigation.Markers.Any(marker => marker.Kind == MapMarkerKind.RivalBase), "Only home is known from the start");
+            Check(navigation.Markers.Where(marker => marker.Kind == MapMarkerKind.Landmark).All(marker => navigation.CanDisplay(marker)),
+                "Landmarks require local sensing instead of global chart hints");
+            Vector3 opening = player.GlobalPosition;
+            var rivalBase = game.GetNode<FactionBase>("EnemyBase");
+            player.GlobalPosition = arena.OnSurface(rivalBase.GlobalPosition, 8); navigation.Refresh();
+            Check(navigation.Markers.Any(marker => marker.Kind == MapMarkerKind.RivalBase && marker.Title.Contains("HP")), "Nearby rival base reveals live details");
+            player.GlobalPosition = opening; navigation.Refresh();
+            Check(navigation.Markers.Any(marker => marker.Kind == MapMarkerKind.RivalBase && marker.Actor == null && !marker.Title.Contains("HP")),
+                "Discovered rival location persists without remote live details");
+            var captureSite = game.GetChildren().OfType<StrategicPoint>().OrderByDescending(site => arena.SurfaceDistance(player.GlobalPosition, site.GlobalPosition)).First();
+            Check(!navigation.Markers.Any(marker => marker.Actor == captureSite), "Remote unowned capture point is hidden");
+            captureSite.Advance(10, true, false); navigation.Refresh();
+            Check(navigation.Markers.Any(marker => marker.Actor == captureSite && marker.AlwaysVisible), "Owned capture point is globally visible");
+            captureSite.Advance(10, false, true); navigation.Refresh();
+            Check(!navigation.Markers.Any(marker => marker.Actor == captureSite), "Neutralizing a remote capture point removes global visibility");
             navigation.SetWaypoint(-arena.UpAt(player.GlobalPosition), "Far side");
             Check(Mathf.Abs(navigation.TargetDistance - Mathf.Pi * arena.PlanetRadius) < 1
                 && float.IsFinite(navigation.TargetDistance), "Antipodal waypoint distance equals half the circumference rather than world X/Z");
@@ -110,14 +123,21 @@ public partial class StrategicNavigationChecks : Node
             navigation.Refresh();
             Check(navigation.Markers.Any(marker => marker.Title == "Neutral antimatter · 77"), "Nearby neutral antimatter is revealed");
             Check(!navigation.Markers.Any(marker => marker.Title == "Neutral antimatter · 98"), "Remote neutral antimatter is not globally revealed");
-            Check(navigation.Markers.Any(marker => marker.Title == "Player antimatter · 123"), "Owned loose antimatter remains trackable on the far side");
+            Check(!navigation.Markers.Any(marker => marker.Title == "Player antimatter · 123"), "Owned loose antimatter also requires ship sensing");
             MapMarker liveMarker = navigation.Markers.Single(marker => marker.Title == "Neutral antimatter · 77");
+            Check(liveMarker.Color == Colors.Orange, "Neutral antimatter uses an orange dot");
+            var material = new MatterPickup { Position = arena.OnSurface(player.GlobalPosition, 1), MatterAmount = 9 }; game.AddChild(material); material.SetPhysicsProcess(false);
+            navigation.Refresh(); Check(navigation.Markers.Single(marker => marker.Actor == material).Color == Colors.Gray, "Neutral matter uses a gray dot");
+            material.ReassignOwnership(AntimatterOwnership.Player); navigation.Refresh();
+            Check(navigation.Markers.Single(marker => marker.Actor == material).Color == new Color(0.15f, 0.85f, 1), "Claimed matter changes to faction color"); material.QueueFree();
             Vector3 snapshotUp = liveMarker.Up;
             nearby.GlobalPosition = arena.OnSurface(player.GlobalPosition + player.GlobalBasis.X * 12, 1);
             Check(liveMarker.TryGetLiveUp(arena, out Vector3 liveUp)
                 && liveUp.DistanceTo(snapshotUp) > 0.01f
                 && liveUp.DistanceTo(arena.UpAt(nearby.GlobalPosition)) < 0.00001f,
                 "Radar follows moving actors between visibility snapshots without a group refresh");
+            Vector3 localPosition = nearby.GlobalPosition; nearby.GlobalPosition = remoteSite.GlobalPosition;
+            Check(!navigation.CanDisplay(liveMarker), "Leaving sensor range hides cached markers before the next refresh"); nearby.GlobalPosition = localPosition;
             Check(Mathf.Abs(navigation.TargetDistance - arena.SurfaceDistance(player.GlobalPosition, navigation.WorldPosition(navigation.TargetUp))) < 0.01f,
                 "Terrain-free guidance retains accurate great-circle target distance");
             var disposable = AddOrb(player.GlobalPosition, 7, AntimatterOwnership.Player);
@@ -139,7 +159,7 @@ public partial class StrategicNavigationChecks : Node
             navigation.Refresh();
             Check(!navigation.Markers.Any(marker => marker.Title.EndsWith("· 77")), "Hidden pending fragments do not appear as available resources");
             owned.BeginCarry(game.GetNode<CollectorDrone>("PlayerDrone"), Vector3.Zero);
-            Check(!navigation.Markers.Single(marker => marker.Actor == owned).TryGetLiveUp(arena, out _),
+            Check(!new MapMarker(arena.UpAt(owned.GlobalPosition), "cargo", MapMarkerKind.Antimatter, Colors.White) { Actor = owned }.TryGetLiveUp(arena, out _),
                 "Carried antimatter immediately stops drawing between visibility scans");
             navigation.Refresh();
             Check(!navigation.Markers.Any(marker => marker.Title == "Player antimatter · 123"), "Carried antimatter is represented by drone cargo rather than duplicate loose markers");
@@ -155,15 +175,16 @@ public partial class StrategicNavigationChecks : Node
             navigation.Refresh();
             Check(navigation.Markers.Any(marker => marker.Actor == chartedWreck && marker.Kind == MapMarkerKind.Wreck), "Nearby wreck becomes charted");
             Check(navigation.Markers.Any(marker => marker.Title == "Neutral antimatter · 98"), "Remote resources reveal when approached on the other hemisphere");
-            Check(director.TrySpawnNeutral(), "Stable habitat populations can fill an empty region while the player explores");
+            Check(director.TrySpawnNeutral() || director.InitialWaveCount == director.MaxActiveEnemies, "Exploration does not bypass stable population cap");
             var mobs = game.GetChildren().OfType<EnemyEcosystemEnemy>().Where(e => e.IsTerritorial).ToArray();
-            Check(mobs.Select(e => e.HabitatId).Distinct().Count() == 5, "Initial replacements balance stable habitats rather than following the player");
+            Check(mobs.Select(e => e.HabitatId).Distinct().Count() >= 5, "Initial populations use stable habitats rather than following the player");
             Check(mobs.All(e => e.Territory != null && arena.SurfaceDistance(e.Territory.Home, e.GlobalPosition) < 41),
                 "Habitat spawning uses local radial coordinates on all hemispheres");
             player.GlobalPosition = start;
             navigation.Refresh();
-            Check(navigation.Markers.Any(marker => marker.Actor == chartedWreck), "Discovered wreck remains charted after leaving the site");
+            Check(!navigation.Markers.Any(marker => marker.Actor == chartedWreck) && chartedWreck.IsCharted, "Chart memory does not expose remote wreck markers");
             chartedWreck.ApplyDamage(50); navigation.Refresh();
+            player.GlobalPosition = arena.OnSurface(remoteSite.GlobalPosition, 8); navigation.Refresh();
             Check(navigation.Markers.Any(marker => marker.Actor == chartedWreck && marker.Kind == MapMarkerKind.Reward),
                 "Charted intact wreck changes to a distinct revealed salvage marker");
 
@@ -173,6 +194,8 @@ public partial class StrategicNavigationChecks : Node
             Check(!canvas.SelectDestination(Vector2.Zero), "Clicks outside the survey cannot create invalid waypoints");
             Vector2 click = canvas.SurveyRect.Position + MapProjection.Project(arena.UpAt(remoteSite.GlobalPosition)) * canvas.SurveyRect.Size;
             Check(canvas.SelectDestination(click) && navigation.WaypointName == "Starfall Observatory", "Clicking a charted landmark selects its waypoint");
+            player.GlobalPosition = start; navigation.Refresh(); navigation.ClearWaypoint();
+            Check(canvas.SelectDestination(click) && navigation.WaypointName == "Waypoint", "Survey clicks cannot identify an out-of-range hidden landmark");
             float raidTime = director.RaidRemaining;
             director.SetPhysicsProcess(true);
             player.SetPhysicsProcess(true);

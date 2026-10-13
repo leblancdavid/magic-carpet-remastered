@@ -82,7 +82,7 @@ public partial class PlanetLayoutChecks : Node3D
                 arena.QueueFree(); await Frames(4);
             }
 
-            foreach (int radius in DisplayServer.GetName() == "headless" ? PlanetSizes.Radii : new[] { 100, 200 })
+            foreach (int radius in DisplayServer.GetName() == "headless" ? PlanetSizes.Radii : new[] { 200, 300 })
             {
                 PlanetSizes.SelectedIndex = Array.IndexOf(PlanetSizes.Radii, radius);
                 var game = GD.Load<PackedScene>("res://scenes/PlanetGame.tscn").Instantiate<MagicCarpetRemastered.Scripts.Game.Game>();

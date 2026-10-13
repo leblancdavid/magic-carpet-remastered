@@ -61,12 +61,12 @@ public partial class TacticalMapCanvas : Control
         float best = 12 * 12;
         foreach (MapMarker marker in Navigation.Markers)
         {
-            if (marker.Kind == MapMarkerKind.Player) continue;
-            Vector2 projected = SurveyRect.Position + MapProjection.Project(marker.Up) * SurveyRect.Size;
+            if (marker.Kind == MapMarkerKind.Player || !Navigation.CanDisplay(marker) || !marker.TryGetLiveUp(Navigation.Arena, out Vector3 up)) continue;
+            Vector2 projected = SurveyRect.Position + MapProjection.Project(up) * SurveyRect.Size;
             float distance = projected.DistanceSquaredTo(position);
             if (distance < best) { best = distance; nearest = marker; }
         }
-        if (nearest != null) Navigation.SetWaypoint(nearest.Up, nearest.Title.Split('·', '—')[0].Trim());
+        if (nearest != null && nearest.TryGetLiveUp(Navigation.Arena, out Vector3 destination)) Navigation.SetWaypoint(destination, Navigation.VisibleTitle(nearest).Split('·', '—')[0].Trim());
         else Navigation.SetWaypoint(MapProjection.Unproject((position - SurveyRect.Position) / SurveyRect.Size));
         return true;
     }
@@ -92,11 +92,11 @@ public partial class TacticalMapCanvas : Control
         Basis playerFrame = Navigation.Player.GlobalBasis;
         foreach (MapMarker marker in Navigation.Markers)
         {
-            if (marker.Kind == MapMarkerKind.Player) continue;
+            if (marker.Kind == MapMarkerKind.Player || !Navigation.CanDisplay(marker)) continue;
             if (!marker.TryGetLiveUp(Navigation.Arena, out Vector3 up)) continue;
             Vector2 offset = MapProjection.LocalOffset(up, playerFrame, Navigation.Arena.PlanetRadius);
             bool outside = offset.Length() > WorldNavigation.RadarRange;
-            if (outside && marker.Kind is not (MapMarkerKind.Home or MapMarkerKind.RivalBase or MapMarkerKind.Landmark or MapMarkerKind.Upgrade or MapMarkerKind.Wreck or MapMarkerKind.Reward or MapMarkerKind.StrategicPoint)) continue;
+            if (outside && !marker.AlwaysVisible) continue;
             Vector2 point = center + offset.LimitLength(WorldNavigation.RadarRange) / WorldNavigation.RadarRange * radius;
             Glyph(point, marker, outside ? 3 : 4);
         }
@@ -124,22 +124,23 @@ public partial class TacticalMapCanvas : Control
         Vector2 mouse = GetLocalMousePosition();
         foreach (MapMarker marker in Navigation.Markers)
         {
-            Vector2 point = rect.Position + MapProjection.Project(marker.Up) * rect.Size;
+            if (!Navigation.CanDisplay(marker) || !marker.TryGetLiveUp(Navigation.Arena, out Vector3 up)) continue;
+            Vector2 point = rect.Position + MapProjection.Project(up) * rect.Size;
             if (marker.Kind == MapMarkerKind.Player)
             {
                 Vector3 nextUp = Navigation.Arena.UpAt(Navigation.Player.GlobalPosition - Navigation.Player.GlobalBasis.Z * 5);
                 Vector2 heading = MapProjection.WrappedDifference(MapProjection.Project(nextUp), MapProjection.Project(marker.Up)) * rect.Size;
                 Arrow(point, heading.LengthSquared() > 0.00001f ? heading.Normalized() : Vector2.Up, marker.Color);
             }
-            else Glyph(point, marker, marker.Kind == MapMarkerKind.Antimatter ? 3 : 6);
+            else Glyph(point, marker, marker.Kind is MapMarkerKind.Antimatter or MapMarkerKind.Matter or MapMarkerKind.Enemy ? 3 : 6);
             float distance = point.DistanceSquaredTo(mouse);
             if (distance < nearest) { nearest = distance; hover = marker; }
         }
         Cross(rect.Position + MapProjection.Project(Navigation.TargetUp) * rect.Size, Gold);
         float bottom = rect.End.Y + 26;
-        Text(new Vector2(rect.Position.X, bottom), "■ Base   □ Wreck   ◇ Landmark / drone   ◆ Salvage   ● Antimatter   ▣ Matter (orange neutral)   ▲ Threat", new Color(0.8f, 0.87f, 0.95f), 14);
+        Text(new Vector2(rect.Position.X, bottom), "■ Base   □ Wreck   ◇ Landmark / drone   ● Mob: black · Antimatter: orange · Matter: gray · Factions: cyan/red", new Color(0.8f, 0.87f, 0.95f), 14);
         Text(new Vector2(rect.Position.X, bottom + 27), $"Target: {Navigation.TargetName} · {Navigation.TargetDistance:0} m · {Navigation.BearingText()}", Gold, 16);
-        Text(new Vector2(rect.Position.X, bottom + 53), hover?.Title ?? "Economic sites: ring/cross markers. Hover for role/owner/benefit. Remain in ring to capture; opposing pilots contest.", Colors.White, 14);
+        Text(new Vector2(rect.Position.X, bottom + 53), hover != null ? Navigation.VisibleTitle(hover) : "Economic sites: ring/cross markers. Hover for role/owner/benefit. Remain in ring to capture; opposing pilots contest.", Colors.White, 14);
     }
 
     private void Glyph(Vector2 point, MapMarker marker, float size)
@@ -154,10 +155,10 @@ public partial class TacticalMapCanvas : Control
         }
         else if (marker.Kind == MapMarkerKind.Wreck)
             DrawRect(new Rect2(point - Vector2.One * size, Vector2.One * size * 2), marker.Color, false, 1.5f);
-        else if (marker.Kind == MapMarkerKind.Matter)
+        else if (marker.Kind is MapMarkerKind.Matter or MapMarkerKind.Antimatter || marker.Actor is MagicCarpetRemastered.Scripts.Enemies.EnemyEcosystemEnemy)
         {
-            DrawRect(new Rect2(point - Vector2.One * size, Vector2.One * size * 2), marker.Color, false, 1.5f);
-            DrawCircle(point, size * 0.4f, marker.Color);
+            if (marker.Color == Colors.Black) DrawCircle(point, size + 1, Colors.LightGray);
+            DrawCircle(point, size, marker.Color);
         }
         else if (marker.Kind is MapMarkerKind.Landmark or MapMarkerKind.Upgrade or MapMarkerKind.Drone or MapMarkerKind.Reward)
         {

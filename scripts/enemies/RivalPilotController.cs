@@ -54,7 +54,7 @@ public partial class RivalPilotController : Node
         {
             DiscoverWrecks();
             Node3D? threat = LocalThreat();
-            if (threat != null && _ship.Health > 35 && _ship.Energy >= 5 && Task != PilotTask.Attack)
+            if (threat != null && _ship.Health > 35 && _ship.Energy >= 5 && Task is not (PilotTask.Attack or PilotTask.Recover))
                 SetGoal(PilotTask.Defend, threat);
             else if (!GoalValid(home) || _age >= _deadline) SelectGoal(home);
             _think = 0.5f;

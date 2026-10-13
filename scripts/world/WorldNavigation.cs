@@ -9,6 +9,7 @@ public enum MapMarkerKind { Player, Home, RivalBase, Landmark, Upgrade, Antimatt
 public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Color Color, bool Charted = true)
 {
     public Node3D? Actor { get; init; }
+    public bool AlwaysVisible { get; init; }
 
     // Membership/metadata is sampled slowly; visible actors move at render cadence.
     public bool TryGetLiveUp(HeightmapArena arena, out Vector3 up)
@@ -30,7 +31,7 @@ public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Col
 
 public partial class WorldNavigation : Node
 {
-    public const float LocalRevealRange = 120;
+    public const float LocalRevealRange = RadarRange;
     public const float RadarRange = 220;
     public HeightmapArena Arena { get; private set; } = null!;
     public ShipFlightController Player { get; private set; } = null!;
@@ -42,8 +43,8 @@ public partial class WorldNavigation : Node
     public string TargetName => WaypointUp.HasValue ? WaypointName : "Home base";
     public float TargetDistance => MapProjection.LocalOffset(TargetUp, Player.GlobalBasis, Arena.PlanetRadius).Length();
     private readonly List<MapMarker> _markers = new();
-    private readonly List<WorldLandmark> _landmarks = new();
     private Vector3 _homeUp = Vector3.Up;
+    private readonly Dictionary<ulong, Vector3> _discoveredBases = new();
     private float _timer;
 
     public override void _Ready()
@@ -90,74 +91,82 @@ public partial class WorldNavigation : Node
     public void Refresh()
     {
         _markers.Clear();
-        _landmarks.Clear();
         _markers.Add(new MapMarker(Arena.UpAt(Player.GlobalPosition), "You", MapMarkerKind.Player, Colors.White) { Actor = Player });
         foreach (string group in new[] { "player_base", "enemy_base" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
             {
                 if (node is not FactionBase hub || hub.IsQueuedForDeletion()) continue;
                 if (hub.IsPlayerBase) _homeUp = Arena.UpAt(hub.GlobalPosition);
+                if (!hub.IsPlayerBase)
+                {
+                    if (Nearby(hub)) _discoveredBases[hub.GetInstanceId()] = Arena.UpAt(hub.GlobalPosition);
+                    if (!_discoveredBases.TryGetValue(hub.GetInstanceId(), out Vector3 location)) continue;
+                    if (!Nearby(hub))
+                    {
+                        _markers.Add(new MapMarker(location, "Rival base · discovered location", MapMarkerKind.RivalBase,
+                            new Color(1, 0.25f, 0.3f)) { AlwaysVisible = true });
+                        continue;
+                    }
+                }
                 Add(hub, hub.IsPlayerBase ? "Home" : "Rival base",
                     hub.IsPlayerBase ? MapMarkerKind.Home : MapMarkerKind.RivalBase,
                     hub.IsPlayerBase ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.25f, 0.3f),
-                    hub.IsDestroyed ? "Ruins" : $"{hub.Health} HP · {hub.StoredAntimatter} antimatter · {hub.StoredMatter} matter");
+                    hub.IsDestroyed ? "Ruins" : $"{hub.Health} HP · {hub.StoredAntimatter} antimatter · {hub.StoredMatter} matter", true);
             }
         foreach (Node node in GetTree().GetNodesInGroup("strategic_point"))
-            if (node is StrategicPoint point && !point.IsQueuedForDeletion())
+            if (node is StrategicPoint point && !point.IsQueuedForDeletion() && (point.Ownership == AntimatterOwnership.Player || Nearby(point)))
                 Add(point, point.StatusText.Replace('\n', ' '), MapMarkerKind.StrategicPoint,
                     point.IsContested ? Colors.Orange : point.Ownership == AntimatterOwnership.Player ? new Color(0.15f, 0.85f, 1)
-                    : point.Ownership == AntimatterOwnership.Enemy ? new Color(1, 0.25f, 0.3f) : Colors.LightGray);
+                    : point.Ownership == AntimatterOwnership.Enemy ? new Color(1, 0.25f, 0.3f) : Colors.LightGray,
+                    alwaysVisible: point.Ownership == AntimatterOwnership.Player);
         foreach (Node node in GetTree().GetNodesInGroup("world_landmark"))
         {
             if (node is not WorldLandmark landmark || landmark.IsQueuedForDeletion()) continue;
-            _landmarks.Add(landmark);
+            if (!Nearby(landmark)) continue;
             _markers.Add(new MapMarker(Arena.UpAt(landmark.GlobalPosition), landmark.IsDiscovered
                 ? $"{landmark.Title} — {landmark.Description}" : "Uncharted landmark — fly within 65 m to identify",
-                MapMarkerKind.Landmark, landmark.IsDiscovered ? landmark.LandmarkColor : new Color(0.6f, 0.65f, 0.72f), landmark.IsDiscovered));
+                MapMarkerKind.Landmark, landmark.IsDiscovered ? landmark.LandmarkColor : new Color(0.6f, 0.65f, 0.72f), landmark.IsDiscovered) { Actor = landmark });
         }
         foreach (Node node in GetTree().GetNodesInGroup("equipment_discovery"))
         {
             if (node is not EquipmentDiscovery discovery || discovery.IsQueuedForDeletion() || discovery.IsCollected) continue;
-            bool revealed = Nearby(discovery);
-            foreach (var landmark in _landmarks)
-                if (landmark.IsDiscovered && Arena.SurfaceDistance(landmark.GlobalPosition, discovery.GlobalPosition) < 30) revealed = true;
-            if (revealed) Add(discovery, $"{discovery.EquipmentName} signal", MapMarkerKind.Upgrade, new Color(1, 0.8f, 0.2f));
+            if (Nearby(discovery)) Add(discovery, $"{discovery.EquipmentName} signal", MapMarkerKind.Upgrade, new Color(1, 0.8f, 0.2f));
         }
         foreach (Node node in GetTree().GetNodesInGroup("exploration_wreck"))
         {
             if (node is not ExplorationWreck wreck || wreck.IsQueuedForDeletion() || wreck.IsCollected) continue;
             if (Nearby(wreck)) wreck.IsCharted = true;
-            if (!wreck.IsCharted) continue;
+            if (!Nearby(wreck)) continue;
             Add(wreck, wreck.IsRevealed ? "Boon salvage · fly close to secure" : $"Wreck · {wreck.Health} HP",
                 wreck.IsRevealed ? MapMarkerKind.Reward : MapMarkerKind.Wreck,
                 wreck.IsRevealed ? new Color(1, 0.8f, 0.2f) : new Color(0.65f, 0.72f, 0.8f));
         }
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {
-            if (node is not AntimatterPickup orb || !orb.IsAvailable || (orb.Ownership != AntimatterOwnership.Player && !Nearby(orb))) continue;
+            if (node is not AntimatterPickup orb || !orb.IsAvailable || !Nearby(orb)) continue;
             Color color = orb.Ownership switch
             {
                 AntimatterOwnership.Player => new Color(0.15f, 0.85f, 1),
                 AntimatterOwnership.Enemy => new Color(1, 0.3f, 0.4f),
-                _ => new Color(0.85f, 0.88f, 0.95f)
+                _ => Colors.Orange
             };
             Add(orb, $"{orb.Ownership} antimatter · {orb.AntimatterAmount}", MapMarkerKind.Antimatter, color);
         }
         foreach (Node node in GetTree().GetNodesInGroup("matter_pickup"))
             if (node is MatterPickup material && material.IsAvailable
-                && (material.Ownership == AntimatterOwnership.Player || Nearby(material)))
+                && Nearby(material))
                 Add(material, $"{material.Ownership} matter · {material.MatterAmount}", MapMarkerKind.Matter,
                     material.Ownership == AntimatterOwnership.Player ? new Color(0.15f, 0.85f, 1)
-                    : material.Ownership == AntimatterOwnership.Enemy ? new Color(1, 0.25f, 0.3f) : new Color(1, 0.65f, 0.18f));
+                    : material.Ownership == AntimatterOwnership.Enemy ? new Color(1, 0.25f, 0.3f) : Colors.Gray);
         foreach (Node node in GetTree().GetNodesInGroup("drone"))
         {
-            if (node is not CollectorDrone drone || drone.IsQueuedForDeletion() || drone.Health <= 0 || (!drone.UsePlayerAntimatter && !Nearby(drone))) continue;
+            if (node is not CollectorDrone drone || drone.IsQueuedForDeletion() || drone.Health <= 0 || !Nearby(drone)) continue;
             Add(drone, drone.UsePlayerAntimatter ? "Your drone" : "Rival drone", MapMarkerKind.Drone,
                 drone.UsePlayerAntimatter ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.3f, 0.4f), $"{drone.CarriedCount} cargo objects · {drone.CarriedMatterAmount} matter");
         }
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
             if (node is EnemyEcosystemEnemy enemy && !enemy.IsQueuedForDeletion() && enemy.Health > 0 && Nearby(enemy))
-                Add(enemy, enemy.RoleText, MapMarkerKind.Enemy, enemy.IsRaider ? Colors.OrangeRed : new Color(1, 0.5f, 0.25f), enemy.BehaviorText);
+                Add(enemy, enemy.RoleText, MapMarkerKind.Enemy, enemy.Role == EnemyEcosystemEnemy.EnemyRole.RivalShip ? new Color(1, 0.25f, 0.5f) : Colors.Black, enemy.BehaviorText);
         foreach (Node node in GetTree().GetNodesInGroup("rival_ship"))
             if (node is ShipFlightController { Health: > 0 } ship && !ship.IsQueuedForDeletion() && Nearby(ship))
                 Add(ship, "Rival pilot", MapMarkerKind.Enemy, new Color(1, 0.25f, 0.5f));
@@ -165,8 +174,21 @@ public partial class WorldNavigation : Node
 
     private bool Nearby(Node3D actor) => Arena.SurfaceDistance(Player.GlobalPosition, actor.GlobalPosition) <= LocalRevealRange;
 
-    private void Add(Node3D actor, string title, MapMarkerKind kind, Color color, string detail = "")
-        => _markers.Add(new MapMarker(Arena.UpAt(actor.GlobalPosition), string.IsNullOrEmpty(detail) ? title : $"{title} · {detail}", kind, color) { Actor = actor });
+    public bool CanDisplay(MapMarker marker)
+    {
+        if (!marker.TryGetLiveUp(Arena, out Vector3 up)) return false;
+        if (marker.Kind == MapMarkerKind.Player || marker.Kind == MapMarkerKind.Home) return true;
+        if (marker.Actor is StrategicPoint point)
+            return point.Ownership == AntimatterOwnership.Player || Nearby(point);
+        if (marker.Kind == MapMarkerKind.RivalBase) return true;
+        return Arena.PlanetRadius * Mathf.Acos(Mathf.Clamp(Arena.UpAt(Player.GlobalPosition).Dot(up), -1, 1)) <= LocalRevealRange;
+    }
+
+    public string VisibleTitle(MapMarker marker) => marker.Kind == MapMarkerKind.RivalBase && marker.Actor is FactionBase hub && !Nearby(hub)
+        ? "Rival base · discovered location" : marker.Title;
+
+    private void Add(Node3D actor, string title, MapMarkerKind kind, Color color, string detail = "", bool alwaysVisible = false)
+        => _markers.Add(new MapMarker(Arena.UpAt(actor.GlobalPosition), string.IsNullOrEmpty(detail) ? title : $"{title} · {detail}", kind, color) { Actor = actor, AlwaysVisible = alwaysVisible });
 
     private void BuildSurvey()
     {

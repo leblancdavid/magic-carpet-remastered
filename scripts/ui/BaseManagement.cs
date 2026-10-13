@@ -21,12 +21,10 @@ public partial class BaseManagement : CanvasLayer
     private readonly ProgressBar[] _progress = new ProgressBar[5];
     private readonly Button[] _cancel = new Button[5];
     private readonly long[] _cancelInstanceIds = new long[5];
-    private readonly Dictionary<string, UiTile> _orders = new(), _inventory = new();
+    private readonly Dictionary<string, UiTile> _orders = new();
+    private readonly Dictionary<string, CheckButton> _equipmentToggles = new();
+    private readonly Dictionary<string, Button> _applyRanks = new();
     private readonly List<GridContainer> _grids = new();
-    private readonly Label[] _equipmentLabels = new Label[4];
-    private readonly Button[] _removeEquipment = new Button[4];
-    private GridContainer _loadoutSlots = null!;
-    private OptionButton _installationSlot = null!;
     private FactionBase _base = null!;
     private ShipFlightController _player = null!;
     private Input.MouseModeEnum _previousMouse;
@@ -76,10 +74,8 @@ public partial class BaseManagement : CanvasLayer
             VBoxContainer research = projects;
             if (slot == ConstructionSlot.Ship)
             {
-                var sections = new TabContainer { Name = "ShipSections", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; projects.AddChild(sections);
-                research = new VBoxContainer { Name = "Research" }; sections.AddChild(research);
-                var loadout = new VBoxContainer { Name = "Loadout" }; sections.AddChild(loadout); AddEquipmentUi(loadout);
-                research.AddChild(Text("Research remotely · install completed items/ranks at home in Loadout", 13));
+                _installationStatus = Text(""); research.AddChild(_installationStatus);
+                research.AddChild(Text("Research remotely · equip up to four at home · keys 1–4 follow row order", 13));
             }
             else research.AddChild(Text("Click a tile to order · hover for effects and requirements", 13));
             if (slot == ConstructionSlot.Ship)
@@ -118,7 +114,14 @@ public partial class BaseManagement : CanvasLayer
         foreach (string heading in new[] { "Equipment", "Rank I", "Rank II", "Rank III" }) table.AddChild(ResearchLabel(heading));
         foreach (string id in ShipEquipmentCatalog.ItemIds)
         {
-            table.AddChild(ResearchLabel(_player.FindEquipment(id)!.DisplayName));
+            var item = new VBoxContainer { CustomMinimumSize = new Vector2(136, 0) }; table.AddChild(item);
+            item.AddChild(ResearchLabel(_player.FindEquipment(id)!.DisplayName));
+            var toggle = new CheckButton { Name = $"Equip_{id}", Text = "Equip", FocusMode = Control.FocusModeEnum.None };
+            toggle.AddThemeFontSizeOverride("font_size", 12); item.AddChild(toggle); _equipmentToggles.Add(id, toggle);
+            toggle.Pressed += () => ToggleEquipment(id);
+            var apply = new Button { Name = $"ApplyRank_{id}", Text = "Apply rank", FocusMode = Control.FocusModeEnum.None };
+            apply.AddThemeFontSizeOverride("font_size", 12); item.AddChild(apply); _applyRanks.Add(id, apply);
+            apply.Pressed += () => InstallEquipment(id, _player.EquipmentSlots.ToList().IndexOf(id));
             for (int rank = 1; rank <= ShipEquipmentCatalog.MaximumRank; rank++)
             {
                 string projectId = ShipEquipmentCatalog.ProjectId(id, rank);
@@ -131,6 +134,7 @@ public partial class BaseManagement : CanvasLayer
         var claim = Tile("Order_claim-range", UiIcon.ForProject("claim-range")); table.AddChild(claim);
         _orders.Add("claim-range", claim); claim.Pressed += () => OrderProject("claim-range");
         table.AddChild(ResearchLabel("—")); table.AddChild(ResearchLabel("—"));
+        research.AddChild(Text("RMB Claim / Shift booster / Space jump are built in · 1–4 selects, LMB activates, Tab cycles", 12));
     }
     private static Label ResearchLabel(string text)
     {
@@ -146,39 +150,20 @@ public partial class BaseManagement : CanvasLayer
     {
         int count = Math.Clamp((int)((_panel.Size.X - 24) / 166), 2, 6);
         foreach (var grid in _grids) grid.Columns = count;
-        if (_loadoutSlots != null) _loadoutSlots.Columns = _panel.Size.X < 800 ? 2 : 4;
     }
 
-    private void AddEquipmentUi(VBoxContainer projects)
+    public bool ToggleEquipment(string id)
     {
-        _installationStatus = Text(""); projects.AddChild(_installationStatus);
-        _loadoutSlots = new GridContainer { Name = "LoadoutSlots", Columns = 4 }; projects.AddChild(_loadoutSlots);
-        for (int i = 0; i < 4; i++)
-        {
-            int index = i;
-            var card = new VBoxContainer { CustomMinimumSize = new Vector2(132, 0), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; _loadoutSlots.AddChild(card);
-            _equipmentLabels[i] = Text("", 14); card.AddChild(_equipmentLabels[i]);
-            _removeEquipment[i] = new Button { Name = $"RemoveEquipment_{i}", Text = "Remove", FocusMode = Control.FocusModeEnum.None };
-            card.AddChild(_removeEquipment[i]); _removeEquipment[i].Pressed += () => { if (IsOpen) _player.TryRemoveEquipment(index); Refresh(); };
-        }
-        projects.AddChild(Text("INSTALL OWNED EQUIPMENT · select destination, then click an item", 13));
-        _installationSlot = new OptionButton { Name = "InstallationSlot", FocusMode = Control.FocusModeEnum.None };
-        for (int i = 0; i < 4; i++) _installationSlot.AddItem($"Replace slot {i + 1}");
-        _installationSlot.ItemSelected += _ => Refresh(); projects.AddChild(_installationSlot);
-        var grid = Grid(); projects.AddChild(grid);
-        foreach (string id in ShipEquipmentCatalog.ItemIds)
-        {
-            var tile = Tile($"Install_{id}", id); grid.AddChild(tile); _inventory.Add(id, tile);
-            tile.Pressed += () => InstallEquipment(id, _installationSlot.Selected);
-        }
-        projects.AddChild(Text("RMB Claim / Shift booster are built in · 1–4 selects, LMB activates, Tab cycles", 12));
+        if (!IsOpen || GetTree().Paused) return false;
+        bool result = _player.TryToggleEquipment(id, out string reason);
+        _actionFeedback = result ? string.Empty : reason; Refresh(); return result;
     }
 
     public bool InstallEquipment(string id, int slot)
     {
         if (!IsOpen || GetTree().Paused) return false;
         bool result = _player.TryInstallEquipment(id, slot, out string reason);
-        _actionFeedback = result ? "Installed. Replaced equipment remains owned." : reason; Refresh(); return result;
+        _actionFeedback = result ? "Equipment rank applied." : reason; Refresh(); return result;
     }
     public bool SetOpen(bool open)
     {
@@ -214,30 +199,27 @@ public partial class BaseManagement : CanvasLayer
 
     public void Refresh()
     {
-        _installationStatus.Text = _player.CanInstallEquipment ? "AT HOME · free installation / replacement" : "REMOTE · return home to install";
+        _installationStatus.Text = _player.CanInstallEquipment ? "AT HOME · equip / unequip and apply ranks for free" : "REMOTE · return home to change equipment";
         _installationStatus.TooltipText = $"Installation requires a living ship within {_player.EquipmentInstallationRadius:0} surface units and 16 elevation units of your surviving home base. Research is remote; applying ranks is explicit.";
-        for (int i = 0; i < 4; i++)
-        {
-            string? id = _player.EquipmentSlots[i];
-            string name = id == null ? "Empty" : $"{UiIcon.ShortName(id)} {Rank(_player.GetEquipmentRank(id))}";
-            _equipmentLabels[i].Text = $"[{i + 1}] {name}";
-            _removeEquipment[i].Disabled = !_player.CanInstallEquipment || id == null;
-            _removeEquipment[i].TooltipText = !_player.CanInstallEquipment ? "Return home while alive to remove equipment." : "Remove from this slot. Ownership and research are retained.";
-            _installationSlot.SetItemText(i, $"Slot {i + 1} · replace {name}");
-        }
-        foreach (var pair in _inventory)
+        foreach (var pair in _equipmentToggles)
         {
             var equipment = _player.FindEquipment(pair.Key)!;
             int owned = _player.GetOwnedEquipmentRank(pair.Key), installed = _player.GetEquipmentRank(pair.Key);
-            string reason = owned == 0 ? "Research this item first." : !_player.CanInstallEquipment ? "Return home while alive to install." : string.Empty;
-            string occupant = _player.EquipmentSlots[_installationSlot.Selected] is { } target ? _player.FindEquipment(target)!.RankedName : "Empty";
+            int slot = _player.EquipmentSlots.ToList().IndexOf(pair.Key);
+            string reason = owned == 0 ? "Research this item first." : !_player.CanInstallEquipment ? "Return home while alive to change equipment."
+                : slot < 0 && _player.EquipmentSlots.All(id => id != null) ? "Turn off an item first; at most four can be equipped." : string.Empty;
             string tooltip = $"{equipment.DisplayName}\n{equipment.Description}\n{equipment.EnergyCost} energy · owned {Rank(owned)} · installed {Rank(installed)}\n"
                 + (owned > 0 ? ShipEquipmentCatalog.EffectSummary(pair.Key, owned) + "\n" : "")
-                + $"Install into slot {_installationSlot.Selected + 1}, replacing {occupant}. Replaced items remain owned.\n"
-                + (reason.Length == 0 ? "Click to install / apply owned rank for free." : reason)
+                + (reason.Length == 0 ? "Toggle equipment for free. Keys 1–4 follow row order. Ownership and research are retained." : reason)
                 + (equipment.EnergyCost > _player.EnergyCapacity ? "\nEnergy cost exceeds current capacity; installation is still allowed at home." : "");
-            pair.Value.Display(UiIcon.ShortName(pair.Key), $"Owned {Rank(owned)} · applied {Rank(installed)}",
-                reason.Length == 0 ? $"Install → {_installationSlot.Selected + 1}" : owned == 0 ? "Not researched" : "Return home", tooltip, reason.Length > 0);
+            pair.Value.SetPressedNoSignal(slot >= 0);
+            pair.Value.Text = slot >= 0 ? $"[{slot + 1}] Equipped {Rank(installed)}" : "Equip";
+            pair.Value.Disabled = reason.Length > 0; pair.Value.TooltipText = tooltip;
+            var apply = _applyRanks[pair.Key];
+            apply.Visible = slot >= 0 && owned > installed;
+            apply.Disabled = !_player.CanInstallEquipment;
+            apply.Text = $"Apply rank {Rank(owned)}";
+            apply.TooltipText = _player.CanInstallEquipment ? "Apply completed research to this equipped item for free." : "Return home to apply the researched rank.";
         }
         _summary.Text = $"Base tier {_base.Tier}/{_base.HighestPurchasedTier} · HP {_base.Health}/{_base.MaxHealth} · Energy {_player.Energy}/{_player.EnergyCapacity}\n"
             + $"Antimatter {_base.StoredAntimatter}/{_base.EffectiveStorageCapacity} · Matter {_base.StoredMatter}/{_base.EffectiveMatterCapacity}\n"
@@ -264,7 +246,7 @@ public partial class BaseManagement : CanvasLayer
             var tile = _orders[definition.Id]; string reason = _base.Construction.GetStartReason(definition.Id);
             var active = _base.Construction.GetActive(definition.Slot);
             string status = reason.Length == 0 ? "Research →" : active?.Definition.Id == definition.Id ? $"Researching {active.Progress:P0}"
-                : reason == "Completed" ? definition.Id.StartsWith("equipment-") ? "Owned · install" : _base.Construction.IsEffectActive(definition.Id) ? "Completed" : "Suspended" : "Locked";
+                : reason == "Completed" ? definition.Id.StartsWith("equipment-") ? "Owned" : _base.Construction.IsEffectActive(definition.Id) ? "Completed" : "Suspended" : "Locked";
             string tooltip = $"{definition.Name}\n{definition.Description}\n{definition.Cost} antimatter + {definition.MatterCost} matter · {definition.DurationSeconds:0}s\nRequires tier {definition.RequiredTier}"
                 + (definition.RequiredProject == null ? "." : $" and {ProjectTitle(definition.RequiredProject)}.")
                 + "\n" + (reason.Length == 0 ? "Click to start paid research." : reason == "Completed"

@@ -1,5 +1,12 @@
 # Project Learnings
 
+## Map Knowledge, Loadout Compaction And Pack Pressure (2026-10-12)
+
+- Distinguish remembered static locations from live sensed actors: a discovered rival base can retain an actor-free position without exposing remote HP/storage. Apply the same range gate to drawing, hover and marker snapping on both maps. Recheck cached actors at draw/click time, using radial angles without querying terrain heights per marker per frame.
+- Compact automatically assigned equipment keys by displayed item order while preserving selected item identity. Keep purchased versus applied ranks separate; an equipped-row Apply rank action avoids requiring off/on toggling for pending research.
+- Pack alerts should originate once from actual damage (including lethal hits), be limited to a stable nonempty habitat ID, and reuse each member's retaliation/leash/committed-return gates. Never recursively propagate alerts between packs.
+- More aggressive replenishing groups also affect the rival economy: repeated defense/salvage can postpone station capture. A committed recharge retreat must not be interrupted at the minimum firing energy. Shared action correctness and unassisted opening resilience are separate acceptance checks.
+
 ## Economy And Capture Playtest Follow-Up (2026-10-12)
 
 - Upgrade prices must fit the previous tier's capacity **and** AI reserve policy. A 120-cost tier with 120 capacity and a mandatory 12 reserve is unreachable; bound the tier reserve requirement by remaining possible storage rather than bypassing shared payment rules.

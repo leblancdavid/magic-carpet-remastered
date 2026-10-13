@@ -10,11 +10,11 @@ Implemented 2026-10-11: owned equipment research, sequential ranks I–III, four
 - The ship can equip up to four items, not four weapons plus additional slotted utilities.
 - Offensive weapons, defensive equipment such as shield/heal, and strategic equipment such as Guardian/Dash all compete for those four slots.
 - The ship UI lists owned equipment and lets the player choose the equipped set.
-- When all four slots are occupied, adding an item requires choosing which item to replace.
+- When all four slots are occupied, turn off one row toggle before enabling another.
 - Unequipped items remain owned for the match and can be re-equipped at the base without paying to build them again.
 - Installation and loadout changes require returning to the player's home base; remote research ordering is allowed.
 
-**1–4 selects the corresponding equipped slot; LMB activates the selected item.** Selection never casts or spends energy. Tab cycles occupied slots in slot order, skipping empties. Selecting an empty slot displays Empty and LMB does nothing. Q/E/F/G no longer directly activate gameplay equipment (the separate flight lab retains F dash). The Ship tab selects an explicit destination slot before installation/replacement; moving an installed item clears its old slot. Replacing the selected slot follows its new occupant; removing/moving that occupant selects the first remaining item if necessary.
+**1–4 selects the corresponding equipped slot; LMB activates the selected item.** Selection never casts or spends energy. Tab cycles occupied slots in slot order, skipping empties. Selecting an empty slot displays Empty and LMB does nothing. Q/E/F/G no longer directly activate gameplay equipment (the separate flight lab retains F dash). Ship upgrade rows have home-only equip toggles; enabled items are automatically assigned contiguous keys 1–4 in displayed row order (Plasma, Pulse, Shield, Dash, Guardian). Compaction preserves the selected item's identity, or selects the first remaining item if it was removed. There is no separate Loadout tab or replacement selector. Explicit slot APIs remain for rival policy/diagnostic fixtures.
 
 ## Ownership And Death
 
@@ -51,7 +51,7 @@ All items have ranks I–III. Plasma Bolt I is free starter equipment; every lat
 | Dash | 40 / 1 | 80 / 2 | 120 / 3 |
 | Guardian Drone | 80 / 2 | 160 / 3 | 240 / 4 |
 
-Research durations are **60 / 90 / 120 seconds** for ranks I / II / III before research-station bonuses (2026-10-12 playtest tuning). The Research view has one row per item with fixed I/II/III columns; Plasma I is explicitly Starting/Owned. Activation costs/cooldowns retain the baseline: Plasma 5/0.25s, Burst 18/2.5s, Shield 14/6s, Dash 10/3s, Guardian 24/8s. Rank effects: Plasma damage 25/35/45; Burst damage 32/40/48 and radius 8/10/12; Shield duration 4/6/8s; Dash speed 46/55.2/64.4; Guardian damage 12/16/20 and lifetime 12/18/24s. No damage-specialization taxonomy is introduced yet.
+Research durations are **60 / 90 / 120 seconds** for ranks I / II / III before research-station bonuses (2026-10-12 playtest tuning). The Ship view has one row per item with equip toggle/assigned key and fixed I/II/III columns; Plasma I is explicitly Starting/Owned. Equipped items with unapplied research show a home-only **Apply rank** button in their row. Enabling an unequipped item applies its latest owned rank. Activation costs/cooldowns retain the baseline: Plasma 5/0.25s, Burst 18/2.5s, Shield 14/6s, Dash 10/3s, Guardian 24/8s. Rank effects: Plasma damage 25/35/45; Burst damage 32/40/48 and radius 8/10/12; Shield duration 4/6/8s; Dash speed 46/55.2/64.4; Guardian damage 12/16/20 and lifetime 12/18/24s. No damage-specialization taxonomy is introduced yet.
 
 Installation is allowed while alive, in unpaused live gameplay, within **18 surface units** of the living home base and **16 elevation units** of its origin. Spherical distance/elevation use the arena's radial helpers; flat gameplay uses horizontal distance/height. Distance is exported on `ShipFlightController`. No automatic installation occurs on completion, return, death or respawn. Completed research permanently records ownership on the home construction state, even through tier loss; the ship stores installed ranks separately. Applying a rank uses the latest researched rank. Previously researched items can be installed after losing their prerequisite tier. Completed uninstalled items/ranks survive death and tier loss; active projects still obey siege destruction/refund rules.
 
@@ -95,7 +95,7 @@ Space is a fresh-press jump costing **2 current energy**, independent of slots/s
 At the base, show:
 
 - Owned equipment list with type, rank, activation cost and effect summary.
-- Four equipped slots, including empty slots and explicit replacement selection.
+- Equipment-row toggles, assigned keys and a four-item cap; empty slots remain visible on the flight HUD.
 - Completed research awaiting installation.
 - Research/rank prerequisites and unavailable reasons.
 - Current energy and energy limit, including a clear warning when an item's cost exceeds the limit.

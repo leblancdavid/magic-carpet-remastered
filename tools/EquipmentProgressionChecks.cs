@@ -66,13 +66,11 @@ public partial class EquipmentProgressionChecks : Node3D
                 Check(!home.Construction.TryStart(project, out _), "Completed ranks cannot be repurchased");
             }
             player.GlobalPosition = home.GlobalPosition + Vector3.Up * 6;
-            // Exercise real GUI signals and explicit replacement target.
+            // Exercise the integrated row's explicit pending-rank application.
             ui.Refresh();
             Find<TabContainer>(ui, "ProjectTabs").CurrentTab = 4;
-            Find<TabContainer>(ui, "ShipSections").CurrentTab = 1;
             for (int i = 0; i < 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            var install = Find<Button>(ui, "Install_plasma-bolt");
-            // The inventory is below the four slots: scroll into view before clicking.
+            var install = Find<Button>(ui, "ApplyRank_plasma-bolt");
             var shipScroll = (ScrollContainer)Find<TabContainer>(ui, "ProjectTabs").GetChild(4);
             shipScroll.EnsureControlVisible(install);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);

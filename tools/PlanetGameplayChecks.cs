@@ -91,8 +91,8 @@ public partial class PlanetGameplayChecks : Node3D
         WorldSeeds.UseSeed(7319);
         try
         {
-            Check(PlanetSizes.Radii.Length == 4 && PlanetSizes.Radii[0] == 100 && PlanetSizes.Radii[1] == 200
-                && PlanetSizes.Radii[2] == 300 && PlanetSizes.Radii[3] == 400, "Approved compact size presets must match");
+            Check(PlanetSizes.Radii.Length == 4 && PlanetSizes.Radii[0] == 200 && PlanetSizes.Radii[1] == 300
+                && PlanetSizes.Radii[2] == 400 && PlanetSizes.Radii[3] == 500, "Approved playtest size presets must match");
             foreach (int radius in PlanetSizes.Radii)
             {
                 _room = new Node3D(); AddChild(_room);
@@ -365,7 +365,7 @@ public partial class PlanetGameplayChecks : Node3D
             AddChild(game);
             Check(game.UseSphericalWorld, "Default playable scene must enable spherical terrain");
             var arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
-            Check(arena != null && arena.IsSpherical && arena.PlanetRadius == 200, "Compact Medium world is the default");
+            Check(arena != null && arena.IsSpherical && arena.PlanetRadius == 300, "Medium 300 m world is the default");
             Check(GetTree().GetNodesInGroup("equipment_discovery").Count == 0
                 && GetTree().GetNodesInGroup("exploration_wreck").Count == 12, "Random wrecks replace legacy discovery beacons");
             Check(GetTree().GetNodesInGroup("drone").Count == 2, "Both hub drones present");

@@ -150,6 +150,10 @@ public partial class RivalFactionChecks : Node3D
                 Check(home.Health < homeHp, "Committed rival attack fires real paid projectiles at the opposing base");
                 rival.SpendEnergy(rival.Energy); rival.SetPhysicsProcess(true); ai._PhysicsProcess(0.01); rival.SetPhysicsProcess(false);
                 Check(ai.Task == RivalPilotController.PilotTask.Recover, "An energy-starved attack retreats instead of using a free weapon");
+                rival._PhysicsProcess(1); player.GlobalPosition = arena.OnSurface(rival.GlobalPosition + rival.GlobalBasis.X * 10, 6);
+                Invoke(ai, "SetGoal", RivalPilotController.PilotTask.Recover, enemy); ai._PhysicsProcess(0.6);
+                Check(rival.Energy >= 5 && ai.Task == RivalPilotController.PilotTask.Recover,
+                    "Local threats cannot interrupt a committed recharge retreat at one-shot energy");
                 rival.GlobalPosition = Point(10); player.GlobalPosition = Point(-70);
 
                 var site = new StrategicPoint { Position = Point(10), CaptureSeconds = 1 }; room.AddChild(site); site.SetPhysicsProcess(false);
@@ -189,6 +193,7 @@ public partial class RivalFactionChecks : Node3D
                 room.QueueFree(); await Frames(10);
             }
 
+            GD.Print($"Shared rival mechanics checks passed: {_checks}; unassisted opening resilience follows");
             // Normal opening, accelerated simulation time; no AI funding or free completions.
             PlanetSizes.SelectedIndex = 1;
             var game = GD.Load<PackedScene>("res://scenes/PlanetGame.tscn").Instantiate<MagicCarpetRemastered.Scripts.Game.Game>(); AddChild(game);
@@ -202,7 +207,8 @@ public partial class RivalFactionChecks : Node3D
             int orders = controller.OrdersPlaced;
             await Frames(1380); Engine.TimeScale = originalScale;
             Engine.TimeScale = 8;
-            for (int batch = 0; batch < 40 && npc.GetEquipmentRank("energy-shield") == 0; batch++) await Frames(60);
+            for (int batch = 0; batch < 40 && (npc.GetEquipmentRank("energy-shield") == 0
+                || !GetTree().GetNodesInGroup("strategic_point").OfType<StrategicPoint>().Any(p => p.Ownership == AntimatterOwnership.Enemy)); batch++) await Frames(60);
             Engine.TimeScale = originalScale;
             Check(!npc.GameplayInputBlocked && hero.GameplayInputBlocked && !GetTree().Paused, "Human live management cannot block rival input or simulation"); management.SetOpen(false);
             Check(controller.OrdersPlaced > orders, "Rival continues paid development while human management is open");

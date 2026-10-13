@@ -170,6 +170,27 @@ public partial class ShipFlightController : CharacterBody3D
         return true;
     }
 
+    public bool TryToggleEquipment(string id, out string reason)
+    {
+        reason = !CanInstallEquipment ? "Return home while alive to change equipped items."
+            : GetOwnedEquipmentRank(id) == 0 ? "Research this item first."
+            : !IsEquipmentInstalled(id) && _equipmentSlots.All(item => item != null) ? "Turn off an item first; at most four can be equipped." : string.Empty;
+        if (reason.Length > 0) return false;
+        string? selected = _equipmentSlots[_selectedEquipmentSlot];
+        bool remove = IsEquipmentInstalled(id);
+        var enabled = _equipmentSlots.Where(item => item != null && item != id).ToHashSet();
+        if (!remove)
+        {
+            enabled.Add(id);
+            FindEquipment(id)!.InstallRank(GetOwnedEquipmentRank(id));
+        }
+        var ordered = ShipEquipmentCatalog.ItemIds.Where(item => enabled.Contains(item)).ToArray();
+        for (int i = 0; i < 4; i++) _equipmentSlots[i] = i < ordered.Length ? ordered[i] : null;
+        int selection = System.Array.IndexOf(_equipmentSlots, selected);
+        _selectedEquipmentSlot = selected != null && selection >= 0 ? selection : 0;
+        return true;
+    }
+
     private void SelectInstalledEquipment()
     {
         if (IsEquipmentInstalled(GetSelectedQuickEquipment()?.Id ?? "")) return;

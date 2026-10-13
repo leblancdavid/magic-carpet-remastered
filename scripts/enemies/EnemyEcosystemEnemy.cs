@@ -113,12 +113,12 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
                 if (HabitatLeashRadius == 120) HabitatLeashRadius = 50;
                 if (PatrolRadius == 12) PatrolRadius = 6;
             }
-            else if (_arena != null && _arena.PlanetRadius <= 400)
+            else if (_arena != null && _arena.PlanetRadius <= 500)
             {
-                if (AwarenessRadius == 25) AwarenessRadius = Mathf.Clamp(_arena.PlanetRadius * 0.08f, 16, 25);
-                if (RetaliationRadius == 65) RetaliationRadius = Mathf.Clamp(_arena.PlanetRadius * 0.15f, 30, 55);
-                if (DisengagementRadius == 85) DisengagementRadius = Mathf.Clamp(_arena.PlanetRadius * 0.2f, 40, 70);
-                if (HabitatLeashRadius == 120) HabitatLeashRadius = Mathf.Clamp(_arena.PlanetRadius * 0.3f, 60, 100);
+                if (AwarenessRadius == 25) AwarenessRadius = Mathf.Clamp(20 + _arena.PlanetRadius * 0.05f, 30, 45);
+                if (RetaliationRadius == 65) RetaliationRadius = Mathf.Clamp(_arena.PlanetRadius * 0.2f, 65, 100);
+                if (DisengagementRadius == 85) DisengagementRadius = Mathf.Clamp(_arena.PlanetRadius * 0.25f, 85, 125);
+                if (HabitatLeashRadius == 120) HabitatLeashRadius = Mathf.Clamp(_arena.PlanetRadius * 0.3f, 100, 150);
                 if (PatrolRadius == 12) PatrolRadius = Mathf.Clamp(_arena.PlanetRadius * 0.04f, 6, 12);
             }
             Territory = new NeutralTerritory(this, _arena, HabitatPosition ?? GlobalPosition);
@@ -196,6 +196,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
         Health = Mathf.Max(0, Health - damage);
         if (Health > 0) Territory?.OnDamage(attacker);
+        AlertHabitat(attacker);
         _hitFlashTimer = 0.14f;
         GameAudio.Instance?.PlayHit();
 
@@ -427,6 +428,20 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         }
 
         return direction * MoveSpeed;
+    }
+
+    private void AlertHabitat(Node3D? attacker)
+    {
+        // Direct damage only: no recursive alert propagation or cross-habitat chase.
+        // Lethal hits still let the surviving pack retaliate.
+        if (Territory == null || string.IsNullOrEmpty(HabitatId) || !NeutralTerritory.IsLivingPilot(attacker)
+            || Territory.Distance(GlobalPosition, attacker!.GlobalPosition) > RetaliationRadius
+            || Territory.Distance(Territory.Home, attacker.GlobalPosition) > HabitatLeashRadius) return;
+        using var members = (Godot.Collections.Array)GetTree().GetNodesInGroup("ecosystem_enemy");
+        foreach (Variant node in members)
+            if (node.As<Node>() is EnemyEcosystemEnemy member && member != this && member.Health > 0
+                && !member.IsQueuedForDeletion() && member.HabitatId == HabitatId)
+                member.Territory?.OnDamage(attacker);
     }
 
     private void UpdateFlyingVelocity(Vector3 desiredMove)

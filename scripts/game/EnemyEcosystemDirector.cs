@@ -65,7 +65,7 @@ public partial class EnemyEcosystemDirector : Node
         if (UseFixedSeed) _random.Seed = unchecked((ulong)GenerationSeed); else _random.Randomize();
         if (_arena.IsSpherical)
         {
-            int population = 8 + Mathf.Clamp(Mathf.RoundToInt(_arena.PlanetRadius / 100), 1, 4) * 8;
+            int population = 8 + Mathf.Clamp(Mathf.RoundToInt(_arena.PlanetRadius / 100) - 1, 1, 4) * 8;
             if (MaxActiveEnemies == 24) MaxActiveEnemies = population;
             if (InitialWaveCount == 24) InitialWaveCount = population;
             if (MaxFlyingSwarms == 12) MaxFlyingSwarms = population / 2;
@@ -86,7 +86,7 @@ public partial class EnemyEcosystemDirector : Node
                 : site.Role == StrategicPointRole.Logistics ? EnemyEcosystemEnemy.EnemyRole.AntimatterThief
                 : site.Role == StrategicPointRole.MatterExtractor ? EnemyEcosystemEnemy.EnemyRole.GroundBeast
                 : EnemyEcosystemEnemy.EnemyRole.FlyingSwarm));
-        if (_arena.IsSpherical && _arena.PlanetRadius >= 300)
+        if (_arena.IsSpherical && _arena.PlanetRadius >= 400)
             foreach (Node node in GetTree().GetNodesInGroup("strategic_point"))
                 if (node is StrategicPoint { Role: StrategicPointRole.Extractor } site)
                     _habitats.Add(new Habitat($"outer-{site.Name}", _arena.OnSurface(site.GlobalPosition + site.GlobalBasis.X * 40),

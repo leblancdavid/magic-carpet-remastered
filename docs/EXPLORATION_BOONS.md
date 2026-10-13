@@ -25,7 +25,7 @@ Implemented first pass, 2026-10-11. Exploration rewards are permanent, stacking 
 | Drone coordination | +10% summoned Guardian output as a deployable source tag, multiplying Energy focus; base strike research unchanged |
 | Reinforced hull | +20 maximum ship HP; acquisition never heals current HP; respawn restores the enlarged maximum |
 
-Damage attribution is scoped to this catalog: Plasma Bolt/Guardian are energy, Pulse Burst is explosive; deployable is an overlapping source tag. No kinetic weapon is currently offered. Base maximum-HP boons remain deferred so acquisition cannot silently restore lost layers; base HP/layer formulas are unchanged. H shows stack counts and live effective stats. Radar/survey reveals wrecks within 120 surface units and retains charted positions; intact wrecks and gold revealed salvage have distinct markers. Random wrecks are not globally exposed via landmark hints.
+Damage attribution is scoped to this catalog: Plasma Bolt/Guardian are energy, Pulse Burst is explosive; deployable is an overlapping source tag. No kinetic weapon is currently offered. Base maximum-HP boons remain deferred so acquisition cannot silently restore lost layers; base HP/layer formulas are unchanged. H shows stack counts and live effective stats. Radar/survey show wrecks only within 220 m ship sensing, even after charting; intact wrecks and gold revealed salvage have distinct markers. Chart memory does not globally expose rewards.
 
 See `SHIP_EQUIPMENT.md` for researched progression, `BASE_DEVELOPMENT.md` for resource accounting and `STRATEGIC_POINTS.md` for ownership-dependent economic sites.
 

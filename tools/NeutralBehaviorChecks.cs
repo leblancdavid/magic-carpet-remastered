@@ -102,6 +102,22 @@ public partial class NeutralBehaviorChecks : Node3D
                 Check(retaliation.Territory.State == NeutralTerritory.BehaviorState.Returning, "Target crossing habitat leash ends pursuit");
                 retaliation.Free();
 
+                FarPilots(); var packVictim = Mob(); var packMate = Mob(); var unrelated = Mob();
+                packVictim.HabitatId = packMate.HabitatId = "test-pack"; unrelated.HabitatId = "other-pack";
+                _ship.GlobalPosition = Point(packVictim.RetaliationRadius - 2);
+                packVictim.ApplyDamage(1000, _ship);
+                Check(packMate.Territory!.Target == _ship && unrelated.Territory!.Target == null,
+                    "Lethal hit rallies the same habitat but never unrelated packs");
+                _ship.GlobalPosition = Point(packMate.HabitatLeashRadius + 1); packMate._PhysicsProcess(0);
+                Check(packMate.Territory.State == NeutralTerritory.BehaviorState.Returning, "Rallied pack obeys ordinary escape/leash rules");
+                _ship.GlobalPosition = Point(5); packMate.ApplyDamage(1, _ship);
+                Check(packMate.Territory.Target == null, "Damage cannot interrupt committed pack return");
+                packMate.GlobalPosition = Point(0); packMate._PhysicsProcess(0); packMate._PhysicsProcess(3.1);
+                FarPilots(); _pilot.GlobalPosition = Point(packMate.RetaliationRadius - 2);
+                packMate.HabitatId = unrelated.HabitatId = "test-rival-pack"; packMate.ApplyDamage(1, _pilot);
+                Check(unrelated.Territory!.Target == _pilot, "Pack retaliation also identifies the rival attacker");
+                packMate.Free(); unrelated.Free(); await Frames(3);
+
                 FarPilots(); var alert = Mob();
                 _ship.GlobalPosition = Point(alert.RetaliationRadius + 1); alert.ApplyDamage(1, _ship);
                 Check(alert.Territory!.State == NeutralTerritory.BehaviorState.Alert && alert.Territory.Target == null,
@@ -226,6 +242,11 @@ public partial class NeutralBehaviorChecks : Node3D
             foreach (var e in game.GetChildren().OfType<EnemyEcosystemEnemy>()) e.SetPhysicsProcess(false);
             foreach (var d in game.GetChildren().OfType<CollectorDrone>()) d.SetPhysicsProcess(false);
             var initial = game.GetChildren().OfType<EnemyEcosystemEnemy>().Where(e => e.IsTerritorial).ToArray();
+            Check(director.InitialWaveCount == 16 + Array.IndexOf(PlanetSizes.Radii, radius) * 8,
+                "Named-size population budgets remain 16/24/32/40 on larger worlds");
+            Check(initial.All(e => Mathf.IsEqualApprox(e.AwarenessRadius, 20 + radius * 0.05f)
+                && e.RetaliationRadius > e.AwarenessRadius && e.DisengagementRadius >= e.RetaliationRadius
+                && e.HabitatLeashRadius >= e.DisengagementRadius), "All sizes use wider coherent aggro/retaliation/escape/leash ranges");
             Check(initial.Length >= director.InitialWaveCount - 2 && initial.Length <= director.InitialWaveCount
                 && initial.GroupBy(e => e.HabitatId).Count(g => g.Count() >= 2) >= 4,
                 $"{radius}: increased initial population contains multiple stable groups ({initial.Length}/{director.InitialWaveCount})");

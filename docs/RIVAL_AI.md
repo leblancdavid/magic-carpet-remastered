@@ -1,5 +1,9 @@
 # Shared-Mechanics Rival AI
 
+## Stronger-pack playtest follow-up (2026-10-12)
+
+Live Medium is now radius 300 with broader neutral aggro and same-habitat damage retaliation. Recovery goals are committed against local threat reacquisition until the existing home recharge threshold; no free healing/funding is added. The unassisted opening verifier waits for both Shield installation and an owned site within its existing bounded budget. Final headless run passes **97** checks (including **90** controlled mechanics checks), with real paid orders, installed Shield and owned-site capture. Earlier accelerated runs missed the owned-site deadline even while researching/installing and surviving; repeated defense/salvage/recovery pressure and frame-based accelerated observation remain reliability/balance follow-ups alongside slope/obstacle routing. Do not treat a passing opening or terrain-only access success as full-match rival acceptance.
+
 ## Status (2026-10-11)
 
 Phase 3 is implemented and regression-verified. Both live Game/PlanetGame rivals use the shared player ship implementation. Phase 4 compact UI is also complete (`COMPACT_UI.md`); next is hands-on balance. Strategy and longer-session performance remain provisional.
