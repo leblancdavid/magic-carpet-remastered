@@ -4,6 +4,9 @@ using System.Threading.Tasks;
 using Godot;
 using MagicCarpetRemastered.Scripts.Player;
 using MagicCarpetRemastered.Scripts.World;
+using MagicCarpetRemastered.Scripts.Equipment;
+using MagicCarpetRemastered.Scripts.Enemies;
+using System.Reflection;
 
 namespace MagicCarpetRemastered.Tools;
 
@@ -16,6 +19,8 @@ public partial class BaseConstructionChecks : Node3D
     {
         try
         {
+            CheckLiveBalance();
+            Clear();
             CheckSlotsAndRefunds();
             Clear();
             CheckSiegeAndRebuilding();
@@ -40,6 +45,14 @@ public partial class BaseConstructionChecks : Node3D
 
     private T Add<T>(T actor) where T : Node
     {
+        // Fixed diagnostic layers/capacities isolate lifecycle and rounding
+        // expectations from live balance. Integrated suites use live defaults.
+        if (actor is FactionBase hub)
+        {
+            if (hub.MaxHealth == 400) hub.MaxHealth = 140;
+            hub.Tier1StorageCapacity = 120; hub.Tier2StorageCapacity = 200;
+            hub.Tier3StorageCapacity = 300; hub.Tier4StorageCapacity = 400; hub.Tier5StorageCapacity = 500;
+        }
         AddChild(actor);
         actor.SetPhysicsProcess(false);
         return actor;
@@ -110,10 +123,44 @@ public partial class BaseConstructionChecks : Node3D
             && !build.TryStart("dependent", out _), "Completed-project prerequisite enforced");
     }
 
+    private void CheckLiveBalance()
+    {
+        var home = new FactionBase(); AddChild(home); home.SetPhysicsProcess(false);
+        var ship = Add(new ShipFlightController());
+        int[] capacities = { 200, 350, 550, 800, 1100 }, costs = { 150, 275, 450, 650 };
+        for (int tier = 1; tier <= 5; tier++)
+        {
+            Check(home.Tier == tier && home.MaxHealth == tier * 400 && home.AntimatterStorageCapacity == capacities[tier - 1],
+                "Live base has the intended storage and 400-HP health layers");
+            if (tier == 5) break;
+            var next = home.Construction.NextTierDefinition()!;
+            home.DepositAntimatter(10000);
+            Check(next.Cost == costs[tier - 1] && next.Cost < home.EffectiveStorageCapacity
+                && home.Construction.TryStartNextTier(out _), "Each live upgrade fits its preceding tier with an energy reserve");
+            Check(ship.EnergyCapacity == capacities[tier - 1] - next.Cost, "Paid live upgrade immediately lowers storage-backed energy");
+            home.Construction.Advance(next.DurationSeconds);
+        }
+        Check(home.SpentAntimatter == 1525, "Tier V requires 1,525 spent antimatter before optional research");
+        Check(home.Construction.Catalog.All(p => p.Cost <= home.StorageCapacityForTier(p.RequiredTier)),
+            "Every research item is purchasable within its unlock-tier capacity");
+        var rival = new FactionBase { IsPlayerBase = false }; AddChild(rival); rival.SetPhysicsProcess(false);
+        var impact = typeof(WeaponProjectile).GetMethod("OnBodyEntered", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        for (int shot = 0; shot < 80; shot++)
+        {
+            var bolt = Add(new WeaponProjectile { Damage = ship.PlasmaBoltDamage }); bolt.Launch(Vector3.Forward, ship);
+            impact.Invoke(bolt, new object[] { rival });
+            Check(rival.Health == 400 - (shot + 1) * 5, "Actual Plasma I projectile applies five base damage per hit");
+        }
+        Check(rival.IsDestroyed && home.Health == 2000, "Eighty Plasma I hits destroy the opposing tier-I base without friendly damage");
+        var beast = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.GroundBeast });
+        var ordinaryBolt = Add(new WeaponProjectile { Damage = ship.PlasmaBoltDamage }); ordinaryBolt.Launch(Vector3.Forward, ship);
+        impact.Invoke(ordinaryBolt, new object[] { beast });
+        Check(beast.Health == 17, "Base resistance leaves normal 25-damage Plasma mob combat intact");
+    }
+
     private void CheckSiegeAndRebuilding()
     {
-        var hub = Add(new FactionBase { InitialStoredAntimatter = 120, InitialStoredMatter = 120, Tier2UpgradeCost = 100, Tier2UpgradeSeconds = 20,
-            Tier2MatterCost = 20, Tier3MatterCost = 30, Tier4MatterCost = 40,
+        var hub = Add(new FactionBase { InitialStoredAntimatter = 120, Tier2UpgradeCost = 100, Tier2UpgradeSeconds = 20,
             Tier3UpgradeCost = 101, Tier3UpgradeSeconds = 1,
             Tier4UpgradeCost = 101, Tier4UpgradeSeconds = 1 });
         hub.TryCompleteTierUpgrade(2);

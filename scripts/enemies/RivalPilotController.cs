@@ -117,9 +117,8 @@ public partial class RivalPilotController : Node
         if (!IsInstanceValid(_goal) || _goal!.IsQueuedForDeletion()) return false;
         return Task switch
         {
-            PilotTask.Gather => _ship.EnergyCapacity >= _ship.ClaimEquipmentEnergyCost && (_goal is AntimatterPickup a
-                ? a.IsAvailable && a.Ownership != _ship.Ownership && home.AvailableStorage > 0
-                : _goal is MatterPickup m && m.IsAvailable && m.Ownership != _ship.Ownership && home.AvailableMatterStorage > 0),
+            PilotTask.Gather => _ship.EnergyCapacity >= _ship.ClaimEquipmentEnergyCost && _goal is AntimatterPickup a
+                && a.IsAvailable && a.Ownership != _ship.Ownership && home.AvailableStorage > 0,
             PilotTask.Capture => _goal is StrategicPoint site && site.Ownership != _ship.Ownership,
             PilotTask.Explore => _goal is ExplorationWreck { IsCollected: false },
             PilotTask.Defend => FactionCombat.CanDamage(_goal, _ship.Ownership) && _arena.SurfaceDistance(_ship.GlobalPosition, _goal.GlobalPosition) < 65,
@@ -152,7 +151,7 @@ public partial class RivalPilotController : Node
             {
                 float fromHome = _arena.SurfaceDistance(home.GlobalPosition, site.GlobalPosition);
                 if (_arena.IsSpherical && fromHome > _arena.PlanetRadius * 1.2f) continue;
-                float priority = site.Role == StrategicPointRole.Extractor ? -80 : site.Role == StrategicPointRole.MatterExtractor && home.StoredMatter < 40 ? -60 : 0;
+                float priority = site.Role == StrategicPointRole.Extractor ? -80 : 0;
                 float candidate = _arena.SurfaceDistance(_ship.GlobalPosition, site.GlobalPosition) + fromHome * 0.3f + priority;
                 if (candidate < score) { score = candidate; best = site; }
             }
@@ -171,12 +170,10 @@ public partial class RivalPilotController : Node
         // recovery path instead of waiting forever beside an unclaimable globe.
         if (_ship.EnergyCapacity < _ship.ClaimEquipmentEnergyCost) return null;
         Node3D? best = null; float score = Math.Min(range, 120);
-        foreach (string group in new[] { "loose_antimatter", "matter_pickup" })
-            foreach (Node node in GetTree().GetNodesInGroup(group))
+            foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
             {
                 if (node is not Node3D actor || !Allowed(actor)) continue;
-                bool eligible = actor is AntimatterPickup a ? home.AvailableStorage > 0 && a.IsAvailable && a.Ownership != _ship.Ownership
-                    : actor is MatterPickup m && home.AvailableMatterStorage > 0 && m.IsAvailable && m.Ownership != _ship.Ownership;
+                bool eligible = actor is AntimatterPickup a && home.AvailableStorage > 0 && a.IsAvailable && a.Ownership != _ship.Ownership;
                 if (!eligible) continue;
                 float distance = _arena.SurfaceDistance(_ship.GlobalPosition, actor.GlobalPosition);
                 if (distance < score) { score = distance; best = actor; }

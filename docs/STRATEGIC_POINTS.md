@@ -2,22 +2,22 @@
 
 ## Status And Purpose
 
-First playable implementation, 2026-10-11, including matter extractors after the material foundation. Capturable sites create economic objectives and contested routes around the planet. Their benefits follow current ownership, unlike permanent exploration boons.
+First playable implementation, 2026-10-11; single-resource redesign, 2026-10-12. Capturable sites create economic objectives and contested routes. Their benefits follow current ownership, unlike permanent exploration boons. Matter has been removed; see `PLAYTEST_SIMPLIFICATION.md`.
 
 ## Implemented Defaults And Policies
 
-- Eight neutral sites per match: two antimatter extractors, two research stations, two logistics stations and two matter extractors. The coordinated globe layout fans four role-matched opportunities out from each antipodal faction start: antimatter/matter extractors at 0.38 radians, logistics at 0.68, research at 0.92, on different bearings. Corresponding surface distances are equal across all four sizes; terrain-accessibility acceptance remains pending. See `STRATEGIC_NAVIGATION.md`. Flat-reference sites retain x = ±48, z = -40/0/40/-65.
-- A living ship/pilot with a surviving base captures automatically within **8/12/18/18 surface metres** on compact Small/Medium/Large/XL (12 flat), at normal hover clearance. Neutral capture takes **10 seconds**. An owned point takes **10 seconds to neutralize plus 10 seconds to capture**; income/research benefits stop at neutralization. Both factions present freezes progress. Departure drains unfinished stage progress at **half capture speed**; re-entry resumes it. Unopposed defenders restore at full speed; a different claimant must reverse retained neutral progress before building their own. Neutralization persists after departure. No input action/payment is required.
-- Extractors generate **2 antimatter/second**, accumulating only a sub-unit fractional remainder. Whole units deposit into current-owner storage; partial room is respected, full/missing/destroyed storage discards the remainder and generates no backlog/overflow. Ownership change clears fractional work. Elapsed tick income belongs to the previous owner; the new owner starts receiving on the next physics tick. `GeneratedAntimatter` / tracker `SiteGeneratedAntimatter` record accepted new supply, not attempted output. Deposits update the energy limit through normal ship accounting without refilling current energy.
+- Eight neutral sites: **four antimatter extractors, two research, two logistics**. Each faction has two extractors at 0.38 radians, logistics at 0.68, research at 0.92 on different bearings. Corresponding distances are equal across all sizes; seed/access checks cover terrain routes. Flat sites retain x = ±48, z = -40/0/40/-65.
+- A living pilot with a surviving base captures automatically within **12/18/18/18 surface metres** on Small/Medium/Large/XL (12 flat). Neutral capture takes **10 seconds**. Owned takeover takes **10 seconds neutralization + 10 seconds capture**; benefits stop at neutralization. Both factions present freezes progress. Departure drains unfinished work at half capture speed; defenders restore at full speed. A different claimant reverses retained neutral progress first. Neutralization persists. No input/payment is required.
+- Extractors generate **0.2 antimatter/second**, one unit per five seconds, accumulating only a fractional remainder. Deposits respect partial room; full/missing/destroyed storage discards remainder without backlog/overflow. Ownership change clears fractional work. Prior-owner income ends exactly at neutralization; new-owner income begins next tick. `GeneratedAntimatter` / tracker `SiteGeneratedAntimatter` report accepted supply. Delivery raises the energy limit without refilling current energy.
 - Each research station adds **25%** progress speed; bonuses add (two stations = 1.5×) across all five construction categories, including upgrades/rebuilds/repeatables and active projects. Payments, stored base durations, prerequisites, completed records and slots remain unchanged. Losing ownership immediately removes the rate bonus.
-- Matter extractors use the same **2 matter/second** fractional/partial/full/capture rules and independent material capacity. They do not change current energy or its limit. `GeneratedMatter` / `WorldMatterTracker.SiteGeneratedMatter` report only accepted new supply. Logistics now transfers mixed antimatter/material cargo with the shared three-object collector limit.
+- Each site's guard habitat stops replenishing while either faction owns the site. Living guards are not removed on capture. Neutralization restarts the full 20-second recovery delay; replacements resume only while neutral and clear of nearby pilots. Wild habitats are independent.
 - Neutral logistics stations activate exactly one drone on first capture. Neutralization suspends station-drone movement/pickup/deposit, preserving its old faction and attached cargo. Final capture resumes and transfers that same living drone, ownership groups/visuals, all attached cargo and destination; resets former seek/return/dock state; and applies the new base's collector upgrade. Cargo is retained at full storage and partly deposited when room exists. Destroyed drones are **not replaced** by recapture. Sites remain indestructible. Ownership persists when a base falls, but generation/capture for that base is disabled.
-- Sites use ring/cross markers colored gray/cyan/red, orange contested. Both maps show player-owned sites globally and all other sites only within 220 m ship sensing. Losing ownership removes global visibility. Hover gives full role/owner/benefit/progress; compact local feedback appears within capture radius + 12. Rings/columns follow terrain/water. B/F3 summarize owned sites, maximum income, research modifiers and station drones separately from home collectors; F3 reports accepted supply. R/new scene resets site/drone state.
+- Sites use ring/cross markers colored gray/cyan/red, orange contested. Player-owned sites are global; others require 220 m sensing. Hover gives role/owner/benefit/progress; local feedback appears within capture radius + 12. Rings follow terrain/water. B resource tooltip/F3 summarize sites, income, modifiers and drones; F3 reports supply. R resets ownership/drone state.
 - A screen-space HUD bar above equipment shows role, current stage and percentage while the player is inside the zone, regardless of camera aim. Contested/restoration/owned states are explicit; live panels, pause, death and results hide it. Leaving hides the bar without erasing gameplay progress.
 
 ### Validation And Playtest
 
-`tools/StrategicPointChecks.tscn` covers flat/underside capture, living/dead presence, contest/departure, prior-owner benefits, income/accounting, research modifiers, cargo theft/recapture, destruction/pause, UI/navigation and all-radius layouts. `MatterChecks` covers material income/mixed logistics; `RivalFactionChecks` verifies modern faction ships and actual autonomous income-site routing. Travel, capture/income/research balance and steep-terrain ring readability still need hands-on acceptance.
+`StrategicPointChecks` covers flat/underside capture, contest/decay, prior-owner benefits, slow fractional income/capacity accounting, research, cargo theft, destruction/pause and all-size layouts. `NeutralBehaviorChecks` covers guard suppression for either owner and neutral recovery. `RivalFactionChecks` verifies actual autonomous capture/research/home installation and ordinary respawn. Hands-on balance remains pending.
 
 See `BASE_DEVELOPMENT.md` for storage/construction, `EXPLORATION_BOONS.md` for wreck rewards and `STRATEGIC_NAVIGATION.md` for current navigation and planned markers.
 
@@ -26,7 +26,6 @@ See `BASE_DEVELOPMENT.md` for storage/construction, `EXPLORATION_BOONS.md` for w
 | Site | Benefit while owned |
 | --- | --- |
 | Antimatter extractor | Recurring antimatter income deposited directly into base storage. |
-| Matter extractor | Recurring matter income deposited directly into independent material storage. |
 | Research station | Increased research/construction speed. |
 | Logistics station | Control of an associated collection drone. |
 
@@ -52,7 +51,7 @@ Progress feedback should identify the owner, claimant, capture progress and cont
 - After spending, withdrawals or damage free room, subsequent income can resume.
 - Do not award new storage income to an absent/destroyed base; exact post-defeat site handling is a future match-lifecycle decision.
 
-Site generation is new resource supply, distinct from transfers, cargo ownership changes and construction expenditure. Track it explicitly in independent antimatter/material accounting checks.
+Site generation is new antimatter supply, distinct from transfers, ownership changes and construction expenditure. Track it explicitly in resource-accounting checks.
 
 ## Research Benefit
 
@@ -64,7 +63,7 @@ All five categories currently receive additive station bonuses as described abov
 
 - The logistics station has an associated drone. Neutralization suspends it; final ownership capture transfers it.
 - On capture, transfer the existing drone to the new owner, wherever it currently is. Do not despawn it, retire it after delivery or replace it with a duplicate as the normal transfer behavior.
-- All antimatter or matter currently aboard changes ownership immediately, stealing those resources from the previous owner.
+- All antimatter aboard changes ownership immediately, stealing that cargo from the previous owner.
 - Keep cargo amounts, cargo attachment and physical state intact. Ownership transfer is not resource creation, expenditure or an extra loose-resource copy.
 - Abandon the former owner's pickup/deposit orders and reroute carried cargo to the new owner's base. An empty drone subsequently serves the new owner's collection needs.
 - Transfer must remain correct while seeking, scooping, returning or docking. Revalidate ownership and destination immediately before any pickup or deposit to prevent stale callbacks delivering stolen cargo to the former owner.
@@ -96,6 +95,6 @@ Current neutral activation, no replacement, new-owner upgrades and indestructibl
 ## Later Decisions
 
 - Tune provisional capture/layout/income/research defaults from playtests; add deliberate rival capture routing with deeper AI work.
-- Tune material income against construction demand and physical hauling; richer mining/material varieties remain later content.
+- Tune slower passive income against hunting, hauling and construction demand.
 - Decide later drone replacement, station damage and richer complete-base-loss policies.
 - Consider broader participants and discovery rules as faction/match scope expands.

@@ -20,6 +20,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     }
 
     [Export] public EnemyRole Role { get; set; } = EnemyRole.FlyingSwarm;
+    [Export] public bool IsHeavy { get; set; }
     [Export] public float MoveSpeed { get; set; } = 8.0f;
     [Export] public int Health { get; set; } = 24;
     [Export] public int ContactDamage { get; set; } = 6;
@@ -65,7 +66,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     public string RoleText => Role switch
     {
         EnemyRole.FlyingSwarm => "Swarm",
-        EnemyRole.GroundBeast => "Beast",
+        EnemyRole.GroundBeast => IsHeavy ? "Heavy beast" : "Beast",
         EnemyRole.RangedCaster => "Caster",
         EnemyRole.BaseAttacker => IsRaider ? "Raider" : "Sieger",
         EnemyRole.AntimatterThief => "Scavenger",
@@ -94,9 +95,16 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     public override void _Ready()
     {
         AddToGroup("ecosystem_enemy");
+        if (Role == EnemyRole.RivalShip) AddToGroup("legacy_rival_pilot");
         _arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
         AddCollisionAndVisuals();
         ConfigureForRole();
+        if (IsHeavy && Role == EnemyRole.GroundBeast)
+        {
+            Health = 150; ContactDamage = 18; MoveSpeed = 4.8f;
+            AttackRadius = 3.2f; GroundClearance = 1.3f;
+            foreach (Node child in GetChildren()) if (child is Node3D body) body.Scale *= 1.7f;
+        }
         if (Role is not (EnemyRole.AntimatterThief or EnemyRole.RivalShip))
         {
             AntimatterReserve += Mathf.Max(0, NeutralAntimatterValue);

@@ -92,7 +92,7 @@ public partial class PlaytestMechanicsChecks : Node3D
 
     private void CheckRepair()
     {
-        var hub = Add(new FactionBase { InitialStoredAntimatter = 120, MaxHealth = 100 });
+        var hub = Add(new FactionBase { InitialStoredAntimatter = 120, MaxHealth = 100, Tier1StorageCapacity = 120 });
         var player = Add(new ShipFlightController());
         var tracker = Add(new WorldAntimatterTracker());
         hub.ApplyDamage(50);

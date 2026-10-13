@@ -240,7 +240,7 @@ public string SummonEquipmentName => _summonEquipment?.RankedName ?? "Guardian D
         : $"LMB: {PrimaryEquipmentName} · 1–4 select slot · Tab cycles installed\n"
             + string.Join(" · ", _equipmentSlots.Select((id, i) => $"{i + 1}: {(id == null ? "Empty" : FindEquipment(id)!.RankedName)}"))
             + "\nRMB Claim · Shift boost · Space jump · B research/install at home";
-    public string StatusMessage { get; private set; } = "Claim antimatter and matter for your collector drone and defend your base.";
+    public string StatusMessage { get; private set; } = "Claim antimatter for your collector drone and defend your base.";
     public string ActiveFeedbackMessage => _feedbackTimer > 0.0f ? StatusMessage : string.Empty;
     public string DiscoveryFeedbackMessage => _discoveryFeedbackTimer > 0 ? _discoveryFeedback : string.Empty;
     public string EquipmentProgressionText => string.Join("\n", new[] { _primaryEquipment, _areaEquipment, _shieldEquipment, _mobilityEquipment, _summonEquipment }
@@ -338,7 +338,7 @@ private EquipmentDefinition _summonEquipment = null!;
         _mobilityEquipment = new EquipmentDefinition("dash", "Dash", EquipmentKind.Mobility, MobilityEquipmentEnergyCost, MobilityEquipmentCooldownSeconds, "Dash quickly in the aimed direction.");
 _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", EquipmentKind.Summoning, SummonEquipmentEnergyCost, SummonEquipmentCooldownSeconds, "Summon a temporary ally that attacks nearby enemies.");
         _terrainEquipment = new EquipmentDefinition("terrain-shape", "Terrain Shape", EquipmentKind.Terrain, TerrainEquipmentEnergyCost, TerrainEquipmentCooldownSeconds, "Shape terrain using the selected terrain mode.");
-        _claimEquipment = new EquipmentDefinition("claim", "Claim", EquipmentKind.Economy, ClaimEquipmentEnergyCost, ClaimEquipmentCooldownSeconds, "Fire a terrain-following bolt to claim neutral or rival antimatter/material crates.");
+        _claimEquipment = new EquipmentDefinition("claim", "Claim", EquipmentKind.Economy, ClaimEquipmentEnergyCost, ClaimEquipmentCooldownSeconds, "Fire a terrain-following bolt to claim neutral or rival antimatter.");
 
         if (IsPlayerControlled)
         {
@@ -899,12 +899,6 @@ private void CycleQuickEquipment()
         Vector3 direction = AimDirection;
         var projectile = new ClaimProjectile { Name = "ClaimProjectile", MaxRange = EffectiveClaimRange, Ownership = Ownership };
         projectile.AntimatterClaimed += OnAntimatterClaimed;
-        projectile.MatterClaimed += amount =>
-        {
-            if (!IsInstanceValid(this) || IsQueuedForDeletion()) return;
-            StatusMessage = $"Claimed {amount} matter";
-            _feedbackTimer = 0.8f;
-        };
         GetParent().AddChild(projectile);
         projectile.GlobalPosition = AimOrigin + direction * 1.5f;
         projectile.Launch(direction);

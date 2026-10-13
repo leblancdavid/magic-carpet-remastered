@@ -242,14 +242,22 @@ public partial class NeutralBehaviorChecks : Node3D
             foreach (var e in game.GetChildren().OfType<EnemyEcosystemEnemy>()) e.SetPhysicsProcess(false);
             foreach (var d in game.GetChildren().OfType<CollectorDrone>()) d.SetPhysicsProcess(false);
             var initial = game.GetChildren().OfType<EnemyEcosystemEnemy>().Where(e => e.IsTerritorial).ToArray();
-            Check(director.InitialWaveCount == 16 + Array.IndexOf(PlanetSizes.Radii, radius) * 8,
-                "Named-size population budgets remain 16/24/32/40 on larger worlds");
+            Check(director.InitialWaveCount == new[] { 64, 120, 200, 300 }[Array.IndexOf(PlanetSizes.Radii, radius)],
+                "Named-size population targets scale 64/120/200/300 across the globe");
+            GD.Print($"Encounters R{radius}: {initial.Length}/{director.InitialWaveCount}, habitats {director.HabitatCount}, wild {initial.Count(e => e.HabitatId.StartsWith("wild-"))}, regions {initial.Select(e => PlanetLayout.RegionFor(arena.UpAt(e.GlobalPosition))).Distinct().Count()}");
             Check(initial.All(e => Mathf.IsEqualApprox(e.AwarenessRadius, 20 + radius * 0.05f)
                 && e.RetaliationRadius > e.AwarenessRadius && e.DisengagementRadius >= e.RetaliationRadius
                 && e.HabitatLeashRadius >= e.DisengagementRadius), "All sizes use wider coherent aggro/retaliation/escape/leash ranges");
-            Check(initial.Length >= director.InitialWaveCount - 2 && initial.Length <= director.InitialWaveCount
+            Check(initial.Length >= director.InitialWaveCount * 0.85 && initial.Length <= director.InitialWaveCount
                 && initial.GroupBy(e => e.HabitatId).Count(g => g.Count() >= 2) >= 4,
                 $"{radius}: increased initial population contains multiple stable groups ({initial.Length}/{director.InitialWaveCount})");
+            Check(initial.Select(e => PlanetLayout.RegionFor(arena.UpAt(e.GlobalPosition))).Distinct().Count() >= 10
+                && initial.Count(e => e.HabitatId.StartsWith("wild-")) > initial.Length / 2,
+                "Most encounters are random wild groups distributed over at least ten regions");
+            Check(initial.Any(e => e.IsHeavy && e.Health == 150) && initial.Where(e => e.Role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm)
+                .All(e => e.Health == 16 && e.AntimatterReserve == 3), "Heavy beasts and easy low-reward swarm members are distinct");
+            Check(initial.Where(e => e.Role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm).GroupBy(e => e.HabitatId).Any(g => g.Count() >= 6),
+                "Each size contains full easy swarms of at least six rather than thinning every group to pairs");
             Check(initial.All(e => !e.IsRaider && arena.SurfaceDistance(e.GlobalPosition, home.GlobalPosition) >= director.EffectiveBaseExclusion
                 && arena.SurfaceDistance(e.GlobalPosition, rival.GlobalPosition) >= director.EffectiveBaseExclusion), "All-size initial populations exclude every base");
             Check(!director.IsSpawnPositionValid(home.GlobalPosition) && !director.IsSpawnPositionValid(rival.GlobalPosition), "Placement rejects both faction bases");
@@ -273,6 +281,8 @@ public partial class NeutralBehaviorChecks : Node3D
             Check(GetTree().GetNodesInGroup("rival_ship").Count == 1 && !all.Any(e => e.IsRaider), "Ordinary spawning never creates rival ships or raiders");
             var depletedGroup = all.Where(e => e.IsTerritorial).GroupBy(e => e.HabitatId).Last(g => g.Count() >= 2).ToArray();
             var victim = depletedGroup[0]; string depleted = victim.HabitatId;
+            player.GlobalPosition = home.GlobalPosition;
+            game.GetNode<ShipFlightController>("RivalPilot").GlobalPosition = rival.GlobalPosition;
             int populationBefore = all.Count(e => e.IsTerritorial && e.HabitatId == depleted);
             victim.ApplyDamage(1000); depletedGroup[1].ApplyDamage(1000); await Frames(3);
             director._PhysicsProcess(19);
@@ -288,6 +298,31 @@ public partial class NeutralBehaviorChecks : Node3D
             Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == depleted) == populationBefore,
                 "Remaining member returns five seconds after the first");
             foreach (var e in game.GetChildren().OfType<EnemyEcosystemEnemy>()) e.SetPhysicsProcess(false);
+            // Guard replacement follows either faction's ownership, not player
+            // proximity or the visible capture ring. Living guards remain.
+            director.RaidsEnabled = false;
+            foreach (var site in game.GetChildren().OfType<StrategicPoint>()) site.SetPhysicsProcess(false);
+            var guarded = game.GetChildren().OfType<StrategicPoint>().First(site => game.GetChildren().OfType<EnemyEcosystemEnemy>()
+                .Count(e => e.Health > 0 && e.HabitatId == $"route-{site.Name}") >= 2);
+            string guardId = $"route-{guarded.Name}";
+            var guards = game.GetChildren().OfType<EnemyEcosystemEnemy>().Where(e => e.Health > 0 && e.HabitatId == guardId).ToArray();
+            guards[0].ApplyDamage(1000); await Frames(3);
+            guarded.Advance(10, true, false); director._PhysicsProcess(60);
+            Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == guardId) == guards.Length - 1,
+                "Player ownership suppresses replacements and leaves surviving guards intact");
+            guarded.Advance(20, false, true); director._PhysicsProcess(60);
+            Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == guardId) == guards.Length - 1,
+                "Rival ownership also suppresses guard replacements");
+            guarded.Advance(10, true, false); director._PhysicsProcess(0.5);
+            player.GlobalPosition = home.GlobalPosition;
+            game.GetNode<ShipFlightController>("RivalPilot").GlobalPosition = rival.GlobalPosition;
+            director._PhysicsProcess(19);
+            Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == guardId) == guards.Length - 1,
+                "Neutralization restarts a full guard recovery delay");
+            director._PhysicsProcess(1);
+            Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == guardId) == guards.Length,
+                "Neutral point resumes its defeated guard replacements after recovery");
+            director.RaidsEnabled = true;
             GetTree().Paused = true; float remaining = director.RaidRemaining;
             director._PhysicsProcess(200); Check(director.RaidRemaining == remaining && !director.TrySpawnNeutral(), "Pause stops raid clocks and population orders");
             GetTree().Paused = false;

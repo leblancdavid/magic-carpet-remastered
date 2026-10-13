@@ -2,15 +2,15 @@
 
 ## Status
 
-Implemented 2026-10-11: owned equipment research, sequential ranks I–III, four-slot management UI, home installation, built-in Shift booster and independent exploration boon modifiers. A new match owns/installs Plasma Bolt I only. Claim and booster remain built in. See `BASE_DEVELOPMENT.md` for construction and `EXPLORATION_BOONS.md` for match bonuses; economic capture points are next.
+Implemented 2026-10-11, repriced/simplified 2026-10-12: remote sequential ranks I–III, four-slot home installation, built-in booster and independent match boons. New matches own/install Plasma I only; Claim stays built in. See `PLAYTEST_SIMPLIFICATION.md` for current economy/siege direction.
 
 ## Four-Slot Loadout
 
-- Each player starts with the basic projectile weapon (legacy Firebolt); its new display name is selected in the terminology pass.
+- Each player starts with Plasma Bolt I.
 - The ship can equip up to four items, not four weapons plus additional slotted utilities.
 - Offensive weapons, defensive equipment such as shield/heal, and strategic equipment such as Guardian/Dash all compete for those four slots.
 - The ship UI lists owned equipment and lets the player choose the equipped set.
-- When all four slots are occupied, turn off one row toggle before enabling another.
+- When four slots are occupied, click an equipped item's owned tile to disable it before enabling another.
 - Unequipped items remain owned for the match and can be re-equipped at the base without paying to build them again.
 - Installation and loadout changes require returning to the player's home base; remote research ordering is allowed.
 
@@ -45,13 +45,13 @@ All items have ranks I–III. Plasma Bolt I is free starter equipment; every lat
 
 | Item | Rank-I cost / tier | Rank-II cost / tier | Rank-III cost / tier |
 | --- | --- | --- | --- |
-| Plasma Bolt | Starter / 1 | 60 / 2 | 90 / 3 |
-| Pulse Burst | 50 / 1 | 100 / 2 | 150 / 3 |
-| Energy Shield | 40 / 1 | 80 / 2 | 120 / 3 |
-| Dash | 40 / 1 | 80 / 2 | 120 / 3 |
-| Guardian Drone | 80 / 2 | 160 / 3 | 240 / 4 |
+| Plasma Bolt | Starter / 1 | 120 / 2 | 180 / 3 |
+| Pulse Burst | 75 / 1 | 200 / 2 | 300 / 3 |
+| Energy Shield | 60 / 1 | 160 / 2 | 240 / 3 |
+| Dash | 60 / 1 | 160 / 2 | 240 / 3 |
+| Guardian Drone | 120 / 2 | 320 / 3 | 480 / 4 |
 
-Research durations are **60 / 90 / 120 seconds** for ranks I / II / III before research-station bonuses (2026-10-12 playtest tuning). The Ship view has one row per item with equip toggle/assigned key and fixed I/II/III columns; Plasma I is explicitly Starting/Owned. Equipped items with unapplied research show a home-only **Apply rank** button in their row. Enabling an unequipped item applies its latest owned rank. Activation costs/cooldowns retain the baseline: Plasma 5/0.25s, Burst 18/2.5s, Shield 14/6s, Dash 10/3s, Guardian 24/8s. Rank effects: Plasma damage 25/35/45; Burst damage 32/40/48 and radius 8/10/12; Shield duration 4/6/8s; Dash speed 46/55.2/64.4; Guardian damage 12/16/20 and lifetime 12/18/24s. No damage-specialization taxonomy is introduced yet.
+Research durations are **60/90/120s** for ranks I/II/III before station bonuses. The Ship view has clickable owned-equipment tiles/assigned keys and fixed rank columns. Active research has overlaid progress/cancel; unavailable research is faded with a Roman **base-tier requirement** at top right. Plasma I is Starting/Owned. Pending equipped upgrades show **Apply rank**; equipping an inactive item applies its latest owned rank. Activation costs/cooldowns: Plasma 5/0.25s, Burst 18/2.5s, Shield 14/6s, Dash 10/3s, Guardian 24/8s. Rank effects: Plasma damage 25/35/45, **20% against bases** (5/7/9 without boons); Burst damage 32/40/48, radius 8/10/12; Shield duration 4/6/8s; Dash speed 46/55.2/64.4; Guardian damage 12/16/20, lifetime 12/18/24s. These remain provisional playtest values.
 
 Installation is allowed while alive, in unpaused live gameplay, within **18 surface units** of the living home base and **16 elevation units** of its origin. Spherical distance/elevation use the arena's radial helpers; flat gameplay uses horizontal distance/height. Distance is exported on `ShipFlightController`. No automatic installation occurs on completion, return, death or respawn. Completed research permanently records ownership on the home construction state, even through tier loss; the ship stores installed ranks separately. Applying a rank uses the latest researched rank. Previously researched items can be installed after losing their prerequisite tier. Completed uninstalled items/ranks survive death and tier loss; active projects still obey siege destruction/refund rules.
 
@@ -69,7 +69,7 @@ Initial boon attribution: Plasma Bolt and summoned Guardian use energy damage, P
 - Continue using the existing aimed, surface-following resource-claim projectile in the terminology-only pass.
 - Claim stays available when base storage is full; collectors wait for storage space.
 
-The live-management starter catalog includes **Claim range calibration**: 30 antimatter, 60 seconds, tier 1; new Claim projectiles gain 25% range (120→150). Its separate built-in research row does not create an owned equipment item, occupy a slot or require loadout installation. Additional Claim upgrades/ranks remain undecided.
+**Claim range calibration** costs 50 antimatter/60s/tier I and increases new-projectile range 120→150. Its built-in row creates no equipment item, slot or installation requirement. Claim targets antimatter only; matter is removed.
 
 ## Built-In Booster
 
@@ -80,7 +80,7 @@ The live-management starter catalog includes **Claim range calibration**: 30 ant
 - Provisional defaults: **36 units/second**, **0.65 seconds** of thrust, **4 current energy**, **2-second cooldown from activation**. Tuning is exported on `ShipFlightController`. Recharge follows the normal storage-backed rules during/after boost; no resource refill occurs.
 - Thrust follows ship heading, ignores camera pitch and does not add diagonal input speed or special lift. Shared hover suspension/gravity remains active and preserves jump/ramp vertical momentum. Space is a paid jump; C no longer controls gameplay altitude. After thrust ends, normal acceleration/drag governs horizontal momentum.
 - Pause freezes thrust/cooldown. Management/survey input ownership ends active thrust and blocks activation; closing UI with Shift held does not retrigger. Death ends thrust; respawn clears booster timers. Insufficient energy rejects atomically without starting cooldown.
-- HUD shows active time, cooldown or energy requirement. The Ship tab lists the built-in mobility tuning outside the equipment slots.
+- HUD has a concise Shift control hint; exact costs/cooldowns remain in F3 and the shared equipment definitions.
 
 ## Dash Equipment
 

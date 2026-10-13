@@ -25,10 +25,10 @@ public partial class PlanetLayoutChecks : Node3D
             "All start pairs obey configurable minimum surface separation");
         Check(Mathf.Abs(Distance(layout.Starts[0], layout.Starts[1]) - Mathf.Pi * arena.PlanetRadius) < 1,
             "Two factions start on opposite sides, not one projected patch");
-        Check(layout.Landmarks.Length == 5 && layout.EconomicSites.Length == 8 && layout.MatterFields.Length == 4,
+        Check(layout.Landmarks.Length == 5 && layout.EconomicSites.Length == 8 && layout.AntimatterFields.Length == 3,
             "Layout retains authored landmark/site/field populations");
         var directions = layout.Landmarks.Select(s => s.Up).Concat(layout.EconomicSites.Select(s => s.Up))
-            .Concat(layout.MatterFields).Concat(layout.AntimatterFields).Concat(layout.Scenery).ToArray();
+            .Concat(layout.AntimatterFields).Concat(layout.Scenery).ToArray();
         Check(directions.All(up => up.IsFinite() && Mathf.Abs(up.Length() - 1) < 0.0001f), "All content uses finite unit surface directions");
         Check(directions.Select(PlanetLayout.RegionFor).Distinct().Count() >= 10, "Authored content reaches at least ten of twelve planetary regions");
         Check(layout.Scenery.Length >= 24 && layout.Scenery.Length <= 36, "Scenery remains bounded and globally clustered");
@@ -51,10 +51,6 @@ public partial class PlanetLayoutChecks : Node3D
         {
             Check(Mathf.Abs(Distance(layout.Starts[side], layout.AntimatterFields[side]) - 55) < 0.2f,
                 "Each opening antimatter field is 55 surface units from home, independent of planet size");
-            Check(Mathf.Abs(Distance(layout.Starts[side], layout.MatterFields[side * 2]) - 45) < 0.2f,
-                "Each opening material field is 45 surface units from home");
-            Check(Distance(layout.Starts[side], layout.MatterFields[side * 2 + 1]) > arena.PlanetRadius,
-                "Remote material provides a genuine exploration route");
         }
     }
 
@@ -98,7 +94,7 @@ public partial class PlanetLayoutChecks : Node3D
                 foreach (var drone in drones) drone.SetPhysicsProcess(false);
                 Check(arena.SurfaceDistance(home.GlobalPosition, rival.GlobalPosition) >= game.Layout!.MinimumStartDistance,
                     "Live bases use the coordinated layout");
-                Check(home.StoredAntimatter == 30 && rival.StoredAntimatter == 30 && home.StoredMatter == rival.StoredMatter,
+                Check(home.StoredAntimatter == 30 && rival.StoredAntimatter == 30,
                     "Live factions have equal starting reserves");
                 Check(arena.SurfaceDistance(ship.GlobalPosition, home.GlobalPosition) < 18 && ship.CanInstallEquipment,
                     "Player spawns beside home with immediate installation access");
@@ -112,7 +108,8 @@ public partial class PlanetLayoutChecks : Node3D
                 foreach (FactionBase hub in new[] { home, rival })
                     Check(orbs.Where(o => arena.SurfaceDistance(hub.GlobalPosition, o.GlobalPosition) < 70).Sum(o => o.AntimatterAmount) == 48,
                         "Each home has the same four-globe opening field");
-                Check(game.GetChildren().OfType<MatterPickup>().Sum(p => p.MatterAmount) == 240, "Layout preserves all four 60-matter fields");
+                Check(game.GetChildren().OfType<StrategicPoint>().Count(p => p.Role == StrategicPointRole.Extractor) == 4,
+                    "Former material sites are antimatter extractors; there are four extractors");
                 var wrecks = game.GetChildren().OfType<ExplorationWreck>().ToArray();
                 var director = game.GetNode<ExplorationDirector>("ExplorationDirector");
                 Check(wrecks.Length == 12 && wrecks.All(w => arena.SurfaceDistance(home.GlobalPosition, w.GlobalPosition) >= director.BaseExclusionDistance

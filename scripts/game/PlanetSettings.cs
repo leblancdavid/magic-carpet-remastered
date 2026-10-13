@@ -20,11 +20,6 @@ public partial class PlanetSettings : CanvasLayer
         Control root = new() { MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(root);
         root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        Label hint = new() { Text = $"{PlanetSizes.Names[PlanetSizes.SelectedIndex]} planet · {PlanetSizes.SelectedRadius} m radius\nF2 planet size · F6 flight lab", HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
-        root.AddChild(hint);
-        hint.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
-        hint.Position += new Vector2(-150, 20);
-        hint.CustomMinimumSize = new Vector2(300, 50);
         _panel = new PanelContainer { Visible = false };
         root.AddChild(_panel);
         _panel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);

@@ -43,17 +43,16 @@ public partial class BaseManagementChecks : Node3D
             await Frames(3);
             Check(!panel.IsOpen && hub.Construction.Catalog.Count() == 19, "Fresh match has starter/equipment catalog and closed management");
             hub.DepositAntimatter(90);
-            hub.DepositMatter(90); // Fund the scripted infrastructure sequence independently of hauling.
             player.RespawnAt(player.GlobalPosition);
             Key(Godot.Key.B); await Frames(2);
             Check(panel.IsOpen && !GetTree().Paused && player.GameplayInputBlocked, "Actual B opens real-time management and owns input");
-            Check(panel.SummaryText.Contains("120/120") && panel.SummaryText.Contains("tier 1"), "Panel shows storage, energy and surviving tier");
+            Check(panel.SummaryText.Contains("120/200") && panel.SummaryText.Contains("BASE  I"), "Panel shows antimatter and surviving tier");
             var tabs = (TabContainer)panel.FindChild("ProjectTabs", true, false);
             tabs.CurrentTab = 1;
             await Frames(3);
             await Click((Button)panel.FindChild("Order_repair-matrix", true, false));
             var repair = hub.Construction.GetActive(ConstructionSlot.Defense);
-            Check(repair != null && hub.StoredAntimatter == 80 && player.EnergyCapacity == 80, "Actual GUI click starts research and lowers limit");
+            Check(repair != null && hub.StoredAntimatter == 50 && player.EnergyCapacity == 50, "Actual GUI click starts research and lowers limit");
             hub.SetPhysicsProcess(true);
             await Frames(8);
             hub.SetPhysicsProcess(false);
@@ -73,9 +72,9 @@ public partial class BaseManagementChecks : Node3D
             foreach (string action in new[] { "activate_primary", "activate_claim", "activate_shield", "move_forward" }) Input.ActionRelease(action);
             await Frames(2); player.SetPhysicsProcess(false);
             panel.SetOpen(true);
-            hub.DepositAntimatter(40);
-            await Click((Button)panel.FindChild("Cancel_Defense", true, false));
-            Check(repair.State == ConstructionState.Cancelled && hub.StoredAntimatter == 120,
+            hub.DepositAntimatter(1000);
+            await Click(((UiTile)panel.FindChild("Order_repair-matrix", true, false)).CancelButton);
+            Check(repair.State == ConstructionState.Cancelled && hub.StoredAntimatter == 200,
                 "GUI cancellation returns payment when storage has refilled");
             Check(GetTree().GetNodesInGroup("loose_antimatter").OfType<AntimatterPickup>()
                 .Any(p => p.Name.ToString().Contains("ConstructionRefundSpill") && p.Ownership == AntimatterOwnership.Player),
@@ -84,7 +83,8 @@ public partial class BaseManagementChecks : Node3D
             hub._PhysicsProcess(60);
             Check(hub.EffectiveRepairHealthPerSecond == 4.5f && hub.Construction.IsCompleted("repair-matrix"), "Completed repair matrix has a live repair effect");
             hub.ApplyDamage(20); hub._PhysicsProcess(6);
-            Check(hub.Health == 124 && hub.Tier == 1, "Actual quiet repair uses researched rate without adding tiers");
+            Check(hub.Health == 384 && hub.Tier == 1, "Actual quiet repair uses researched rate without adding tiers");
+            hub.DepositAntimatter(1000);
             Check(panel.OrderProject("collector-drive") && panel.OrderProject("claim-range"), "Resources and ship categories can run concurrently");
             hub._PhysicsProcess(60);
             Check(hub.CollectorSpeedMultiplier == 1.25f && player.EffectiveClaimRange == 150, "Collector speed and built-in Claim range effects apply");
@@ -94,7 +94,7 @@ public partial class BaseManagementChecks : Node3D
             Vector3 destination = arena.StepToward(departure, rival.GlobalPosition, 100);
             typeof(CollectorDrone).GetMethod("MoveToward", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(collector, new object[] { destination, 1f });
             Check(arena.SurfaceDistance(departure, collector.GlobalPosition) > 12, "Real collector movement uses researched speed");
-            hub.DepositAntimatter(120);
+            hub.DepositAntimatter(1000);
             Check(panel.OrderNextTier(), "Panel orders tier advancement");
             hub._PhysicsProcess(60);
             Check(hub.Tier == 2, "Timed tier advancement completes through panel order");
@@ -115,16 +115,16 @@ public partial class BaseManagementChecks : Node3D
             claim.QueueFree();
             panel.SetOpen(true);
             Check(panel.OrderProject("strike-drone"), "Panel orders offensive unit");
-            hub._PhysicsProcess(15);
+            hub._PhysicsProcess(20);
             var strike = GetTree().GetNodesInGroup("base_strike_drone").OfType<BaseStrikeDrone>().Single();
             strike.SetPhysicsProcess(false);
             int rivalHealth = rival.Health;
             int routeTicks = (int)Math.Ceiling(strike.LifetimeSeconds / 0.1) + 1;
             for (int i = 0; i < routeTicks && !strike.IsQueuedForDeletion(); i++) strike._PhysicsProcess(0.1);
-            Check(rival.Health == rivalHealth - 45 && strike.IsQueuedForDeletion(), "Offensive drone travels the globe and hits rival base once");
+            Check(rival.Health == rivalHealth - 120 && strike.IsQueuedForDeletion(), "Offensive drone travels the globe and hits rival base once");
             strike._PhysicsProcess(1);
-            Check(rival.Health == rivalHealth - 45 && !hub.Construction.IsCompleted("strike-drone"), "Repeatable unit cannot hit twice or become one-time research");
-            hub.ApplyDamage(140); panel.Refresh();
+            Check(rival.Health == rivalHealth - 120 && !hub.Construction.IsCompleted("strike-drone"), "Repeatable unit cannot hit twice or become one-time research");
+            hub.ApplyDamage(400); panel.Refresh();
             Check(hub.Tier == 1 && hub.EnergyRechargeMultiplier == 1 && panel.AlertText.Contains("SIEGE"),
                 "Lost tier suspends higher-tier effects and shows siege alert");
             hub.DepositAntimatter(120);
@@ -140,7 +140,6 @@ public partial class BaseManagementChecks : Node3D
             if (capture != null)
             {
                 hub.DepositAntimatter(200);
-                hub.DepositMatter(200); // Refill both resources for the concurrent-project layout capture.
                 Check(panel.OrderNextTier(), "Capture has active base construction");
                 hub.DepositAntimatter(200);
                 Check(panel.OrderProject("strike-drone"), "Capture has concurrent offense construction");

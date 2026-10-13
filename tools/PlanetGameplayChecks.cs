@@ -132,9 +132,10 @@ public partial class PlanetGameplayChecks : Node3D
             // Use the underside for all economic/combat tests: world-Y assumptions fail here.
             Vector3 underside = Vector3.Down;
             _arena.FlattenTerrain(_arena.PlanetCenter + underside * 800, 80, 7);
-            FactionBase home = Add(new FactionBase { InitialStoredAntimatter = 30 }, underside, 2);
+            FactionBase home = Add(new FactionBase { InitialStoredAntimatter = 30, MaxHealth = 140,
+                Tier1StorageCapacity = 120, Tier2StorageCapacity = 200, Tier3StorageCapacity = 300 }, underside, 2);
             Vector3 rivalUp = Offset(underside, 45, 800, Vector3.Right);
-            FactionBase rival = Add(new FactionBase { IsPlayerBase = false, InitialStoredAntimatter = 48 }, rivalUp, 2);
+            FactionBase rival = Add(new FactionBase { IsPlayerBase = false, InitialStoredAntimatter = 48, MaxHealth = 140 }, rivalUp, 2);
             _player = Add(new ShipFlightController(), Offset(underside, 12, 800, Vector3.Forward), 6);
             _player.SetPhysicsProcess(false);
             Check(home.GlobalBasis.Y.Dot(underside) > 0.9999f && rival.GlobalBasis.Y.Dot(rivalUp) > 0.9999f, "Bases upright on underside");

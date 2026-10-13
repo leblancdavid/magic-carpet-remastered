@@ -23,12 +23,6 @@ public sealed class BaseConstruction
         }
     }
     public long CompletedInvestment { get; private set; }
-    public long ActiveMatterInvestment
-    {
-        get { long total = 0; foreach (var project in _slots) total += project?.PaidMatter ?? 0; return total; }
-    }
-    public long CompletedMatterInvestment { get; private set; }
-    public long DestroyedMatterLoss { get; private set; }
     public long DestroyedInvestmentLoss { get; private set; }
     public int DestroyedProjectCount { get; private set; }
 
@@ -41,7 +35,7 @@ public sealed class BaseConstruction
     {
         if (string.IsNullOrWhiteSpace(definition.Id) || string.IsNullOrWhiteSpace(definition.Name)
             || !ValidSlot(definition.Slot) || definition.Slot == ConstructionSlot.Base
-            || definition.Cost < 0 || definition.MatterCost < 0 || (definition.Cost == 0 && definition.MatterCost == 0)
+            || definition.Cost <= 0
             || !double.IsFinite(definition.DurationSeconds) || definition.DurationSeconds <= 0
             || definition.RequiredTier < 1 || definition.RequiredTier > FactionBase.MaximumTier) return false;
         return _catalog.TryAdd(definition.Id, definition);
@@ -53,11 +47,9 @@ public sealed class BaseConstruction
         if (_base.IsDestroyed || target > FactionBase.MaximumTier) return null;
         bool rebuild = target <= _base.HighestPurchasedTier;
         int cost = _base.UpgradeCostForTier(target);
-        int matter = _base.MatterCostForTier(target);
         if (rebuild) cost = cost / 2 + cost % 2; // Round rebuild payment up.
-        if (rebuild) matter = matter / 2 + matter % 2;
         return new ConstructionDefinition($"base-tier-{target}", $"{(rebuild ? "Rebuild" : "Upgrade")} tier {target}",
-            ConstructionSlot.Base, cost, _base.UpgradeSecondsForTier(target), _base.Tier, MatterCost: matter);
+            ConstructionSlot.Base, cost, _base.UpgradeSecondsForTier(target), _base.Tier);
     }
 
     public bool TryStartNextTier(out string reason)
@@ -94,10 +86,9 @@ public sealed class BaseConstruction
         if (_slots[(int)definition.Slot] != null) return "Slot occupied";
         if (_base.Tier < definition.RequiredTier) return $"Requires tier {definition.RequiredTier}";
         if (definition.RequiredProject != null && !_completed.Contains(definition.RequiredProject)) return $"Requires {definition.RequiredProject}";
-        if (definition.Cost < 0 || definition.MatterCost < 0 || (definition.Cost == 0 && definition.MatterCost == 0)
+        if (definition.Cost <= 0
             || !double.IsFinite(definition.DurationSeconds) || definition.DurationSeconds <= 0) return "Invalid tuning";
         if (_base.StoredAntimatter < definition.Cost) return $"Need {definition.Cost - _base.StoredAntimatter} more antimatter";
-        if (_base.StoredMatter < definition.MatterCost) return $"Need {definition.MatterCost - _base.StoredMatter} more matter";
         return string.Empty;
     }
 
@@ -105,7 +96,7 @@ public sealed class BaseConstruction
     {
         reason = ValidateStart(definition);
         if (reason.Length > 0) return false;
-        if (!_base.TrySpendResources(definition.Cost, definition.MatterCost)) { reason = "Insufficient stored resources"; return false; }
+        if (!_base.TrySpendAntimatter(definition.Cost)) { reason = "Insufficient stored antimatter"; return false; }
         _slots[(int)definition.Slot] = new ConstructionProject(++_nextInstanceId, definition, targetTier, rebuild);
         LastStatus = $"Started {definition.Name}";
         reason = string.Empty;
@@ -120,7 +111,6 @@ public sealed class BaseConstruction
         _slots[(int)slot] = null;
         project.Finish(ConstructionState.Cancelled);
         _base.RefundConstruction(project.PaidAntimatter);
-        _base.RefundMatterConstruction(project.PaidMatter);
         LastStatus = $"Cancelled {project.Definition.Name}: full refund";
         return true;
     }
@@ -140,7 +130,6 @@ public sealed class BaseConstruction
             _slots[i] = null;
             project.Finish(ConstructionState.Completed);
             CompletedInvestment += project.PaidAntimatter;
-            CompletedMatterInvestment += project.PaidMatter;
             if (project.TargetTier == 0 && !project.Definition.Repeatable) _completed.Add(project.Definition.Id);
             if (project.TargetTier == 0) _base.ApplyProjectCompletion(project.Definition.Id);
             LastStatus = $"Completed {project.Definition.Name}";
@@ -159,9 +148,6 @@ public sealed class BaseConstruction
             int spill = project.PaidAntimatter / 2; // Odd unit is permanently lost.
             DestroyedInvestmentLoss += project.PaidAntimatter - spill;
             _base.SpillConstructionInvestment(spill);
-            int matterSpill = project.PaidMatter / 2;
-            DestroyedMatterLoss += project.PaidMatter - matterSpill;
-            _base.SpillMatterInvestment(matterSpill);
             count++;
         }
         DestroyedProjectCount += count;

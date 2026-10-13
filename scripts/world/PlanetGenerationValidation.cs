@@ -28,7 +28,7 @@ public static class PlanetGenerationValidation
         for (int side = 0; side < 2; side++)
         {
             Vector3 start = layout.Starts[side];
-            if (!Link(arena, start, layout.AntimatterFields[side]) || !Link(arena, start, layout.MatterFields[side * 2]))
+            if (!Link(arena, start, layout.AntimatterFields[side]))
             { reason = "Opening resource approach"; return false; }
             for (int role = 0; role < 4; role++)
                 if (!Link(arena, start, layout.EconomicSites[side * 4 + role].Up))

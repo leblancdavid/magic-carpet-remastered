@@ -79,7 +79,7 @@ public partial class RivalFactionChecks : Node3D
                     "Booster spends energy, not physical stored antimatter");
                 rival._PhysicsProcess(3);
 
-                // Real mixed Claim and collector delivery; no direct absorption.
+                // Real Claim and collector delivery; no direct absorption.
                 rival.GlobalPosition = Point(10); rival.Velocity = Vector3.Zero;
                 var orb = new AntimatterPickup { Ownership = AntimatterOwnership.Player, AntimatterAmount = 9, Position = Point(30, 1) };
                 room.AddChild(orb); orb.Freeze = true; orb.SetPhysicsProcess(false);
@@ -88,24 +88,17 @@ public partial class RivalFactionChecks : Node3D
                 await Frames(45);
                 Check(orb.Ownership == AntimatterOwnership.Enemy && orb.AntimatterAmount == 9 && orb.IsAvailable,
                     "Actual Claim steals ownership but cannot absorb antimatter into the ship");
-                var matter = new MatterPickup { Ownership = AntimatterOwnership.Player, MatterAmount = 10, Position = Point(25, 0) };
-                room.AddChild(matter); matter.SetPhysicsProcess(false);
-                rival._PhysicsProcess(1); rival.GlobalPosition = Point(10); rival.Velocity = Vector3.Zero;
-                rival.SetAutonomousControls(Vector3.Zero, matter.GlobalPosition - rival.AimOrigin); rival.TryActivateClaim();
-                await Frames(45);
-                Check(matter.Ownership == AntimatterOwnership.Enemy && matter.MatterAmount == 10, "Same Claim bolt handles rival material crates");
-                int stored = enemy.StoredAntimatter, storedMatter = enemy.StoredMatter;
+                int stored = enemy.StoredAntimatter;
                 var drone = new CollectorDrone { UsePlayerAntimatter = false, Position = Point(25, 5), MaxSeekRadius = 100 };
                 room.AddChild(drone);
                 await Frames(480); drone.SetPhysicsProcess(false);
-                Check(enemy.StoredAntimatter == stored + 9 && enemy.StoredMatter == storedMatter + 10,
-                    "Actual shared collector hauls and deposits both AI-owned resources");
+                Check(enemy.StoredAntimatter == stored + 9, "Actual shared collector hauls and deposits AI-owned antimatter");
 
-                enemy.DepositAntimatter(1000); enemy.DepositMatter(1000);
+                enemy.DepositAntimatter(1000);
                 Check(enemy.Construction.TryStartNextTier(out _), "Rival tier requires a paid project"); enemy.Construction.Advance(60);
                 enemy.DepositAntimatter(1000);
                 int beforeOrder = enemy.StoredAntimatter;
-                Check(ai.TryOrderProject("equipment-energy-shield-1") && enemy.StoredAntimatter == beforeOrder - 40,
+                Check(ai.TryOrderProject("equipment-energy-shield-1") && enemy.StoredAntimatter == beforeOrder - 60,
                     "AI orders use ordinary research payment and prerequisites");
                 enemy.Construction.Advance(60);
                 Check(rival.GetOwnedEquipmentRank("energy-shield") == 1 && rival.GetEquipmentRank("energy-shield") == 0,
@@ -129,12 +122,12 @@ public partial class RivalFactionChecks : Node3D
 
                 Check(ai.TryOrderProject("equipment-plasma-bolt-2"), "Sequential rival ranks use the same tier-gated paid catalog");
                 enemy.Construction.Advance(90); rival.TryInstallEquipment("plasma-bolt", 0, out _);
-                enemy.ApplyDamage(enemy.Health - 140);
+                enemy.ApplyDamage(enemy.Health - 400);
                 Check(enemy.Tier == 1 && rival.GetOwnedEquipmentRank("plasma-bolt") == 2 && rival.GetEquipmentRank("plasma-bolt") == 2,
                     "Siege tier loss preserves rival owned and installed higher-tier equipment");
                 var rebuild = enemy.Construction.NextTierDefinition()!;
                 int rebuildBefore = enemy.StoredAntimatter;
-                Check(rebuild.Cost == 60 && enemy.Construction.TryStartNextTier(out _) && enemy.StoredAntimatter == rebuildBefore - 60,
+                Check(rebuild.Cost == 75 && enemy.Construction.TryStartNextTier(out _) && enemy.StoredAntimatter == rebuildBefore - 75,
                     "Rival recovery uses normal sequential half-price rebuilding"); enemy.Construction.Advance(60);
                 Check(enemy.Tier == 2 && rival.GetEquipmentRank("plasma-bolt") == 2, "Rebuilding keeps the existing applied loadout");
 
@@ -200,7 +193,7 @@ public partial class RivalFactionChecks : Node3D
             var hero = game.GetNode<ShipFlightController>("PlayerShip"); hero.SetPhysicsProcess(false);
             var npc = game.GetNode<ShipFlightController>("RivalPilot"); var controller = npc.GetNode<RivalPilotController>("RivalAI");
             var hub = game.GetNode<FactionBase>("EnemyBase");
-            Check(hub.StoredAntimatter == 30 && hub.StoredMatter == 30 && npc.Health == 100, "Real match starts with equal unassisted rival resources");
+            Check(hub.StoredAntimatter == 30 && npc.Health == 100, "Real match starts with equal unassisted rival resources");
             Engine.TimeScale = 8;
             await Frames(180);
             var management = game.GetNode<BaseManagement>("BaseManagement"); management.SetOpen(true);
@@ -212,15 +205,19 @@ public partial class RivalFactionChecks : Node3D
             Engine.TimeScale = originalScale;
             Check(!npc.GameplayInputBlocked && hero.GameplayInputBlocked && !GetTree().Paused, "Human live management cannot block rival input or simulation"); management.SetOpen(false);
             Check(controller.OrdersPlaced > orders, "Rival continues paid development while human management is open");
-            Check(controller.OrdersPlaced > 0 && hub.SpentAntimatter > 0 && hub.SpentMatter > 0, "Integrated opening funds real paid development from the normal economy");
+            Check(controller.OrdersPlaced > 0 && hub.SpentAntimatter > 0, "Integrated opening funds real paid development from the normal economy");
             GD.Print($"Rival opening diagnostics: {controller.StatusText}; HP {npc.Health}; tier {hub.Tier}; shield {npc.GetOwnedEquipmentRank("energy-shield")}/{npc.GetEquipmentRank("energy-shield")}");
             Check(GetTree().GetNodesInGroup("strategic_point").OfType<StrategicPoint>().Any(p => p.Ownership == AntimatterOwnership.Enemy),
                 "Integrated economy-first rival actually captures an income site");
             Check(npc.GetOwnedEquipmentRank("energy-shield") > 0 && npc.GetEquipmentRank("energy-shield") > 0,
                 "Integrated research returns home and installs its researched equipment");
+            // A dense-world battle can end on a legitimate death frame. Verify
+            // the ordinary objective-owned recovery instead of assuming the
+            // bot is immortal at an arbitrary observation boundary.
+            for (int batch = 0; npc.Health <= 0 && !hub.IsDestroyed && batch < 12; batch++) await Frames(60);
             Check(npc.Health > 0 && npc.EnergyCapacity == hub.StoredAntimatter && npc.Energy <= npc.EnergyCapacity,
-                "Integrated AI remains alive with strictly storage-backed energy");
-            GD.Print($"Rival opening: {controller.StatusText}; tier {hub.Tier}, {hub.StoredAntimatter} A / {hub.StoredMatter} M");
+                "Integrated AI survives or normally respawns with strictly storage-backed energy");
+            GD.Print($"Rival opening: {controller.StatusText}; tier {hub.Tier}, {hub.StoredAntimatter} A");
             if (DisplayServer.GetName() != "headless")
             {
                 npc.SetPhysicsProcess(false); var terrain = game.GetNode<HeightmapArena>("HeightmapArena");

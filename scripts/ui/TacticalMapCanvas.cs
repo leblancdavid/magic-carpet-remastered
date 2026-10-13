@@ -80,9 +80,9 @@ public partial class TacticalMapCanvas : Control
 
     private void DrawRadar()
     {
-        DrawRect(new Rect2(16, 124, 196, 224), PanelColor);
-        Text(new Vector2(28, 146), $"RADAR · {WorldNavigation.RadarRange:0} m", Colors.White, 13);
-        Vector2 center = new(114, 227);
+        Vector2 origin = new(Size.X - 192, Size.Y - 222);
+        DrawRect(new Rect2(origin, new Vector2(176, 176)), PanelColor);
+        Vector2 center = origin + new Vector2(88, 88);
         const float radius = 72;
         DrawCircle(center, radius, new Color(0.05f, 0.1f, 0.14f));
         DrawArc(center, radius, 0, Mathf.Tau, 64, LineColor, 1.5f, true);
@@ -104,9 +104,6 @@ public partial class TacticalMapCanvas : Control
         DrawLine(center, center + target.LimitLength(WorldNavigation.RadarRange) / WorldNavigation.RadarRange * radius, new Color(1, 0.8f, 0.2f, 0.5f), 1.5f);
         Cross(center + target.LimitLength(WorldNavigation.RadarRange) / WorldNavigation.RadarRange * radius, Gold);
         Arrow(center, Vector2.Up, Colors.White);
-        Text(new Vector2(86, 169), "FORWARD", new Color(0.6f, 0.7f, 0.8f), 10);
-        Text(new Vector2(28, 319), _targetTitle, Gold, 13, 172);
-        Text(new Vector2(28, 339), _targetGuidance, Colors.White, 12, 172);
     }
 
     private void DrawSurvey()
@@ -132,13 +129,13 @@ public partial class TacticalMapCanvas : Control
                 Vector2 heading = MapProjection.WrappedDifference(MapProjection.Project(nextUp), MapProjection.Project(marker.Up)) * rect.Size;
                 Arrow(point, heading.LengthSquared() > 0.00001f ? heading.Normalized() : Vector2.Up, marker.Color);
             }
-            else Glyph(point, marker, marker.Kind is MapMarkerKind.Antimatter or MapMarkerKind.Matter or MapMarkerKind.Enemy ? 3 : 6);
+            else Glyph(point, marker, marker.Kind is MapMarkerKind.Antimatter or MapMarkerKind.Enemy ? 3 : 6);
             float distance = point.DistanceSquaredTo(mouse);
             if (distance < nearest) { nearest = distance; hover = marker; }
         }
         Cross(rect.Position + MapProjection.Project(Navigation.TargetUp) * rect.Size, Gold);
         float bottom = rect.End.Y + 26;
-        Text(new Vector2(rect.Position.X, bottom), "■ Base   □ Wreck   ◇ Landmark / drone   ● Mob: black · Antimatter: orange · Matter: gray · Factions: cyan/red", new Color(0.8f, 0.87f, 0.95f), 14);
+        Text(new Vector2(rect.Position.X, bottom), "■ Base   □ Wreck   ◇ Landmark / drone   ● Mob: black · Antimatter: orange · Factions: cyan/red", new Color(0.8f, 0.87f, 0.95f), 14);
         Text(new Vector2(rect.Position.X, bottom + 27), $"Target: {Navigation.TargetName} · {Navigation.TargetDistance:0} m · {Navigation.BearingText()}", Gold, 16);
         Text(new Vector2(rect.Position.X, bottom + 53), hover != null ? Navigation.VisibleTitle(hover) : "Economic sites: ring/cross markers. Hover for role/owner/benefit. Remain in ring to capture; opposing pilots contest.", Colors.White, 14);
     }
@@ -155,7 +152,7 @@ public partial class TacticalMapCanvas : Control
         }
         else if (marker.Kind == MapMarkerKind.Wreck)
             DrawRect(new Rect2(point - Vector2.One * size, Vector2.One * size * 2), marker.Color, false, 1.5f);
-        else if (marker.Kind is MapMarkerKind.Matter or MapMarkerKind.Antimatter || marker.Actor is MagicCarpetRemastered.Scripts.Enemies.EnemyEcosystemEnemy)
+        else if (marker.Kind == MapMarkerKind.Antimatter || marker.Actor is MagicCarpetRemastered.Scripts.Enemies.EnemyEcosystemEnemy)
         {
             if (marker.Color == Colors.Black) DrawCircle(point, size + 1, Colors.LightGray);
             DrawCircle(point, size, marker.Color);

@@ -2,7 +2,7 @@
 
 ## Status
 
-Pre-playtest phase 2 implemented, 2026-10-11. Ordinary enemies occupy stable habitats and fight locally. Phase 3 now supplies a shared-mechanics faction ship (`RIVAL_AI.md`); local targeting treats both faction ships as pilots. Ranges, population and raid pacing remain provisional pending hands-on play.
+Territorial behavior implemented 2026-10-11; globe-wide random habitats and ownership-aware guard recovery implemented 2026-10-12. Ordinary enemies fight locally; both factions share ship mechanics. See `PLAYTEST_SIMPLIFICATION.md` for current density, rewards, UI and economy. Tuning remains provisional.
 
 ## Local aggression
 
@@ -30,25 +30,26 @@ Damage, including a lethal hit, rallies living members of the same nonempty habi
 
 ## Population and safe placement
 
-- Globe populations use five authored landmarks plus eight economic-route habitats; Large/XL also have two outer extractor-route swarm habitats. Corresponding faction routes are interleaved when seeding the population budget. Flat reference uses its site habitats/fixed-corner fallback. No spawn is relative to a travelling pilot.
-- Initial/maximum ordinary populations are **16/24/32/40** on Small/Medium/Large/XL, subject to bounded placement. Opening swarms start with three, beasts with two, casters/scavengers with one; further rounds enlarge groups. Per-habitat caps are **five swarms / three beasts / two casters / two scavengers**. Global swarm cap is half the population budget; each other role is capped at one third. Explicit exported overrides survive size substitution. Proximity acquisition is individual; damage rallies the habitat group.
-- Each habitat remembers its seeded population target, so another habitat cannot consume its replacement slot. Death starts a **20-second recovery delay**, then replacements arrive individually every **five seconds**. Pause freezes both population and raid clocks; live interfaces do not. A blocked placement retries safely rather than allocating an actor.
+- Globe populations combine five landmarks, eight site guard habitats and many **seeded random wild habitats** across twelve regions. Wild centres target 60 m spacing; land roles prefer dry locations. Flat reference retains site/corner habitats. Spawn locations do not follow a travelling pilot.
+- Initial/maximum ordinary targets are **64/120/200/300** on Small/Medium/Large/XL. Seed all habitats then finish packs under budget. Swarms permit **6–10 members**, ordinary beasts three, heavy beasts one/two, casters three, scavengers two; initial populations can be smaller than per-habitat capacity. Swarm global cap is three quarters of budget; other roles one third. Exported overrides remain respected.
+- Heavy beasts have **150 HP / 18 contact damage / 1.7× body size**, versus ordinary beasts' 42 HP/10 damage. Swarms remain 16 HP/5 damage. Live intrinsic rewards are **3/18/36/10 A** for swarms/beasts/heavies/casters; scavengers only drop stolen reserves. Random heavy selection makes tougher solo/pair encounters alongside easy swarms.
+- Habitats remember their seeded target. Death starts a **20-second delay**, followed by one replacement every **five seconds**. Either faction owning a guard's linked site suppresses replacements without removing living guards. Becoming neutral restarts the full delay. Wild recovery is independent. Replacements wait within 64 m of a living pilot, keeping the 32 m placement ring away from immediate pop-in. A 0.5-second census limits polling; raids keep full-frequency clocks. Pause freezes both; live interfaces do not.
 - Ordinary spawning cannot create rival ships or base raiders. The designated rival is created/respawned only by the match/objective loop.
 - Every placement gets at most **64 attempts**. It excludes **60/80/80/80 m around every live globe base** (30 flat), avoids sharp support transitions, other mobs and scenery, and stays inside the flat arena. Failure allocates nothing and never uses an unsafe nearby fallback.
-- Mobs start in a **14–28-unit habitat ring** (8–14 flat); the stable habitat centre is their home. Long-lived populations remain bounded rather than following the player across the planet.
+- Mobs start in a **14–32-unit habitat ring** (8–14 flat); the stable habitat centre is home. Populations remain bounded rather than following the player.
 
 ## Neutral scavengers
 
 The historical `AntimatterThief` role is now displayed as Scavenger. It searches locally within the smaller of **42 units or half its habitat leash**, preferring the nearest faction-owned loose antimatter over neutral globes. Both factions can be robbed; matter/cargo is unaffected. It stops scavenging after reaching 12 carried antimatter (the last whole globe can exceed that amount), and during alert, pursuit or return.
 
-Stolen antimatter stays in the neutral's reserve, not a faction base. World accounting classifies it as neutral-creature supply; death drops the exact remainder as neutral salvage. It still starts with no minted reserve. Other neutral roles retain their intrinsic 12-antimatter drop. Live faction ships use Claim and collector hauling without a physical ship reserve; legacy rival-archetype collection/deposit remains only in diagnostic fixtures.
+Stolen antimatter stays in the scavenger, not a faction base, and drops exactly on death. It starts without minted reserve. Other live roles use the differentiated rewards above; standalone diagnostic fixtures retain their explicit/default reserves. Live ships use Claim/collectors without a physical ship reserve.
 
 ## Separately paced raids
 
 - A **180-second opening grace** precedes the first raid. Successful launches reset a **180-second interval**; at most **one raider** is alive. No intensity ramp changes these clocks. Failed/capped attempts retry after ten seconds. Pause stops timers; live B/M/H panels do not.
 - Successful raids alternate between living faction bases, starting with the player. If one is absent/destroyed, only a surviving target is eligible. A raid never changes its assigned base to the other faction midway.
 - A red, labelled **34-HP** sieger approaches from a size-aware baseline **70/100/100/100 m**, searching between baseline + 1 and baseline + 40 m (46–53 flat), subject to the same all-base exclusions/support/spacing checks. It can locally fight nearby pilots, using a broader approach leash of spawn distance + 80 units around its assigned base.
-- Base attacks deal **4 HP every 3 seconds**, with a **90-second lifetime**. An intact 140-HP tier-one base survives even an immediate, unopposed default raid; actual approach travel further reduces attack time. Other simultaneous damage and future tuning are separate balance considerations.
+- Base attacks deal **4 HP every 3 seconds**, with a **90-second lifetime**. An intact **400-HP** tier-one base survives an immediate unopposed raid; approach travel reduces attack time. Raid pressure needs hands-on tuning against stronger bases.
 - Kill, target loss or expiry clears the raider and releases its exact reserve as neutral salvage. An ordinary sieger without an explicit raid assignment cannot ram a base.
 - An **eight-second inbound notice** uses the existing HUD feedback panel. The world label identifies its target; local map markers are orange-red with raid details. F3 shows counts, launch total and time to the next raid check.
 

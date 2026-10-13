@@ -36,7 +36,7 @@ public partial class StrategicPointChecks : Node3D
                 var player = new ShipFlightController { Position = arena.OnSurface(origin, 8), EnergyRegenFractionPerSecond = 0 };
                 room.AddChild(player); player.SetPhysicsProcess(false);
                 int currentEnergy = player.Energy;
-                var extractor = new StrategicPoint { Position = arena.OnSurface(origin), CaptureSeconds = 10 };
+                var extractor = new StrategicPoint { Position = arena.OnSurface(origin), CaptureSeconds = 10, IncomePerSecond = 2 };
                 room.AddChild(extractor); extractor.SetPhysicsProcess(false);
                 extractor.Advance(5, true, false);
                 Check(extractor.Ownership == AntimatterOwnership.Neutral && extractor.CaptureProgress == 0.5 && home.StoredAntimatter == 80,
@@ -167,7 +167,7 @@ public partial class StrategicPointChecks : Node3D
                 research._PhysicsProcess(0.1);
                 Check(research.CaptureProgress > 0 && research.CaptureProgress < progress + 0.1, "Real out-of-range ship drains rather than resets capture");
                 var ui = new BaseManagement(); room.AddChild(ui); ui.SetOpen(true);
-                Check(ui.SummaryText.Contains("Sites") && !GetTree().Paused, "Management summarizes economic sites in real time");
+                Check(ui.SummaryText.Contains("ANTIMATTER") && !GetTree().Paused, "Management shows the single-resource economy in real time");
                 ui.SetOpen(false);
                 if (spherical)
                 {
@@ -195,16 +195,18 @@ public partial class StrategicPointChecks : Node3D
                 Check(points.Count == 8, $"{radius}: match creates eight fresh economic sites");
                 for (int role = 0; role < 4; role++)
                 {
-                    StrategicPoint? left = null, right = null;
-                    foreach (Node node in points)
-                        if (node is StrategicPoint point && (int)point.Role == role)
-                        { if (left == null) left = point; else right = point; }
+                    StrategicPoint? left = points[role] as StrategicPoint, right = points[4 + role] as StrategicPoint;
                     Check(left != null && right != null && left.Ownership == AntimatterOwnership.Neutral && right.Ownership == AntimatterOwnership.Neutral,
-                        $"{radius}: two neutral sites of each role reset without previous benefits");
+                        $"{radius}: corresponding neutral site pairs reset without previous benefits");
                     float a = arena.SurfaceDistance(home.GlobalPosition, left!.GlobalPosition);
                     float b = arena.SurfaceDistance(rival.GlobalPosition, right!.GlobalPosition);
                     Check(Mathf.Abs(a - b) < 1 && a > 30 && b > 30, $"{radius}: mirrored opening distances are comparable and outside bases");
                 }
+                var incomeSite = (StrategicPoint)points[0]; incomeSite.SetPhysicsProcess(false); home.SetPhysicsProcess(false);
+                Check(incomeSite.IncomePerSecond == 0.2, "Live extractors produce one antimatter per five seconds");
+                incomeSite.Advance(10, true, false); int before = home.StoredAntimatter;
+                incomeSite.Advance(4.9, true, false); Check(home.StoredAntimatter == before, "Slow income holds fractional work below five seconds");
+                incomeSite.Advance(0.1, true, false); Check(home.StoredAntimatter == before + 1, "Slow income deposits one at five seconds");
                 if (radius == 200 && DisplayServer.GetName() != "headless")
                 {
                     var ship = (ShipFlightController)GetTree().GetFirstNodeInGroup("player");

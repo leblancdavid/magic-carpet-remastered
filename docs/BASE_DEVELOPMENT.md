@@ -1,5 +1,19 @@
 # Base Development
 
+## Current Rules — 2026-10-12 Playtest Simplification
+
+**Antimatter is the sole resource; matter has been removed.** Current authoritative tuning and UI are in `PLAYTEST_SIMPLIFICATION.md`. The older foundation notes below retain implementation history and are superseded wherever they describe matter, old prices/capacities/HP or the previous five-tab management layout.
+
+- Capacities: **200/350/550/800/1100**. Tier II–V cost **150/275/450/650 A**, taking **60/80/100/120s** before station bonuses. Start at tier I with 30 antimatter; aim for economy-focused Medium tier V in **10–15 minutes**, pending hands-on validation.
+- Each layer has **400 HP**. Plasma deals 20% base damage, keeping its normal mob/ship damage. Strike drones deal 120 once for 100 A/20s.
+- Repair/Energy grid/Collector drive/Claim range cost **70/140/90/50 A**. Equipment pricing is in `SHIP_EQUIPMENT.md`.
+- Five backend project slots pay antimatter immediately, support exact full-refund cancellation with owned overflow, destroy all active investments on tier loss with floor-half neutral spill/remainder loss, and rebuild previously purchased tiers sequentially at rounded-up half price.
+- Storage damage still scales the top layer's incremental capacity; passive repair cannot recover destroyed tiers or resources. Energy limit equals retained antimatter, recharging at 4%/s before modifiers; delivery does not directly refill energy.
+- Eight economic sites now include four 0.2-A/s extractors. Collectors haul antimatter only. No material storage/payment/refund/siege ledger remains.
+- B shows resources and one base advancement/rebuild button above **Offense / Defense / Resources / Ship**. Progress/cancel live on order buttons. Owned equipment tiles toggle installation at home; pending ranks have explicit Apply actions. The panel remains real time and owns ship input.
+
+## Historical Foundation Notes
+
 ## Status And Direction
 
 Approved design, 2026-10-11. Terminology, explicit-tier/storage-backed-energy accounting, five-slot construction, cancellation/refunds, tier destruction/rebuilding, real-time management, starter projects, owned equipment/four-slot home installation, Shift booster, boons, economic sites and matter logistics/material costs are implemented for their first pass. The existing spherical mechanics are accepted as a smooth playtest baseline. Costs, timing, balance, AI, equipment progression and base development remain iterative work.

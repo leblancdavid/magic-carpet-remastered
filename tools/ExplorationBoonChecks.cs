@@ -73,7 +73,8 @@ public partial class ExplorationBoonChecks : Node3D
             var testRoom = new Node3D(); AddChild(testRoom);
             var terrain = new HeightmapArena { IsSpherical = true, PlanetRadius = 800 }; testRoom.AddChild(terrain);
             Vector3 underside = terrain.PlanetCenter + Vector3.Down * 800;
-            var hub = new FactionBase { Position = terrain.OnSurface(underside), InitialStoredAntimatter = 110 }; testRoom.AddChild(hub); hub.SetPhysicsProcess(false);
+            var hub = new FactionBase { Position = terrain.OnSurface(underside), InitialStoredAntimatter = 110,
+                Tier1StorageCapacity = 120, MaxHealth = 140 }; testRoom.AddChild(hub); hub.SetPhysicsProcess(false);
             var enemyHub = new FactionBase { IsPlayerBase = false, Position = terrain.OnSurface(terrain.PlanetCenter + Vector3.Up * 800) };
             testRoom.AddChild(enemyHub); enemyHub.SetPhysicsProcess(false);
             var ship = new ShipFlightController { Position = terrain.OnSurface(underside, 6), EnergyRegenFractionPerSecond = 0.04f }; testRoom.AddChild(ship); ship.SetPhysicsProcess(false);

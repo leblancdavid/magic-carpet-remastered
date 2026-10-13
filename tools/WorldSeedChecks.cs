@@ -67,7 +67,7 @@ public partial class WorldSeedChecks : Node3D
                 var w = game.GetChildren().OfType<ExplorationWreck>().Select(n => n.GlobalPosition).ToArray();
                 var m = game.GetChildren().OfType<EnemyEcosystemEnemy>().Select(n => n.GlobalPosition).ToArray();
                 var r = game.GetChildren().OfType<EnemyEcosystemEnemy>().Select(n => (int)n.Role).ToArray();
-                Check(w.Length == 12 && m.Length == 24, "Seeded initial content retains wrecks and grouped Medium population");
+                Check(w.Length == 12 && m.Length == 120, "Seeded initial content retains wrecks and distributed Medium population");
                 if (repeat == 0) { wrecks = w; mobs = m; roles = r; terrain = Heights(arena); }
                 else Check(wrecks!.SequenceEqual(w) && mobs!.SequenceEqual(m) && roles!.SequenceEqual(r) && terrain!.SequenceEqual(Heights(arena)),
                     "Restart reproduces initial wrecks, mob roles/positions and terrain");

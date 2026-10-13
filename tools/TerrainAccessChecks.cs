@@ -144,7 +144,6 @@ public partial class TerrainAccessChecks : Node3D
                     {
                         Vector3 start = layout!.Starts[side];
                         var route = VerifyRoute(arena, start, layout.AntimatterFields[side], $"R{radius}, seed {seed}, faction {side}, antimatter");
-                        VerifyRoute(arena, start, layout.MatterFields[side * 2], $"R{radius}, seed {seed}, faction {side}, matter");
                         for (int role = 0; role < 4; role++)
                             VerifyRoute(arena, start, layout.EconomicSites[side * 4 + role].Up,
                                 $"R{radius}, seed {seed}, faction {side}, station {role}");

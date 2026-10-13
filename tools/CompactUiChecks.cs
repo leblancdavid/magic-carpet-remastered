@@ -39,6 +39,12 @@ public partial class CompactUiChecks : Node3D
             var hud = game.GetNode<Hud>("Hud"); var ui = game.GetNode<BaseManagement>("BaseManagement");
             var bar = Find<EquipmentBar>(hud, "EquipmentBar");
             await Frames(4); hud._Process(1); bar.Refresh();
+            Check(hud.FindChild("Vitals", true, false) == null && hud.FindChild("Objective", true, false) == null,
+                "Persistent corner vitals and objective panels are removed");
+            var vitals = Find<HBoxContainer>(hud, "VitalBars");
+            Check(vitals.GetChildCount() == 3 && Find<ProgressBar>(hud, "EnergyGauge").Value == ship.Energy
+                && Find<ProgressBar>(hud, "AntimatterGauge").MaxValue == home.EffectiveStorageCapacity,
+                "Three vertical gauges show actual health, rechargeable energy and base storage");
             var cards = Find<HBoxContainer>(bar, "EquipmentSlots").GetChildren().OfType<UiTile>().ToArray();
             Check(cards.Length == 4 && cards.Select(c => c.Name.ToString()).SequenceEqual(new[] { "EquipmentSlot_1", "EquipmentSlot_2", "EquipmentSlot_3", "EquipmentSlot_4" }),
                 "HUD is exactly four numbered equipment cards in one horizontal row");
@@ -74,39 +80,50 @@ public partial class CompactUiChecks : Node3D
             Check(ui.IsOpen && ship.GameplayInputBlocked && !GetTree().Paused && !bar.Visible && !Find<HBoxContainer>(hud, "InterfaceActions").Visible,
                 "Entry click opens live management and hides redundant flight controls");
             var tabs = Find<TabContainer>(ui, "ProjectTabs"); tabs.CurrentTab = 1; await Frames(3);
+            Check(tabs.GetTabCount() == 4 && ui.FindChild("ActiveProjects", true, false) == null
+                && Find<UiTile>(ui, "Order_Tier").GetGlobalRect().End.Y < tabs.GetGlobalRect().Position.Y,
+                "Four project tabs sit under header upgrade button without a separate active-project strip");
             var repair = Find<UiTile>(ui, "Order_repair-matrix"); var gridUpgrade = Find<UiTile>(ui, "Order_energy-grid");
-            Check(repair.Glyph.IconId == "repair-matrix" && repair.Title.Text.Contains("Repair") && repair.Detail.Text.Contains("40 A") && repair.Detail.Text.Contains("10 M"),
-                "Upgrade tile shows original glyph, short name and independent costs");
-            Check(gridUpgrade.Disabled && gridUpgrade.TooltipText.Contains("Requires tier 2") && gridUpgrade.TooltipText.Contains("80 antimatter"),
+            Check(repair.Glyph.IconId == "repair-matrix" && repair.Title.Text.Contains("Repair") && repair.Detail.Text.Contains("70 A") && !repair.Detail.Text.Contains(" M"),
+                "Upgrade tile shows original glyph and antimatter-only cost");
+            Check(gridUpgrade.Disabled && gridUpgrade.TooltipText.Contains("Requires tier 2") && gridUpgrade.TooltipText.Contains("140 antimatter"),
                 "Unavailable tiles preserve exact tier/cost reasons in tooltip");
+            Check(gridUpgrade.TierBadge.Text == "II" && gridUpgrade.SelfModulate.A < 1,
+                "Unavailable upgrades are faded and show the Roman required-tier badge");
             var tooltip = repair._MakeCustomTooltip(repair.TooltipText);
             Check(tooltip.GetChild<Label>(0).CustomMinimumSize.X == 310 && tooltip.GetChild<Label>(0).Text.Contains("60s"), "Custom tooltips bound width and include duration"); tooltip.Free();
-            home.DepositAntimatter(1000); home.DepositMatter(1000); ui.Refresh();
-            int before = home.StoredAntimatter, beforeM = home.StoredMatter;
+            home.DepositAntimatter(1000); ui.Refresh();
+            int before = home.StoredAntimatter;
             await Click(repair);
             var project = home.Construction.GetActive(ConstructionSlot.Defense)!;
-            Check(project != null && home.StoredAntimatter == before - 40 && home.StoredMatter == beforeM - 10 && repair.Disabled,
+            Check(project != null && home.StoredAntimatter == before - 70 && repair.Disabled,
                 "Actual icon tile click starts one paid project and disables duplicate order");
-            ui.Refresh(); Check(repair.State.Text.Contains("Researching"), "Active tile has progress state");
+            ui.Refresh(); Check(repair.State.Text.Contains("Building") && repair.BuildProgress.Visible, "Active tile has overlaid progress state");
             home.SetPhysicsProcess(true); double elapsed = project!.ElapsedSeconds; await Frames(8); home.SetPhysicsProcess(false);
             Check(project.ElapsedSeconds > elapsed && ui.IsOpen && !GetTree().Paused, "Construction remains live with compact UI open");
-            await Click(Find<Button>(ui, "Cancel_Defense"));
-            Check(project.State == ConstructionState.Cancelled && home.StoredAntimatter == before && home.StoredMatter == beforeM, "Compact cancellation preserves both exact refunds");
+            home.Construction.Advance(20); ui.Refresh();
+            Check(repair.BuildProgress.Value > 0.3 && repair.ProjectInstanceId == project.InstanceId,
+                "Button overlay fills with actual elapsed work and keeps its own cancellation identity");
+            if (DisplayServer.GetName() != "headless") await Capture("CompactActiveBuild.png");
+            await Click(repair.CancelButton);
+            Check(project.State == ConstructionState.Cancelled && home.StoredAntimatter == before, "Compact cancellation preserves exact antimatter refund");
             // Purchase and install a complete four-slot loadout through ordinary APIs.
-            ui.OrderNextTier(); home.Construction.Advance(60);
+            Check(ui.OrderNextTier() && Find<UiTile>(ui, "Order_Tier").BuildProgress.Visible,
+                "Header upgrade button displays its paid construction overlay");
+            home.Construction.Advance(60);
             foreach (string id in new[] { "energy-shield", "dash", "pulse-burst" })
             {
                 home.DepositAntimatter(1000); Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId(id, 1)), "Tile catalog retains shared equipment research"); home.Construction.Advance(60);
             }
-            tabs.CurrentTab = 4; ui.Refresh(); await Frames(4);
+            tabs.CurrentTab = 3; ui.Refresh(); await Frames(4);
             Check(ui.FindChild("ShipSections", true, false) == null, "Ship equipment uses one integrated view");
-            var install = Find<CheckButton>(ui, "Equip_energy-shield");
+            var install = Find<UiTile>(ui, "Equip_energy-shield");
             Check(!install.Disabled && install.TooltipText.Contains("row order"), "Row toggle explains automatic key assignment");
             await Click(install); Check(ship.EquipmentSlots[1] == "energy-shield" && install.ButtonPressed, "Viewport click equips and checks the row toggle");
             Check(ui.ToggleEquipment("dash") && ui.ToggleEquipment("pulse-burst"), "Mixed equipment still occupies only four shared slots");
             Check(ship.EquipmentSlots.SequenceEqual(new[] { "plasma-bolt", "pulse-burst", "energy-shield", "dash" }), "Automatic slots follow displayed row order");
             home.DepositAntimatter(1000); Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId("guardian-drone", 1)), "Fifth item can be researched"); home.Construction.Advance(60); ui.Refresh();
-            Check(Find<CheckButton>(ui, "Equip_guardian-drone").Disabled && !ui.ToggleEquipment("guardian-drone"), "Fifth toggle cannot replace an item silently");
+            Check(Find<UiTile>(ui, "Equip_guardian-drone").Disabled && !ui.ToggleEquipment("guardian-drone"), "Fifth toggle cannot replace an item silently");
             ui.SetOpen(false); ship.TrySelectEquipmentFromInterface(2); ui.SetOpen(true);
             Check(ui.ToggleEquipment("pulse-burst") && ship.SelectedEquipmentSlot == 1 && ship.EquipmentSlots[1] == "energy-shield", "Compaction preserves selected item identity");
             Check(ui.ToggleEquipment("pulse-burst") && ship.SelectedEquipmentSlot == 2, "Reinsertion preserves selected item identity");
@@ -150,6 +167,9 @@ public partial class CompactUiChecks : Node3D
                 Check(cards.All(c => c.GetGlobalRect().Position.Y == cards[0].GetGlobalRect().Position.Y), "Equipment remains a single row at supported viewport sizes");
                 var actions = Find<HBoxContainer>(hud, "InterfaceActions");
                 Check(!actions.GetGlobalRect().Intersects(bar.GetGlobalRect()), "Consolidated hints do not overlap the equipment bar");
+                Check(vitals.GetGlobalRect().End.X < bar.GetGlobalRect().Position.X
+                    && Find<PanelContainer>(hud, "BaseHealthPanel").GetGlobalRect().Position.X > bar.GetGlobalRect().End.X,
+                    "Vitals are left of weapons and home-base health is beneath the right-side map");
                 site.Advance(0.01, true, false); hud._Process(1); await Frames(2);
                 Check(capturePanel.Visible && !capturePanel.GetGlobalRect().Intersects(bar.GetGlobalRect())
                     && !capturePanel.GetGlobalRect().Intersects(actions.GetGlobalRect()), $"Capture HUD clears equipment and interface dock at {size}: visible {capturePanel.Visible}, capture {capturePanel.GetGlobalRect()}, bar {bar.GetGlobalRect()}, dock {actions.GetGlobalRect()}");

@@ -123,7 +123,8 @@ public partial class WeaponProjectile : Area3D
         if (body is ExplorationWreck wreck) wreck.ApplyDamage(Damage);
 
         if (FactionCombat.CanDamage(body, _ownership))
-            FactionCombat.Damage(body, Damage, IsInstanceValid(_owner) ? _owner : null);
+            FactionCombat.Damage(body, body is FactionBase && Damage > 0 ? Mathf.Max(1, Mathf.RoundToInt(Damage * 0.2f)) : Damage,
+                IsInstanceValid(_owner) ? _owner : null);
 
         if (body.IsInGroup("deformable_terrain") && GetTree().GetFirstNodeInGroup("heightmap_arena") is HeightmapArena arena)
         {

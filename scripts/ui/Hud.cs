@@ -7,8 +7,13 @@ namespace MagicCarpetRemastered.Scripts.Ui;
 
 public partial class Hud : CanvasLayer
 {
-    private Label _vitals = null!;
-    private Label _objective = null!;
+    private HBoxContainer _vitalBars = null!;
+    private readonly ProgressBar[] _gauges = new ProgressBar[3];
+    private readonly Label[] _gaugeValues = new Label[3];
+    private PanelContainer _baseHealthPanel = null!;
+    private ProgressBar _baseHealth = null!;
+    private Label _baseHealthText = null!;
+    private StyleBoxFlat _healthFill = null!;
     private PanelContainer _capturePanel = null!;
     private Label _captureLabel = null!;
     private ProgressBar _captureProgress = null!;
@@ -17,7 +22,6 @@ public partial class Hud : CanvasLayer
     private Button _baseAction = null!, _boonAction = null!, _mapAction = null!;
     private Control _root = null!;
     private Label _feedback = null!;
-    private Label _debugHint = null!;
     private PanelContainer _feedbackPanel = null!;
     private PanelContainer _debugPanel = null!;
     private RichTextLabel _debugText = null!;
@@ -28,7 +32,6 @@ public partial class Hud : CanvasLayer
     private FactionBase? _enemyBase;
     private EnemyEcosystemDirector? _enemyEcosystem;
     private WorldAntimatterTracker? _antimatterTracker;
-    private WorldMatterTracker? _matterTracker;
     private LevelObjective? _levelObjective;
     private PanelContainer _resultPanel = null!;
     private Label _result = null!;
@@ -40,10 +43,7 @@ public partial class Hud : CanvasLayer
         AddChild(root);
         root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
-        AddLabelPanel(root, "Vitals", Control.LayoutPreset.TopLeft,
-            new Vector2(16, 16), new Vector2(270, 94), out _vitals, 15);
-        AddLabelPanel(root, "Objective", Control.LayoutPreset.TopRight,
-            new Vector2(-236, 16), new Vector2(220, 62), out _objective, 14);
+        BuildVitals(root);
         _equipmentBar = new EquipmentBar(); root.AddChild(_equipmentBar);
         Place(_equipmentBar, Control.LayoutPreset.CenterBottom, new Vector2(-190, -144), new Vector2(380, 126));
         _feedbackPanel = AddLabelPanel(root, "Feedback", Control.LayoutPreset.BottomLeft,
@@ -62,9 +62,6 @@ public partial class Hud : CanvasLayer
         _result.HorizontalAlignment = HorizontalAlignment.Center;
         _resultPanel.Visible = false;
 
-        AddLabelPanel(root, "DebugHint", Control.LayoutPreset.BottomRight,
-            new Vector2(-122, -46), new Vector2(106, 30), out _debugHint, 12);
-        _debugHint.Text = "F3  Help";
         _actions = new HBoxContainer { Name = "InterfaceActions", MouseFilter = Control.MouseFilterEnum.Ignore };
         root.AddChild(_actions); Place(_actions, Control.LayoutPreset.BottomLeft, new Vector2(16, -46), new Vector2(252, 30));
         _actions.AddThemeConstantOverride("separation", 5);
@@ -72,7 +69,18 @@ public partial class Hud : CanvasLayer
         _mapAction = ActionButton("MapAction", "M  Map", () => (GetTree().GetFirstNodeInGroup("tactical_map_ui") as TacticalMap)?.SetExpanded(true));
         _boonAction = ActionButton("BoonAction", "H  Boons", () => (GetTree().GetFirstNodeInGroup("boon_choices") as BoonChoices)?.SetOpen(true));
         _actions.AddChild(_baseAction); _actions.AddChild(_mapAction); _actions.AddChild(_boonAction);
+        _baseHealthPanel = CreatePanel("BaseHealthPanel"); root.AddChild(_baseHealthPanel);
+        using var baseFrame = UiTile.Frame(new Color(0.025f, 0.04f, 0.075f, 0.88f), new Color(0.22f, 0.42f, 0.5f));
+        baseFrame.ContentMarginTop = baseFrame.ContentMarginBottom = 3;
+        _baseHealthPanel.AddThemeStyleboxOverride("panel", baseFrame);
+        _baseHealth = new ProgressBar { Name = "BaseHealth", ShowPercentage = false, MouseFilter = Control.MouseFilterEnum.Ignore };
+        _baseHealthPanel.AddChild(_baseHealth);
+        using var baseFill = UiTile.Frame(new Color(0.15f, 0.65f, 0.7f), Colors.Transparent, 0);
+        _baseHealth.AddThemeStyleboxOverride("fill", baseFill);
+        _baseHealthText = CreateLabel("", 11); _baseHealthText.HorizontalAlignment = HorizontalAlignment.Center;
+        _baseHealth.AddChild(_baseHealthText); _baseHealthText.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         root.Resized += LayoutHud;
+        LayoutHud();
 
         _debugPanel = CreatePanel("DebugPanel");
         root.AddChild(_debugPanel);
@@ -107,7 +115,6 @@ public partial class Hud : CanvasLayer
         if (@event.IsActionPressed("toggle_debug_ui") && !@event.IsEcho())
         {
             _debugPanel.Visible = !_debugPanel.Visible;
-            _debugHint.Text = _debugPanel.Visible ? "F3  Close" : "F3  Help";
             _refreshTimer = 0;
             GetViewport().SetInputAsHandled();
         }
@@ -145,19 +152,20 @@ public partial class Hud : CanvasLayer
         _enemyBase ??= GetTree().GetFirstNodeInGroup("enemy_base") as FactionBase;
         _enemyEcosystem ??= GetTree().GetFirstNodeInGroup("enemy_ecosystem_director") as EnemyEcosystemDirector;
         _antimatterTracker ??= GetTree().GetFirstNodeInGroup("world_antimatter_tracker") as WorldAntimatterTracker;
-        _matterTracker ??= GetTree().GetFirstNodeInGroup("world_matter_tracker") as WorldMatterTracker;
         _levelObjective ??= GetTree().GetFirstNodeInGroup("level_objective") as LevelObjective;
         if (_player == null)
         {
             return;
         }
 
-        _vitals.Text = $"HP {_player.Health}/{_player.MaximumHealth}   Energy {_player.Energy}/{_player.EnergyCapacity}\n"
-            + (_playerBase == null ? "" : $"Base T{_playerBase.Tier} · HP {_playerBase.Health}/{_playerBase.MaxHealth}\nA {_playerBase.StoredAntimatter}/{_playerBase.EffectiveStorageCapacity} · M {_playerBase.StoredMatter}/{_playerBase.EffectiveMatterCapacity}")
-            + (_player.Health <= 0 ? $"\nRespawn {_levelObjective?.PlayerRespawnRemaining:0.0}s" : _player.IsShielded ? $"\n{_player.ShieldStatusText}" : "");
-        _objective.Text = _levelObjective == null ? "Eliminate the rival\nDestroy base and pilot"
-            : $"Rival base: {(_levelObjective.RivalBaseDestroyed ? "Destroyed" : $"{_enemyBase?.Health} HP")}\n"
-                + $"Rival pilot: {(_levelObjective.RivalPilotDefeated ? _levelObjective.RivalBaseDestroyed ? "Defeated" : $"Respawn {_levelObjective.RivalRespawnRemaining:0}s" : "Alive")}";
+        RefreshGauge(0, _player.Health, _player.MaximumHealth);
+        RefreshGauge(1, _player.Energy, _player.EnergyCapacity);
+        RefreshGauge(2, _playerBase?.StoredAntimatter ?? 0, _playerBase?.EffectiveStorageCapacity ?? 0);
+        float healthRatio = (float)_player.Health / Mathf.Max(1, _player.MaximumHealth);
+        _healthFill.BgColor = healthRatio <= 0.25f ? new Color(0.95f, 0.18f, 0.15f)
+            : healthRatio <= 0.5f ? new Color(0.95f, 0.75f, 0.12f) : new Color(0.2f, 0.8f, 0.3f);
+        _baseHealth.MaxValue = Mathf.Max(1, _playerBase?.MaxHealth ?? 1); _baseHealth.Value = _playerBase?.Health ?? 0;
+        _baseHealthText.Text = $"Base {_playerBase?.Health ?? 0}/{_playerBase?.MaxHealth ?? 0}";
         _resultPanel.Visible = _levelObjective != null && _levelObjective.State != LevelObjective.LevelState.Playing;
         if (_resultPanel.Visible)
         {
@@ -180,16 +188,16 @@ public partial class Hud : CanvasLayer
             _captureLabel.Text = $"{capture.Role} · {stage} · {progress:P0}";
             _captureProgress.Value = progress;
         }
-        _debugHint.GetParent<PanelContainer>().Visible = !livePanel && !GetTree().Paused;
+        _vitalBars.Visible = _baseHealthPanel.Visible = !livePanel && !GetTree().Paused;
         _actions.Visible = !GetTree().Paused && !livePanel && _player.Health > 0;
         _baseAction.Text = _playerBase is { Health: var hp, MaxHealth: var max } && hp < max ? "B  Base !" : "B  Base";
-        _baseAction.TooltipText = "Remote research and base development. Install owned equipment at home in Ship → Loadout. Gameplay stays live.";
+        _baseAction.TooltipText = "Remote research and base development. Click owned equipment in Ship to equip at home. Gameplay stays live.";
         _mapAction.Visible = GetTree().GetFirstNodeInGroup("tactical_map_ui") != null;
         _mapAction.TooltipText = "World survey / waypoint. Gameplay stays live.";
         _boonAction.Text = _player.Boons.Pending.Count > 0 ? $"H  Boons {_player.Boons.Pending.Count}" : "H  Boons";
         _boonAction.TooltipText = "Secured choices and permanent match bonuses. Gameplay stays live.";
         _equipmentBar.Refresh(); LayoutHud();
-        _feedback.Text = _player.Health <= 0 ? "Pilot down — your base will respawn you"
+        _feedback.Text = _player.Health <= 0 ? $"Pilot down · respawn {_levelObjective?.PlayerRespawnRemaining:0.0}s"
             : !string.IsNullOrEmpty(_player.DiscoveryFeedbackMessage) ? _player.DiscoveryFeedbackMessage
             : !string.IsNullOrEmpty(_enemyEcosystem?.RaidFeedbackMessage) ? _enemyEcosystem!.RaidFeedbackMessage : _player.ActiveFeedbackMessage;
         _feedbackPanel.Visible = !_resultPanel.Visible && !livePanel && !string.IsNullOrEmpty(_feedback.Text);
@@ -210,9 +218,6 @@ public partial class Hud : CanvasLayer
             + (_antimatterTracker == null ? "Tracker unavailable\n" : $"World total: {_antimatterTracker.TotalAntimatter}\nNeutral loose: {_antimatterTracker.NeutralLooseAntimatter}\nNeutral creatures: {_antimatterTracker.NeutralCreatureAntimatter}\nPlayer: {_antimatterTracker.PlayerControlledAntimatter}\nRival: {_antimatterTracker.EnemyControlledAntimatter}\n")
             + $"Extractor supply accepted: {_antimatterTracker?.SiteGeneratedAntimatter ?? 0}\n"
             + (_well == null ? "Source: unavailable\n\n" : "Source: finite neutral landmark\n\n")
-            + Section("MATTER ECONOMY")
-            + (_matterTracker == null ? "Tracker unavailable\n" : $"Physical: {_matterTracker.PhysicalMatter} · committed: {_matterTracker.NetCommittedMatter}\nExtractor supply accepted: {_matterTracker.SiteGeneratedMatter}\nActive: {_matterTracker.ActiveInvestment} · permanent siege loss: {_matterTracker.DestroyedInvestmentLoss}\n")
-            + "Orange crates: Claim then drone hauling. Matter does not power equipment.\n\n"
             + Section("BASES / ENEMIES")
             + BaseDetails(_playerBase, "Player") + BaseDetails(_enemyBase, "Rival")
             + (_enemyEcosystem?.StatusText ?? "Ecosystem unavailable") + "\n\n"
@@ -226,7 +231,7 @@ public partial class Hud : CanvasLayer
             + Section("CONTROLS")
             + "WASD — hover / steer\nSpace — jump (2 current energy, fresh press)\nShift — built-in forward boost (fresh press)\nMouse — look / aim\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nR — restart arena\n\n"
             + $"1–4 — select equipped slot (no activation)\nLMB — activate {_player.PrimaryEquipmentName}\nTab — cycle installed slots\n"
-            + $"RMB — Claim ({_player.ClaimEquipmentEnergyCost} energy): aim at a globe/material crate or the ground before it; the bolt follows terrain after landing.\n\n"
+            + $"RMB — Claim ({_player.ClaimEquipmentEnergyCost} energy): aim at a globe or the ground before it; the bolt follows terrain after landing.\n\n"
             + Section("OWNERSHIP / ROLE GUIDE")
             + "Antimatter: gray neutral · cyan yours · red rival\nDrones haul owned antimatter to bases. Base damage reduces storage; excess spills neutral. Stored antimatter supports equipment power. Pop rivals to spill their cargo.\n\n"
             + "Orange — swarm\nGreen — beast\nBlue — caster\nRed — occasional raider\nYellow — local neutral scavenger\nPurple — rival pilot";
@@ -249,17 +254,49 @@ public partial class Hud : CanvasLayer
     private void LayoutHud()
     {
         if (_actions == null) return;
-        bool narrow = _root.Size.X < 1000;
-        Place(_actions, Control.LayoutPreset.BottomLeft, new Vector2(16, narrow ? -186 : -46), new Vector2(252, 30));
-        Place(_feedbackPanel, Control.LayoutPreset.BottomLeft, new Vector2(16, narrow ? -240 : -110), new Vector2(300, 46));
+        Place(_equipmentBar, Control.LayoutPreset.BottomRight, new Vector2(-588, -186), new Vector2(380, 144));
+        Place(_vitalBars, Control.LayoutPreset.BottomRight, new Vector2(-828, -186), new Vector2(224, 144));
+        Place(_actions, Control.LayoutPreset.BottomRight, new Vector2(-588, -36), new Vector2(380, 28));
+        Place(_baseHealthPanel, Control.LayoutPreset.BottomRight, new Vector2(-192, -38), new Vector2(176, 30));
+        Place(_capturePanel, Control.LayoutPreset.BottomRight, new Vector2(-588, -264), new Vector2(380, 66));
+        Place(_feedbackPanel, Control.LayoutPreset.BottomRight, new Vector2(-588, -322), new Vector2(380, 46));
     }
+
+    private void BuildVitals(Control root)
+    {
+        _vitalBars = new HBoxContainer { Name = "VitalBars", MouseFilter = Control.MouseFilterEnum.Ignore };
+        _vitalBars.AddThemeConstantOverride("separation", 8); root.AddChild(_vitalBars);
+        string[] titles = { "HP", "Energy", "Antimatter" };
+        Color[] colors = { new(0.2f, 0.8f, 0.3f), new(0.15f, 0.5f, 1), new(1, 0.65f, 0.15f) };
+        for (int i = 0; i < 3; i++)
+        {
+            var column = new VBoxContainer { CustomMinimumSize = new Vector2(68, 0), MouseFilter = Control.MouseFilterEnum.Ignore };
+            _vitalBars.AddChild(column);
+            _gaugeValues[i] = CreateLabel("0/0", 11); _gaugeValues[i].HorizontalAlignment = HorizontalAlignment.Center;
+            column.AddChild(_gaugeValues[i]);
+            var center = new CenterContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill }; column.AddChild(center);
+            _gauges[i] = new ProgressBar { Name = $"{titles[i]}Gauge", FillMode = (int)ProgressBar.FillModeEnum.BottomToTop,
+                ShowPercentage = false, CustomMinimumSize = new Vector2(24, 76), MouseFilter = Control.MouseFilterEnum.Ignore };
+            center.AddChild(_gauges[i]);
+            var fill = UiTile.Frame(colors[i], Colors.Transparent, 0);
+            _gauges[i].AddThemeStyleboxOverride("fill", fill);
+            if (i == 0) _healthFill = fill; else fill.Dispose();
+            var caption = CreateLabel(titles[i], 11); caption.HorizontalAlignment = HorizontalAlignment.Center; column.AddChild(caption);
+        }
+    }
+
+    private void RefreshGauge(int index, int value, int maximum)
+    {
+        _gauges[index].MaxValue = Mathf.Max(1, maximum); _gauges[index].Value = value;
+        _gaugeValues[index].Text = $"{value}/{maximum}";
+    }
+    public override void _ExitTree() => _healthFill?.Dispose();
 
     private static string BaseDetails(FactionBase? hub, string side) => hub == null
         ? $"{side} base: unavailable\n"
         : $"{side} base: {(hub.IsDestroyed ? "Destroyed" : $"HP {hub.Health}/{hub.MaxHealth}")}\n"
             + $"Storage: {hub.StoredAntimatter}/{hub.EffectiveStorageCapacity} (intact {hub.AntimatterStorageCapacity})  ·  Tier {hub.Tier} / purchased {hub.HighestPurchasedTier}\n"
             + $"Payments: {hub.SpentAntimatter} · Refunds: {hub.RefundedAntimatter} · Investment spill: {hub.InvestmentSpilledAntimatter}\n"
-            + $"Matter: {hub.StoredMatter}/{hub.EffectiveMatterCapacity} · Paid: {hub.SpentMatter} · Refunded: {hub.RefundedMatter} · Investment spill: {hub.InvestmentSpilledMatter}\n"
             + $"Construction: {hub.Construction.ActiveInvestment} invested · Siege loss: {hub.Construction.DestroyedInvestmentLoss}\n{hub.Construction.LastStatus}\n"
             + ConstructionDetails(hub) + StrategicPoint.Summary(hub) + "\n"
             + $"Repair: {(hub.IsDestroyed ? "Ruined" : hub.IsRepairing ? "Repairing" : hub.Health < hub.MaxHealth ? "Waiting for quiet" : "Intact")}\n\n";
@@ -272,7 +309,7 @@ public partial class Hud : CanvasLayer
             var slot = (ConstructionSlot)i;
             var project = hub.Construction.GetActive(slot);
             text += project == null ? $"{slot}: idle\n"
-                : $"{slot}: {project.Definition.Name} {project.Progress:P0} · paid {project.PaidAntimatter} A + {project.PaidMatter} M\n";
+                : $"{slot}: {project.Definition.Name} {project.Progress:P0} · paid {project.PaidAntimatter} A\n";
         }
         return text;
     }

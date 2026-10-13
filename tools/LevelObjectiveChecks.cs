@@ -161,10 +161,10 @@ public partial class LevelObjectiveChecks : Node3D
         var bolt = AddActor(new WeaponProjectile());
         typeof(WeaponProjectile).GetMethod("OnBodyEntered", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(bolt, new object[] { hub });
-        Check(hub.Health == before - bolt.Damage, "PlasmaBolt damages rival hub");
+        Check(hub.Health == before - 5, "PlasmaBolt applies reduced base damage to rival hub");
         typeof(WeaponProjectile).GetMethod("OnBodyEntered", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(bolt, new object[] { hub });
-        Check(hub.Health == before - bolt.Damage, "Consumed plasmaBolt cannot deal duplicate damage");
+        Check(hub.Health == before - 5, "Consumed plasmaBolt cannot deal duplicate damage");
         hub.ApplyDamage(1000);
     }
 

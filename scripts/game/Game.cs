@@ -61,14 +61,12 @@ public partial class Game : Node3D
         CreatePlayer();
         CreateDrones();
         CreateAntimatterPickups();
-        CreateMatterFields();
         AddChild(new ExplorationDirector { Name = "ExplorationDirector", UseFixedSeed = UseSphericalWorld,
             GenerationSeed = WorldSeeds.Derive(ActiveWorldSeed, 3) });
         CreateStrategicPoints();
         CreateEnemyEcosystem();
         CreateLevelObjective();
         AddChild(new WorldAntimatterTracker { Name = "WorldAntimatterTracker" });
-        AddChild(new WorldMatterTracker { Name = "WorldMatterTracker" });
         AddChild(new Hud { Name = "Hud" });
         if (UseSphericalWorld) AddChild(new PlanetSettings { Name = "PlanetSettings" });
         if (UseSphericalWorld)
@@ -293,8 +291,9 @@ public partial class Game : Node3D
     {
         if (UseSphericalWorld)
         {
+            int siteIndex = 0;
             foreach (var site in Layout!.EconomicSites)
-                AddChild(new StrategicPoint { Name = $"StrategicPoint{site.Side}_{(int)site.Role}", Role = site.Role,
+                AddChild(new StrategicPoint { Name = $"StrategicPoint{site.Side}_{siteIndex++}", Role = site.Role,
                     Position = PlanetLayout.Position(_arena, site.Up), CaptureRadius = Mathf.Clamp(_arena.PlanetRadius * 0.06f, 8, 18) });
             return;
         }
@@ -305,7 +304,7 @@ public partial class Game : Node3D
             Vector3 position = UseSphericalWorld
                 ? _arena.PlanetCenter + new Vector3(side * 0.32f, 1, role == 3 ? -0.95f : role == 0 ? -0.45f : role * 0.45f).Normalized() * _arena.PlanetRadius
                 : _arena.FromMap(side * 48, role == 3 ? -65 : (role - 1) * 40, 0);
-            AddChild(new StrategicPoint { Name = $"StrategicPoint{side}_{role}", Role = (StrategicPointRole)role,
+            AddChild(new StrategicPoint { Name = $"StrategicPoint{side}_{role}", Role = role == 3 ? StrategicPointRole.Extractor : (StrategicPointRole)role,
                 Position = position, CaptureRadius = UseSphericalWorld ? 18 : 12 });
         }
     }
@@ -336,25 +335,6 @@ public partial class Game : Node3D
             Roughness = 1.0f
         };
         pillar.AddChild(mesh);
-    }
-
-    private void CreateMatterFields()
-    {
-        if (UseSphericalWorld)
-        {
-            foreach (Vector3 up in Layout!.MatterFields) MatterPickup.Spawn(this, PlanetLayout.Position(_arena, up), 60);
-            return;
-        }
-        for (int side = -1; side <= 1; side += 2)
-        {
-            Vector3 home = side < 0 ? _playerBase.GlobalPosition : _enemyBase.GlobalPosition;
-            Vector3 near = home + PlanetGeometry.Frame(_arena.UpAt(home), Vector3.Forward) * new Vector3(side * 26, 0, -22);
-            MatterPickup.Spawn(this, near, 60);
-            Vector3 remote = UseSphericalWorld
-                ? _arena.PlanetCenter + new Vector3(side * 0.7f, 1, -0.65f).Normalized() * _arena.PlanetRadius
-                : _arena.FromMap(side * 60, 55, 0);
-            MatterPickup.Spawn(this, remote, 60);
-        }
     }
 
     private Vector3 AboveTerrain(float x, float z, float clearance)

@@ -6,46 +6,26 @@ namespace MagicCarpetRemastered.Scripts.World;
 public partial class FactionBase : StaticBody3D
 {
     [Export] public bool IsPlayerBase { get; set; } = true;
-    [Export] public int Tier1StorageCapacity { get; set; } = 120;
-    [Export] public int Tier2StorageCapacity { get; set; } = 200;
-    [Export] public int Tier3StorageCapacity { get; set; } = 300;
-    [Export] public int Tier4StorageCapacity { get; set; } = 400;
-    [Export] public int Tier5StorageCapacity { get; set; } = 500;
+    [Export] public int Tier1StorageCapacity { get; set; } = 200;
+    [Export] public int Tier2StorageCapacity { get; set; } = 350;
+    [Export] public int Tier3StorageCapacity { get; set; } = 550;
+    [Export] public int Tier4StorageCapacity { get; set; } = 800;
+    [Export] public int Tier5StorageCapacity { get; set; } = 1100;
     [Export] public int InitialStoredAntimatter { get; set; } = 30;
-    [Export] public int InitialStoredMatter { get; set; } = 30;
-    [Export] public int Tier1MatterCapacity { get; set; } = 120;
-    [Export] public int Tier2MatterCapacity { get; set; } = 200;
-    [Export] public int Tier3MatterCapacity { get; set; } = 300;
-    [Export] public int Tier4MatterCapacity { get; set; } = 400;
-    [Export] public int Tier5MatterCapacity { get; set; } = 500;
-    [Export] public int Tier2MatterCost { get; set; } = 30;
-    [Export] public int Tier3MatterCost { get; set; } = 45;
-    [Export] public int Tier4MatterCost { get; set; } = 60;
-    [Export] public int Tier5MatterCost { get; set; } = 75;
-    [Export] public int MaxHealth { get; set; } = 140;
+    [Export] public int MaxHealth { get; set; } = 400;
     [Export] public float ScalePerTier { get; set; } = 0.18f;
     [Export] public float RepairDelaySeconds { get; set; } = 5.0f;
     [Export] public float RepairHealthPerSecond { get; set; } = 3.0f;
-    [Export] public int Tier2UpgradeCost { get; set; } = 120;
-    [Export] public int Tier3UpgradeCost { get; set; } = 180;
-    [Export] public int Tier4UpgradeCost { get; set; } = 270;
-    [Export] public int Tier5UpgradeCost { get; set; } = 360;
+    [Export] public int Tier2UpgradeCost { get; set; } = 150;
+    [Export] public int Tier3UpgradeCost { get; set; } = 275;
+    [Export] public int Tier4UpgradeCost { get; set; } = 450;
+    [Export] public int Tier5UpgradeCost { get; set; } = 650;
     [Export] public float Tier2UpgradeSeconds { get; set; } = 60;
     [Export] public float Tier3UpgradeSeconds { get; set; } = 80;
     [Export] public float Tier4UpgradeSeconds { get; set; } = 100;
     [Export] public float Tier5UpgradeSeconds { get; set; } = 120;
 
     public int StoredAntimatter { get; private set; }
-    public int StoredMatter { get; private set; }
-    public int MatterStorageCapacity => MatterCapacityForTier(Tier);
-    public int EffectiveMatterCapacity => IsDestroyed ? 0 : MatterCapacityForTier(Tier - 1)
-        + (int)(((long)(MatterStorageCapacity - MatterCapacityForTier(Tier - 1))
-            * (Health - (Tier - 1) * _healthPerTier) + _healthPerTier - 1) / _healthPerTier);
-    public int AvailableMatterStorage => Mathf.Max(0, EffectiveMatterCapacity - StoredMatter);
-    public long SpentMatter { get; private set; }
-    public long RefundedMatter { get; private set; }
-    public long InvestmentSpilledMatter { get; private set; }
-    public long NetCommittedMatter => SpentMatter - RefundedMatter - InvestmentSpilledMatter;
     public int Health { get; private set; }
     public const int MaximumTier = 5;
     public int Tier { get; private set; } = 1;
@@ -69,7 +49,7 @@ public partial class FactionBase : StaticBody3D
     public bool IsRepairing => !IsDestroyed && Health < MaxHealth && _secondsSinceHit >= RepairDelaySeconds;
     private float _secondsSinceHit;
     private float _repairAccumulator;
-    private int _healthPerTier = 140;
+    private int _healthPerTier = 400;
 
     private StandardMaterial3D _baseMaterial = null!;
     private StandardMaterial3D _towerMaterial = null!;
@@ -88,7 +68,6 @@ public partial class FactionBase : StaticBody3D
         Construction = new BaseConstruction(this);
         BaseProjectCatalog.Register(Construction);
         StoredAntimatter = Mathf.Clamp(InitialStoredAntimatter, 0, EffectiveStorageCapacity);
-        StoredMatter = Mathf.Clamp(InitialStoredMatter, 0, EffectiveMatterCapacity);
         BuildBaseVisuals();
         UpdateEconomy();
     }
@@ -138,59 +117,6 @@ public partial class FactionBase : StaticBody3D
         StoredAntimatter -= withdrawn;
         UpdateEconomy();
         return withdrawn;
-    }
-
-    public int DepositMatter(int amount)
-    {
-        if (amount <= 0 || IsDestroyed) return 0;
-        int accepted = Mathf.Min(amount, AvailableMatterStorage);
-        StoredMatter += accepted;
-        return accepted;
-    }
-
-    public int WithdrawMatter(int amount)
-    {
-        if (amount <= 0 || IsDestroyed) return 0;
-        int withdrawn = Mathf.Min(amount, StoredMatter);
-        StoredMatter -= withdrawn;
-        return withdrawn;
-    }
-
-    public bool TrySpendResources(int antimatter, int matter)
-    {
-        if (IsDestroyed || antimatter < 0 || matter < 0 || (antimatter == 0 && matter == 0)
-            || StoredAntimatter < antimatter || StoredMatter < matter) return false;
-        StoredAntimatter -= antimatter; StoredMatter -= matter;
-        SpentAntimatter += antimatter; SpentMatter += matter;
-        UpdateEconomy();
-        return true;
-    }
-
-    public int MatterCapacityForTier(int tier) => tier switch
-    {
-        1 => Mathf.Max(0, Tier1MatterCapacity),
-        2 => Mathf.Max(MatterCapacityForTier(1), Tier2MatterCapacity),
-        3 => Mathf.Max(MatterCapacityForTier(2), Tier3MatterCapacity),
-        4 => Mathf.Max(MatterCapacityForTier(3), Tier4MatterCapacity),
-        5 => Mathf.Max(MatterCapacityForTier(4), Tier5MatterCapacity), _ => 0
-    };
-
-    public int MatterCostForTier(int tier) => tier switch
-    {
-        2 => Tier2MatterCost, 3 => Tier3MatterCost, 4 => Tier4MatterCost, 5 => Tier5MatterCost, _ => 0
-    };
-
-    internal void RefundMatterConstruction(int amount)
-    {
-        RefundedMatter += amount;
-        MatterPickup.Spawn(GetParent(), GlobalPosition, amount - DepositMatter(amount),
-            IsPlayerBase ? AntimatterOwnership.Player : AntimatterOwnership.Enemy);
-    }
-
-    internal void SpillMatterInvestment(int amount)
-    {
-        InvestmentSpilledMatter += amount;
-        MatterPickup.Spawn(GetParent(), GlobalPosition, amount);
     }
 
     // Atomic payment for future construction callers. WithdrawAntimatter remains
@@ -291,16 +217,13 @@ public partial class FactionBase : StaticBody3D
         int spilled = Mathf.Max(0, StoredAntimatter - EffectiveStorageCapacity);
         StoredAntimatter -= spilled;
         SpillAntimatter(spilled);
-        int matterSpilled = Mathf.Max(0, StoredMatter - EffectiveMatterCapacity);
-        StoredMatter -= matterSpilled;
-        MatterPickup.Spawn(GetParent(), GlobalPosition, matterSpilled);
         UpdateEconomy();
     }
 
     public string GetStatusText()
     {
         string destruction = IsDestroyed ? "Destroyed" : $"HP {Health}/{MaxHealth}";
-        return $"{BaseLabel}: {destruction}   Antimatter {StoredAntimatter}/{EffectiveStorageCapacity}   Matter {StoredMatter}/{EffectiveMatterCapacity}   Tier {Tier}";
+        return $"{BaseLabel}: {destruction}   Antimatter {StoredAntimatter}/{EffectiveStorageCapacity}   Tier {Tier}";
     }
 
     private void UpdateEconomy()

@@ -1,5 +1,15 @@
 # Project Learnings
 
+## Dense Population / Single-Resource Playtest (2026-10-12)
+
+- Neutral acquisition must scan actual pilots, not every neutral. At 120 mobs, per-mob `ecosystem_enemy` scans caused quadratic native Variant/array traffic. A dedicated `legacy_rival_pilot` group preserves diagnostic rivals alongside modern `pilots`. Initial rendered Medium observation: ~164 ms p95 wall frames/~6 GiB managed allocations across 480 samples; narrowing the scan reduced a corresponding run to ~18 ms/~71 MiB. This is workload evidence, not universal performance acceptance.
+- Seed one member per habitat before finishing packs: filling opening groups first starves distant regions, but round-robin filling alone thins every intended swarm into pairs. Preserve regional coverage, then complete role-sized packs under budget. Placement and failed replacements stay bounded.
+- Link capture guards to actual site objects, not nearest-point proximity. Either faction owning the site suppresses all replacement paths; neutralization restarts recovery without removing living guards or respawning the whole group immediately.
+- Higher construction prices require enough preceding-tier capacity and a usable energy reserve. More mobs require encounter-level reward tuning; slower passive income alone cannot balance large swarms yielding twelve antimatter per cheap member. Storage also affects combat energy/recharge.
+- Removing resource fields also changes protected terrain pads/seed acceptance. Re-run independent slope and real travel checks; record that twelve previous opening routes per world became ten instead of retaining an obsolete route count.
+- Verify actual container minimum sizes in a grouped HUD: a second controls line increased the equipment VBox and overlapped B/M/H despite unchanged requested offsets. Screenshots and rectangle assertions caught it. Embedded cancel uses its own tile's project instance, never another category's latest snapshot.
+- Integrated bots may die at arbitrary observation boundaries. Verify normal objective-owned respawn/recovery and paid development, not immortality, while treating repeated defeats/stalled routes as real balance/AI follow-ups.
+
 ## Map Knowledge, Loadout Compaction And Pack Pressure (2026-10-12)
 
 - Distinguish remembered static locations from live sensed actors: a discovered rival base can retain an actor-free position without exposing remote HP/storage. Apply the same range gate to drawing, hover and marker snapping on both maps. Recheck cached actors at draw/click time, using radial angles without querying terrain heights per marker per frame.

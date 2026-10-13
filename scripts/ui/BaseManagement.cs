@@ -17,14 +17,12 @@ public partial class BaseManagement : CanvasLayer
     private PanelContainer _panel = null!;
     private Label _summary = null!, _alert = null!, _installationStatus = null!;
     private UiTile _tierOrder = null!;
-    private readonly Label[] _slotLabels = new Label[5];
-    private readonly ProgressBar[] _progress = new ProgressBar[5];
-    private readonly Button[] _cancel = new Button[5];
-    private readonly long[] _cancelInstanceIds = new long[5];
     private readonly Dictionary<string, UiTile> _orders = new();
-    private readonly Dictionary<string, CheckButton> _equipmentToggles = new();
+    private readonly Dictionary<string, UiTile> _equipmentToggles = new();
     private readonly Dictionary<string, Button> _applyRanks = new();
     private readonly List<GridContainer> _grids = new();
+    private TabContainer _tabs = null!;
+    private static readonly ConstructionSlot[] TabSlots = { ConstructionSlot.Offense, ConstructionSlot.Defense, ConstructionSlot.Resources, ConstructionSlot.Ship };
     private FactionBase _base = null!;
     private ShipFlightController _player = null!;
     private Input.MouseModeEnum _previousMouse;
@@ -49,53 +47,39 @@ public partial class BaseManagement : CanvasLayer
         _panel.AddThemeStyleboxOverride("panel", panelStyle);
         var column = new VBoxContainer(); column.AddThemeConstantOverride("separation", 6); _panel.AddChild(column);
         var header = new HBoxContainer(); column.AddChild(header);
-        var title = Text("BASE DEVELOPMENT  ·  REAL TIME", 19); title.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; header.AddChild(title);
+        _summary = Text("", 16); _summary.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; header.AddChild(_summary);
+        _tierOrder = Tile("Order_Tier", "base"); _tierOrder.Compact = true; _tierOrder.CustomMinimumSize = new Vector2(250, 72);
+        header.AddChild(_tierOrder); _tierOrder.Pressed += () => OrderNextTier();
+        _tierOrder.CancelButton.Name = "Cancel_Base";
+        _tierOrder.CancelButton.Pressed += () => CancelProject(ConstructionSlot.Base, _tierOrder.ProjectInstanceId);
         var close = new Button { Text = "Close · B / Esc", FocusMode = Control.FocusModeEnum.None }; header.AddChild(close); close.Pressed += () => SetOpen(false);
-        _summary = Text(""); column.AddChild(_summary);
         _alert = Text("", 13); _alert.AddThemeColorOverride("font_color", new Color(1, 0.7f, 0.3f)); column.AddChild(_alert);
-        var slots = new GridContainer { Name = "ActiveProjects", Columns = 5 }; column.AddChild(slots);
-        for (int i = 0; i < 5; i++)
-        {
-            var slot = (ConstructionSlot)i;
-            var card = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; slots.AddChild(card);
-            _slotLabels[i] = Text($"{slot} · idle", 13); _slotLabels[i].CustomMinimumSize = new Vector2(0, 38); card.AddChild(_slotLabels[i]);
-            _progress[i] = new ProgressBar { MaxValue = 1, ShowPercentage = false, CustomMinimumSize = new Vector2(0, 7) }; card.AddChild(_progress[i]);
-            _cancel[i] = new Button { Name = $"Cancel_{slot}", Text = "Cancel", FocusMode = Control.FocusModeEnum.None,
-                TooltipText = "Cancel this project for a full refund of both payments. Overflow stays owned." };
-            _cancel[i].AddThemeFontSizeOverride("font_size", 12); card.AddChild(_cancel[i]);
-            _cancel[i].Pressed += () => CancelProject(slot, _cancelInstanceIds[(int)slot]);
-        }
         var tabs = new TabContainer { Name = "ProjectTabs", SizeFlagsVertical = Control.SizeFlags.ExpandFill }; column.AddChild(tabs);
-        for (int i = 0; i < 5; i++)
+        _tabs = tabs;
+        foreach (var slot in TabSlots)
         {
-            var slot = (ConstructionSlot)i;
             var scroll = new ScrollContainer { Name = slot.ToString(), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled }; tabs.AddChild(scroll);
             var projects = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill }; scroll.AddChild(projects);
             VBoxContainer research = projects;
             if (slot == ConstructionSlot.Ship)
             {
                 _installationStatus = Text(""); research.AddChild(_installationStatus);
-                research.AddChild(Text("Research remotely · equip up to four at home · keys 1–4 follow row order", 13));
             }
-            else research.AddChild(Text("Click a tile to order · hover for effects and requirements", 13));
             if (slot == ConstructionSlot.Ship)
             {
                 AddResearchRows(research);
                 continue;
             }
             var grid = Grid(); research.AddChild(grid);
-            if (slot == ConstructionSlot.Base)
-            {
-                _tierOrder = Tile("Order_Tier", "base"); grid.AddChild(_tierOrder); _tierOrder.Pressed += () => OrderNextTier();
-            }
             foreach (var definition in _base.Construction.Catalog)
             {
                 if (definition.Slot != slot) continue;
                 var tile = Tile($"Order_{definition.Id}", UiIcon.ForProject(definition.Id)); grid.AddChild(tile);
                 _orders.Add(definition.Id, tile); tile.Pressed += () => OrderProject(definition.Id);
+                WireCancel(tile, definition.Slot);
             }
         }
-        column.AddChild(Text("A = antimatter · M = matter · payments lower energy capacity · hover tiles for details", 12));
+        column.AddChild(Text("Click to purchase · hover for details · × cancels for a full refund · gameplay stays live", 12));
         _panel.Resized += LayoutGrids;
         LayoutGrids(); Refresh();
     }
@@ -115,9 +99,8 @@ public partial class BaseManagement : CanvasLayer
         foreach (string id in ShipEquipmentCatalog.ItemIds)
         {
             var item = new VBoxContainer { CustomMinimumSize = new Vector2(136, 0) }; table.AddChild(item);
-            item.AddChild(ResearchLabel(_player.FindEquipment(id)!.DisplayName));
-            var toggle = new CheckButton { Name = $"Equip_{id}", Text = "Equip", FocusMode = Control.FocusModeEnum.None };
-            toggle.AddThemeFontSizeOverride("font_size", 12); item.AddChild(toggle); _equipmentToggles.Add(id, toggle);
+            var toggle = ResearchTile($"Equip_{id}", id); toggle.ToggleMode = true;
+            item.AddChild(toggle); _equipmentToggles.Add(id, toggle);
             toggle.Pressed += () => ToggleEquipment(id);
             var apply = new Button { Name = $"ApplyRank_{id}", Text = "Apply rank", FocusMode = Control.FocusModeEnum.None };
             apply.AddThemeFontSizeOverride("font_size", 12); item.AddChild(apply); _applyRanks.Add(id, apply);
@@ -126,15 +109,16 @@ public partial class BaseManagement : CanvasLayer
             {
                 string projectId = ShipEquipmentCatalog.ProjectId(id, rank);
                 if (id == "plasma-bolt" && rank == 1) { table.AddChild(ResearchLabel("Starting · Owned")); continue; }
-                var tile = Tile($"Order_{projectId}", id); table.AddChild(tile);
+                var tile = ResearchTile($"Order_{projectId}", id); table.AddChild(tile);
                 _orders.Add(projectId, tile); tile.Pressed += () => OrderProject(projectId);
+                WireCancel(tile, ConstructionSlot.Ship);
             }
         }
         table.AddChild(ResearchLabel("Built-in Claim"));
-        var claim = Tile("Order_claim-range", UiIcon.ForProject("claim-range")); table.AddChild(claim);
+        var claim = ResearchTile("Order_claim-range", UiIcon.ForProject("claim-range")); table.AddChild(claim);
         _orders.Add("claim-range", claim); claim.Pressed += () => OrderProject("claim-range");
+        WireCancel(claim, ConstructionSlot.Ship);
         table.AddChild(ResearchLabel("—")); table.AddChild(ResearchLabel("—"));
-        research.AddChild(Text("RMB Claim / Shift booster / Space jump are built in · 1–4 selects, LMB activates, Tab cycles", 12));
     }
     private static Label ResearchLabel(string text)
     {
@@ -146,6 +130,16 @@ public partial class BaseManagement : CanvasLayer
         grid.AddThemeConstantOverride("h_separation", 8); grid.AddThemeConstantOverride("v_separation", 8); _grids.Add(grid); return grid;
     }
     private static UiTile Tile(string name, string icon) { var tile = new UiTile { Name = name }; tile.Glyph.IconId = icon; return tile; }
+    private static UiTile ResearchTile(string name, string icon)
+    {
+        var tile = Tile(name, icon); tile.CustomMinimumSize = new Vector2(136, 94);
+        tile.Glyph.CustomMinimumSize = new Vector2(24, 24); return tile;
+    }
+    private void WireCancel(UiTile tile, ConstructionSlot slot)
+    {
+        tile.CancelButton.Name = $"Cancel_{tile.Name}";
+        tile.CancelButton.Pressed += () => CancelProject(slot, tile.ProjectInstanceId);
+    }
     private void LayoutGrids()
     {
         int count = Math.Clamp((int)((_panel.Size.X - 24) / 166), 2, 6);
@@ -213,54 +207,62 @@ public partial class BaseManagement : CanvasLayer
                 + (reason.Length == 0 ? "Toggle equipment for free. Keys 1–4 follow row order. Ownership and research are retained." : reason)
                 + (equipment.EnergyCost > _player.EnergyCapacity ? "\nEnergy cost exceeds current capacity; installation is still allowed at home." : "");
             pair.Value.SetPressedNoSignal(slot >= 0);
-            pair.Value.Text = slot >= 0 ? $"[{slot + 1}] Equipped {Rank(installed)}" : "Equip";
-            pair.Value.Disabled = reason.Length > 0; pair.Value.TooltipText = tooltip;
+            pair.Value.Display(equipment.DisplayName, owned > 0 ? $"Owned {Rank(owned)}" : "Not researched",
+                slot >= 0 ? $"[{slot + 1}] Equipped {Rank(installed)}" : "Click to equip", tooltip, reason.Length > 0);
+            pair.Value.SetProject(null, 0, owned == 0);
+            pair.Value.State.Modulate = slot >= 0 ? new Color(0.5f, 1, 0.7f) : Colors.White;
             var apply = _applyRanks[pair.Key];
             apply.Visible = slot >= 0 && owned > installed;
             apply.Disabled = !_player.CanInstallEquipment;
             apply.Text = $"Apply rank {Rank(owned)}";
             apply.TooltipText = _player.CanInstallEquipment ? "Apply completed research to this equipped item for free." : "Return home to apply the researched rank.";
         }
-        _summary.Text = $"Base tier {_base.Tier}/{_base.HighestPurchasedTier} · HP {_base.Health}/{_base.MaxHealth} · Energy {_player.Energy}/{_player.EnergyCapacity}\n"
-            + $"Antimatter {_base.StoredAntimatter}/{_base.EffectiveStorageCapacity} · Matter {_base.StoredMatter}/{_base.EffectiveMatterCapacity}\n"
-            + StrategicPoint.Summary(_base);
-        _summary.AddThemeFontSizeOverride("font_size", 13);
+        _summary.Text = $"ANTIMATTER  {_base.StoredAntimatter}/{_base.EffectiveStorageCapacity}\nBASE  {Rank(_base.Tier)}";
+        _summary.TooltipText = StrategicPoint.Summary(_base) + $"\nBase HP {_base.Health}/{_base.MaxHealth} · Energy {_player.Energy}/{_player.EnergyCapacity}";
         _alert.Text = _base.IsDestroyed ? "HOME BASE DESTROYED" : _base.Tier < _base.HighestPurchasedTier ? "SIEGE · lost tiers require rebuilding"
             : _base.Health < _base.MaxHealth ? $"BASE DAMAGED · {(_base.IsRepairing ? "repairing" : "waiting for quiet")}" : _actionFeedback;
         _alert.Visible = _alert.Text.Length > 0;
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < TabSlots.Length; i++)
         {
-            var project = _base.Construction.GetActive((ConstructionSlot)i);
-            _slotLabels[i].Text = project == null ? $"{(ConstructionSlot)i}\nIdle" : $"{(ConstructionSlot)i} · {project.Progress:P0}\n{ProjectName(project.Definition)}";
-            _progress[i].Value = project?.Progress ?? 0; _cancel[i].Disabled = project == null; _cancel[i].Visible = project != null;
-            _cancelInstanceIds[i] = project?.InstanceId ?? 0;
-            _cancel[i].TooltipText = project == null ? "No active project" : $"Cancel {project.Definition.Name}\nRefund {project.PaidAntimatter} antimatter + {project.PaidMatter} matter; owned overflow.\nLosing a tier destroys active investments instead.";
+            var project = _base.Construction.GetActive(TabSlots[i]);
+            _tabs.SetTabTitle(i, TabSlots[i] + (project == null ? "" : $" · {project.Progress:P0}"));
         }
         var next = _base.Construction.NextTierDefinition(); string tierReason = _base.Construction.GetNextTierStartReason();
-        _tierOrder.Display(next?.Name ?? "Maximum tier", next == null ? "" : Costs(next), tierReason.Length == 0 ? "Build →" : "Unavailable",
-            next == null ? "No next tier available." : $"{next.Name}\n{next.Cost} antimatter + {next.MatterCost} matter · {next.DurationSeconds:0}s\n"
-                + $"Capacity: A {_base.AntimatterStorageCapacity} → {_base.StorageCapacityForTier(_base.Tier + 1)}; M {_base.MatterStorageCapacity} → {_base.MatterCapacityForTier(_base.Tier + 1)}.\nAdds an HP layer without restoring spent resources.\n"
+        var baseProject = _base.Construction.GetActive(ConstructionSlot.Base);
+        _tierOrder.Display(baseProject?.Definition.Name ?? next?.Name ?? "Maximum tier", next == null ? "" : Costs(next),
+            baseProject == null ? tierReason.Length == 0 ? "Build →" : "Unavailable" : $"Building {baseProject.Progress:P0}",
+            next == null ? "No next tier available." : $"{next.Name}\n{next.Cost} antimatter · {next.DurationSeconds:0}s\n"
+                + $"Capacity: {_base.AntimatterStorageCapacity} → {_base.StorageCapacityForTier(_base.Tier + 1)}.\nAdds an HP layer without restoring spent resources.\n"
                 + (tierReason.Length == 0 ? "Click to start." : tierReason), tierReason.Length > 0);
+        _tierOrder.SetProject(baseProject, 0, tierReason.Length > 0);
+        _tierOrder.CancelButton.TooltipText = "Cancel base construction for its exact paid antimatter refund.";
         foreach (var definition in _base.Construction.Catalog)
         {
             var tile = _orders[definition.Id]; string reason = _base.Construction.GetStartReason(definition.Id);
             var active = _base.Construction.GetActive(definition.Slot);
             string status = reason.Length == 0 ? "Research →" : active?.Definition.Id == definition.Id ? $"Researching {active.Progress:P0}"
                 : reason == "Completed" ? definition.Id.StartsWith("equipment-") ? "Owned" : _base.Construction.IsEffectActive(definition.Id) ? "Completed" : "Suspended" : "Locked";
-            string tooltip = $"{definition.Name}\n{definition.Description}\n{definition.Cost} antimatter + {definition.MatterCost} matter · {definition.DurationSeconds:0}s\nRequires tier {definition.RequiredTier}"
+            string tooltip = $"{definition.Name}\n{definition.Description}\n{definition.Cost} antimatter · {definition.DurationSeconds:0}s\nRequires tier {definition.RequiredTier}"
                 + (definition.RequiredProject == null ? "." : $" and {ProjectTitle(definition.RequiredProject)}.")
                 + "\n" + (reason.Length == 0 ? "Click to start paid research." : reason == "Completed"
                     ? status == "Suspended" ? "Completed · suspended until the required tier is rebuilt." : status + " · ownership retained"
                     : reason.StartsWith("Requires equipment-") ? "Requires " + ProjectTitle(reason[9..]) : reason);
             tile.Display(ProjectName(definition), Costs(definition), status, tooltip, reason.Length > 0);
+            var project = active?.Definition.Id == definition.Id ? active : null;
+            tile.SetProject(project, definition.RequiredTier, reason.Length > 0 && reason != "Completed");
+            if (project != null)
+            {
+                tile.State.Text = $"Building {project.Progress:P0} · {Math.Max(0, project.Definition.DurationSeconds - project.ElapsedSeconds) / StrategicPoint.ProjectSpeed(_base):0}s";
+                tile.CancelButton.TooltipText = $"Cancel {definition.Name}: refund {project.PaidAntimatter} antimatter. Overflow stays owned.";
+            }
         }
     }
-    private static string Costs(ConstructionDefinition project) => $"{project.Cost} A · {project.MatterCost} M · {project.DurationSeconds:0}s";
+    private static string Costs(ConstructionDefinition project) => $"{project.Cost} A · {project.DurationSeconds:0}s";
     private string ProjectTitle(string id) => _base.Construction.Catalog.FirstOrDefault(project => project.Id == id)?.Name ?? id;
     private static string ProjectName(ConstructionDefinition project) => project.Id.StartsWith("equipment-")
         ? $"{UiIcon.ShortName(UiIcon.ForProject(project.Id))} {Rank(int.Parse(project.Id[^1..]))}"
         : project.Id.StartsWith("base-tier-") ? project.Name : UiIcon.ShortName(project.Id);
-    public static string Rank(int rank) => rank switch { 1 => "I", 2 => "II", 3 => "III", _ => "—" };
+    public static string Rank(int rank) => rank switch { 1 => "I", 2 => "II", 3 => "III", 4 => "IV", 5 => "V", _ => "—" };
 
     public override void _Process(double delta)
     {

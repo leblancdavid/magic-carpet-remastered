@@ -68,10 +68,10 @@ public partial class EquipmentProgressionChecks : Node3D
             player.GlobalPosition = home.GlobalPosition + Vector3.Up * 6;
             // Exercise the integrated row's explicit pending-rank application.
             ui.Refresh();
-            Find<TabContainer>(ui, "ProjectTabs").CurrentTab = 4;
+            Find<TabContainer>(ui, "ProjectTabs").CurrentTab = 3;
             for (int i = 0; i < 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             var install = Find<Button>(ui, "ApplyRank_plasma-bolt");
-            var shipScroll = (ScrollContainer)Find<TabContainer>(ui, "ProjectTabs").GetChild(4);
+            var shipScroll = (ScrollContainer)Find<TabContainer>(ui, "ProjectTabs").GetChild(3);
             shipScroll.EnsureControlVisible(install);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
             Vector2 point = install.GetGlobalRect().GetCenter();
@@ -112,14 +112,14 @@ public partial class EquipmentProgressionChecks : Node3D
                 "Sequential utility/offense stats scale without double application");
             if (DisplayServer.GetName() != "headless")
             {
-                Find<TabContainer>(ui, "ProjectTabs").CurrentTab = 4;
+                Find<TabContainer>(ui, "ProjectTabs").CurrentTab = 3;
                 shipScroll.ScrollVertical = 0;
                 await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
                 await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
                 using var image = GetViewport().GetTexture().GetImage();
                 Check(image.SavePng("user://equipment-management.png") == Error.Ok, "Save rendered owned/rank/loadout UI");
             }
-            home.ApplyDamage(420); // Tier four to one.
+            home.ApplyDamage(1200); // Tier four to one with live 400-HP layers.
             Check(home.Tier == 1 && player.GetEquipmentRank("plasma-bolt") == 3 && player.GetOwnedEquipmentRank("guardian-drone") == 1,
                 "Tier loss preserves owned and installed items/ranks");
             Check(!home.Construction.TryStart(ShipEquipmentCatalog.ProjectId("guardian-drone", 2), out _), "Tier loss still blocks new research prerequisites");

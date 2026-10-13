@@ -126,10 +126,6 @@ public partial class StrategicNavigationChecks : Node
             Check(!navigation.Markers.Any(marker => marker.Title == "Player antimatter · 123"), "Owned loose antimatter also requires ship sensing");
             MapMarker liveMarker = navigation.Markers.Single(marker => marker.Title == "Neutral antimatter · 77");
             Check(liveMarker.Color == Colors.Orange, "Neutral antimatter uses an orange dot");
-            var material = new MatterPickup { Position = arena.OnSurface(player.GlobalPosition, 1), MatterAmount = 9 }; game.AddChild(material); material.SetPhysicsProcess(false);
-            navigation.Refresh(); Check(navigation.Markers.Single(marker => marker.Actor == material).Color == Colors.Gray, "Neutral matter uses a gray dot");
-            material.ReassignOwnership(AntimatterOwnership.Player); navigation.Refresh();
-            Check(navigation.Markers.Single(marker => marker.Actor == material).Color == new Color(0.15f, 0.85f, 1), "Claimed matter changes to faction color"); material.QueueFree();
             Vector3 snapshotUp = liveMarker.Up;
             nearby.GlobalPosition = arena.OnSurface(player.GlobalPosition + player.GlobalBasis.X * 12, 1);
             Check(liveMarker.TryGetLiveUp(arena, out Vector3 liveUp)

@@ -8,7 +8,7 @@ public partial class BaseStrikeDrone : Node3D
     public FactionBase Target { get; set; } = null!;
     public bool IsPlayerOwned { get; set; } = true;
     [Export] public float MoveSpeed { get; set; } = 18;
-    [Export] public int Damage { get; set; } = 45;
+    [Export] public int Damage { get; set; } = 120;
     [Export] public float LifetimeSeconds { get; set; } = 60;
     private HeightmapArena? _arena;
     private bool _spent;

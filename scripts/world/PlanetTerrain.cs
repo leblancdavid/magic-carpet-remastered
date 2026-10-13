@@ -302,7 +302,7 @@ public partial class PlanetTerrain : Node3D
                 _openingApproaches.Add(new OpeningApproach(from, to, tangent, from.Cross(tangent).Normalized(),
                     Mathf.Acos(Mathf.Clamp(from.Dot(to), -1, 1))));
             }
-            Approach(layout.AntimatterFields[side]); Approach(layout.MatterFields[side * 2]);
+            Approach(layout.AntimatterFields[side]);
             for (int role = 0; role < 4; role++) Approach(layout.EconomicSites[side * 4 + role].Up);
         }
         void Pad(Vector3 up, float inner, float outer, bool dry)
@@ -329,7 +329,6 @@ public partial class PlanetTerrain : Node3D
         }
         foreach (var site in layout.EconomicSites) Pad(site.Up, 8, 24, false);
         foreach (Vector3 up in layout.AntimatterFields) Pad(up, 14, 32, false);
-        foreach (Vector3 up in layout.MatterFields) Pad(up, 10, 28, false);
         foreach (var site in layout.Landmarks) Pad(site.Up, 6, 24, false);
         // Bases take final priority: overlapping approaches must not tilt the
         // ship/collector footprint inside an otherwise flat starting pad.

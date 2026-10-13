@@ -76,7 +76,9 @@ public sealed class NeutralTerritory
             Node3D? nearest = null;
             float best = _body.AwarenessRadius;
             using var players = (Godot.Collections.Array)_body.GetTree().GetNodesInGroup("pilots");
-            using var enemies = (Godot.Collections.Array)_body.GetTree().GetNodesInGroup("ecosystem_enemy");
+            // Legacy diagnostic pilots have their own small group. Scanning
+            // every neutral for every neutral makes world density quadratic.
+            using var enemies = (Godot.Collections.Array)_body.GetTree().GetNodesInGroup("legacy_rival_pilot");
             foreach (Variant node in players) Consider(node.As<Node>());
             foreach (Variant node in enemies) Consider(node.As<Node>());
             if (nearest != null) { Target = nearest; State = BehaviorState.Pursuit; return; }

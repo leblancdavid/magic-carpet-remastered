@@ -15,7 +15,6 @@ public sealed class PlanetLayout
     public Site[] Landmarks { get; }
     public EconomicSite[] EconomicSites { get; }
     public Vector3[] AntimatterFields { get; }
-    public Vector3[] MatterFields { get; }
     public Vector3[] Scenery { get; }
     public float MinimumStartDistance { get; }
     public bool StartsOnDryGround { get; }
@@ -50,7 +49,6 @@ public sealed class PlanetLayout
         Landmarks = SitesInFrame(frame);
         EconomicSites = new EconomicSite[8];
         AntimatterFields = new Vector3[3];
-        MatterFields = new Vector3[4];
         for (int side = 0; side < 2; side++)
         {
             float sign = side == 0 ? 1 : -1;
@@ -63,11 +61,9 @@ public sealed class PlanetLayout
             {
                 Vector3 tangent = frame.X.Rotated(up, bearings[role]);
                 Vector3 direction = new Quaternion(up.Cross(tangent), angles[role]) * up;
-                EconomicSites[side * 4 + role] = new EconomicSite(side, (StrategicPointRole)role, direction);
+                EconomicSites[side * 4 + role] = new EconomicSite(side, role == 3 ? StrategicPointRole.Extractor : (StrategicPointRole)role, direction);
             }
             AntimatterFields[side] = Offset(up, frame.X * sign, 55 / arena.PlanetRadius);
-            MatterFields[side * 2] = Offset(up, -frame.Z * sign, 45 / arena.PlanetRadius);
-            MatterFields[side * 2 + 1] = frame * new Vector3(-0.65f * sign, 0, 0.76f * sign).Normalized();
         }
         AntimatterFields[2] = Landmarks[3].Up;
 
@@ -127,7 +123,6 @@ public sealed class PlanetLayout
         foreach (Site site in Landmarks) if (Distance(site.Up) < 12) return false;
         foreach (EconomicSite site in EconomicSites) if (Distance(site.Up) < Mathf.Clamp(radius * 0.06f, 8, 18) + 5) return false;
         foreach (Vector3 field in AntimatterFields) if (Distance(field) < 18) return false;
-        foreach (Vector3 field in MatterFields) if (Distance(field) < 14) return false;
         return true;
     }
 

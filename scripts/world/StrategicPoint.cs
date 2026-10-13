@@ -5,7 +5,7 @@ using MagicCarpetRemastered.Scripts.Player;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
-public enum StrategicPointRole { Extractor, Research, Logistics, MatterExtractor }
+public enum StrategicPointRole { Extractor, Research, Logistics }
 
 public partial class StrategicPoint : Node3D
 {
@@ -13,7 +13,7 @@ public partial class StrategicPoint : Node3D
     [Export] public float CaptureRadius { get; set; } = 18;
     [Export] public double CaptureSeconds { get; set; } = 10;
     [Export] public double CaptureDecayMultiplier { get; set; } = 0.5;
-    [Export] public double IncomePerSecond { get; set; } = 2;
+    [Export] public double IncomePerSecond { get; set; } = 0.2;
     [Export] public double ResearchBonus { get; set; } = 0.25;
     public AntimatterOwnership Ownership { get; private set; }
     public AntimatterOwnership Claimant { get; private set; }
@@ -23,16 +23,14 @@ public partial class StrategicPoint : Node3D
     public string CaptureStage => IsContested ? "Contested" : Ownership != AntimatterOwnership.Neutral
         && Claimant != AntimatterOwnership.Neutral ? "Neutralizing" : "Capturing";
     public long GeneratedAntimatter { get; private set; }
-    public long GeneratedMatter { get; private set; }
     public int CaptureCount { get; private set; }
     public CollectorDrone? Drone { get; private set; }
     public string BenefitText => Role switch
     {
         StrategicPointRole.Extractor => $"+{IncomePerSecond:0.#} antimatter/s (room permitting)",
-        StrategicPointRole.MatterExtractor => $"+{IncomePerSecond:0.#} matter/s (room permitting)",
         StrategicPointRole.Research => $"+{ResearchBonus * 100:0}% project speed",
         _ => Drone == null ? "Collector activates on first capture" : GodotObject.IsInstanceValid(Drone) && !Drone.IsQueuedForDeletion()
-            ? $"Station drone{(Drone.StationSuspended ? " · suspended" : "")} · {Drone.CarriedCount} cargo objects ({Drone.CarriedMatterAmount} matter)" : "Station drone destroyed"
+            ? $"Station drone{(Drone.StationSuspended ? " · suspended" : "")} · {Drone.CarriedCount} cargo objects" : "Station drone destroyed"
     };
     public string StatusText => $"{Role} · {Ownership} · {BenefitText}\n"
         + (IsContested || Claimant != AntimatterOwnership.Neutral ? $"{CaptureStage} · {Claimant} {CaptureProgress:P0}" : "Remain in ring to capture");
@@ -128,16 +126,14 @@ public partial class StrategicPoint : Node3D
 
     private void AdvanceIncome(double delta)
     {
-        if (Role is not (StrategicPointRole.Extractor or StrategicPointRole.MatterExtractor)
+        if (Role != StrategicPointRole.Extractor
             || BaseFor(Ownership) is not { IsDestroyed: false } hub) { _incomeFraction = 0; return; }
-        bool matter = Role == StrategicPointRole.MatterExtractor;
-        int available = matter ? hub.AvailableMatterStorage : hub.AvailableStorage;
+        int available = hub.AvailableStorage;
         if (available == 0) { _incomeFraction = 0; return; }
         double accrued = _incomeFraction + delta * Math.Max(0, IncomePerSecond);
         int request = (int)Math.Min(available, Math.Floor(accrued));
-        if (matter) GeneratedMatter += hub.DepositMatter(request);
-        else GeneratedAntimatter += hub.DepositAntimatter(request);
-        _incomeFraction = (matter ? hub.AvailableMatterStorage : hub.AvailableStorage) == 0 ? 0 : accrued - Math.Floor(accrued);
+        GeneratedAntimatter += hub.DepositAntimatter(request);
+        _incomeFraction = hub.AvailableStorage == 0 ? 0 : accrued - Math.Floor(accrued);
     }
 
     private void CompleteCapture(AntimatterOwnership owner)
@@ -184,15 +180,14 @@ public partial class StrategicPoint : Node3D
 
     public static string Summary(FactionBase hub)
     {
-        int sites = 0, drones = 0; double income = 0, matter = 0;
+        int sites = 0, drones = 0; double income = 0;
         foreach (Node node in hub.GetTree().GetNodesInGroup("strategic_point"))
             if (node is StrategicPoint point && !point.IsQueuedForDeletion()
                 && point.Ownership == (hub.IsPlayerBase ? AntimatterOwnership.Player : AntimatterOwnership.Enemy))
             {
                 sites++; if (point.Role == StrategicPointRole.Extractor) income += point.IncomePerSecond;
-                if (point.Role == StrategicPointRole.MatterExtractor) matter += point.IncomePerSecond;
                 if (GodotObject.IsInstanceValid(point.Drone) && !point.Drone!.IsQueuedForDeletion()) drones++;
             }
-        return $"Sites {sites} · income up to {income:0.#} antimatter/s + {matter:0.#} matter/s · project speed {ProjectSpeed(hub):0.##}× · station drones {drones}";
+        return $"Sites {sites} · income up to {income:0.#} antimatter/s · project speed {ProjectSpeed(hub):0.##}× · station drones {drones}";
     }
 }

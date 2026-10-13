@@ -49,7 +49,7 @@ public partial class EquipmentBar : VBoxContainer
             _slots[i].Glyph.IconId = id ?? "empty";
             _slots[i].Display($"{i + 1}  {(id == null ? "Empty" : UiIcon.ShortName(id))}",
                 item == null ? "—" : $"{BaseManagement.Rank(item.Rank)} · {item.EnergyCost} E", state,
-                item == null ? $"Slot {i + 1} · Empty\nResearch equipment with B, then install at home in Ship → Loadout."
+                item == null ? $"Slot {i + 1} · Empty\nResearch equipment with B, then click its owned tile at home in Ship."
                     : $"Slot {i + 1} · {item.RankedName}\n{item.Description}\n{item.EnergyCost} energy · {item.CooldownSeconds:0.##}s base cooldown\n"
                         + $"{state}\n{i + 1} selects · LMB activates · Tab cycles. Cursor click selects only.", _ship.Health <= 0);
             _slots[i].Glyph.Modulate = unavailable ? new Color(0.85f, 0.5f, 0.3f) : Colors.White;
@@ -62,6 +62,6 @@ public partial class EquipmentBar : VBoxContainer
             float height = 32 * Mathf.Clamp(cooldown / Mathf.Max(0.01f, full), 0, 1);
             _cooldown[i].Position = new Vector2(7, 7 + 32 - height); _cooldown[i].Size = new Vector2(Mathf.Max(0, _slots[i].Size.X - 14), height);
         }
-        _builtIns.Text = $"RMB Claim · {_ship.ClaimEquipmentEnergyCost} E     Shift · {_ship.BoosterStatusText.Replace("Boost ", "")}     Space · {_ship.JumpEnergyCost} E";
+        _builtIns.Text = "1–4 select · LMB fire · RMB Claim\nWASD move · Shift boost · Space jump · F3 help";
     }
 }

@@ -16,7 +16,6 @@ public partial class ClaimProjectile : Node3D
 
     public bool IsFollowingTerrain { get; private set; }
     public event Action<int>? AntimatterClaimed;
-    public event Action<int>? MatterClaimed;
 
     private HeightmapArena? _arena;
     private Vector3 _direction = Vector3.Forward;
@@ -90,18 +89,16 @@ public partial class ClaimProjectile : Node3D
                 }
             }
 
-            Node3D? hit = FindFirstHit(previous, next);
+            AntimatterPickup? hit = FindFirstHit(previous, next);
             GlobalPosition = next;
             if (hit != null)
             {
-                int amount = hit is AntimatterPickup orb ? orb.AntimatterAmount : ((MatterPickup)hit).MatterAmount;
-                if (hit is AntimatterPickup energy) energy.ReassignOwnership(Ownership);
-                else ((MatterPickup)hit).ReassignOwnership(Ownership);
+                int amount = hit.AntimatterAmount;
+                hit.ReassignOwnership(Ownership);
                 EquipmentImpactPool.Prepare(GetTree().CurrentScene).Emit(hit.GlobalPosition,
                     new Color(0.2f, 0.9f, 1, 0.85f), new Color(0.05f, 0.7f, 1), 0.28f, 0.4f, 2.2f);
                 QueueFree();
-                if (hit is MatterPickup) MatterClaimed?.Invoke(amount);
-                else AntimatterClaimed?.Invoke(amount);
+                AntimatterClaimed?.Invoke(amount);
                 return;
             }
 
@@ -121,9 +118,9 @@ public partial class ClaimProjectile : Node3D
         }
     }
 
-    private Node3D? FindFirstHit(Vector3 from, Vector3 to)
+    private AntimatterPickup? FindFirstHit(Vector3 from, Vector3 to)
     {
-        Node3D? first = null;
+        AntimatterPickup? first = null;
         float firstEntry = float.PositiveInfinity;
         Vector3 segment = to - from;
         float lengthSquared = segment.LengthSquared();
@@ -163,24 +160,6 @@ public partial class ClaimProjectile : Node3D
                 firstEntry = entry;
                 first = pickup;
             }
-        }
-        foreach (Node node in GetTree().GetNodesInGroup("matter_pickup"))
-        {
-            if (node is not MatterPickup matter || !matter.IsAvailable || matter.Ownership == Ownership) continue;
-            Vector3 offset = from - matter.GlobalPosition;
-            float radius = HitRadius + 0.6f;
-            float c = offset.LengthSquared() - radius * radius;
-            float entry = 0;
-            if (c > 0)
-            {
-                if (lengthSquared <= 0.000001f) continue;
-                float b = offset.Dot(segment);
-                float discriminant = b * b - lengthSquared * c;
-                if (discriminant < 0) continue;
-                entry = (-b - Mathf.Sqrt(discriminant)) / lengthSquared;
-                if (entry < 0 || entry > 1) continue;
-            }
-            if (entry < firstEntry) { firstEntry = entry; first = matter; }
         }
         return first;
     }
