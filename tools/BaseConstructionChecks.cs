@@ -145,17 +145,17 @@ public partial class BaseConstructionChecks : Node3D
             "Every research item is purchasable within its unlock-tier capacity");
         var rival = new FactionBase { IsPlayerBase = false }; AddChild(rival); rival.SetPhysicsProcess(false);
         var impact = typeof(WeaponProjectile).GetMethod("OnBodyEntered", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        for (int shot = 0; shot < 80; shot++)
+        for (int shot = 0; shot < 134; shot++)
         {
             var bolt = Add(new WeaponProjectile { Damage = ship.PlasmaBoltDamage }); bolt.Launch(Vector3.Forward, ship);
             impact.Invoke(bolt, new object[] { rival });
-            Check(rival.Health == 400 - (shot + 1) * 5, "Actual Plasma I projectile applies five base damage per hit");
+            Check(rival.Health == Math.Max(0, 400 - (shot + 1) * 3), "Actual Plasma I projectile applies three base damage per hit");
         }
-        Check(rival.IsDestroyed && home.Health == 2000, "Eighty Plasma I hits destroy the opposing tier-I base without friendly damage");
+        Check(rival.IsDestroyed && home.Health == 2000, "134 Plasma I hits destroy the opposing tier-I base without friendly damage");
         var beast = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.GroundBeast });
         var ordinaryBolt = Add(new WeaponProjectile { Damage = ship.PlasmaBoltDamage }); ordinaryBolt.Launch(Vector3.Forward, ship);
         impact.Invoke(ordinaryBolt, new object[] { beast });
-        Check(beast.Health == 17, "Base resistance leaves normal 25-damage Plasma mob combat intact");
+        Check(beast.Health == 29, "Base resistance leaves normal 13-damage Plasma mob combat intact");
     }
 
     private void CheckSiegeAndRebuilding()

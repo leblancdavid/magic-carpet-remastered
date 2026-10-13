@@ -45,6 +45,10 @@ public partial class CompactUiChecks : Node3D
             Check(vitals.GetChildCount() == 3 && Find<ProgressBar>(hud, "EnergyGauge").Value == ship.Energy
                 && Find<ProgressBar>(hud, "AntimatterGauge").MaxValue == home.EffectiveStorageCapacity,
                 "Three vertical gauges show actual health, rechargeable energy and base storage");
+            Check(vitals.GetChildren().OfType<VBoxContainer>().Select(c => c.GetChild<Label>(2).Text).SequenceEqual(new[] { "H", "E", "A" })
+                && vitals.GetChildren().OfType<VBoxContainer>().All(c => !c.GetChild<Label>(0).Text.Contains('/')),
+                "Compact gauges use letter icons and current values only");
+            Check(!Find<PanelContainer>(hud, "Feedback").Visible, "Routine gameplay feedback is not displayed as a toast");
             var cards = Find<HBoxContainer>(bar, "EquipmentSlots").GetChildren().OfType<UiTile>().ToArray();
             Check(cards.Length == 4 && cards.Select(c => c.Name.ToString()).SequenceEqual(new[] { "EquipmentSlot_1", "EquipmentSlot_2", "EquipmentSlot_3", "EquipmentSlot_4" }),
                 "HUD is exactly four numbered equipment cards in one horizontal row");
@@ -170,6 +174,11 @@ public partial class CompactUiChecks : Node3D
                 Check(vitals.GetGlobalRect().End.X < bar.GetGlobalRect().Position.X
                     && Find<PanelContainer>(hud, "BaseHealthPanel").GetGlobalRect().Position.X > bar.GetGlobalRect().End.X,
                     "Vitals are left of weapons and home-base health is beneath the right-side map");
+                var basePanel = Find<PanelContainer>(hud, "BaseHealthPanel");
+                Check(Mathf.Abs((vitals.GetGlobalRect().Position.X + basePanel.GetGlobalRect().End.X) * 0.5f
+                    - GetViewport().GetVisibleRect().Size.X * 0.5f) < 1, "Complete HUD including radar/base HP is bottom centered");
+                Check(FlightHudLayout.RadarOrigin(GetViewport().GetVisibleRect().Size).X == basePanel.GetGlobalRect().Position.X,
+                    "Radar and base HP share the same centered layout");
                 site.Advance(0.01, true, false); hud._Process(1); await Frames(2);
                 Check(capturePanel.Visible && !capturePanel.GetGlobalRect().Intersects(bar.GetGlobalRect())
                     && !capturePanel.GetGlobalRect().Intersects(actions.GetGlobalRect()), $"Capture HUD clears equipment and interface dock at {size}: visible {capturePanel.Visible}, capture {capturePanel.GetGlobalRect()}, bar {bar.GetGlobalRect()}, dock {actions.GetGlobalRect()}");

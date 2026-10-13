@@ -10,7 +10,7 @@ Implemented first pass, 2026-10-11. Exploration rewards are permanent, stacking 
 - Uniform sphere candidates exclude **30/50/75/80 m from every base** on compact Small/Medium/Large/XL, including ruins, and **20/40/60/60 m from every active wreck/reward**, with **64 bounded attempts**. These defaults replace the old 180/100 m guards that cannot populate Small. Explicit non-default exported overrides remain. Fill the least occupied of twelve planetary regions, then break ties by cumulative nearest-base fairness. This improves coverage without guaranteeing equal travel costs. Sharp ledges (>4 height units over 2 surface units) reject; water supports floating rewards. Flat defaults: five initial/eight active, 30 base exclusion, 18 spacing.
 - Wrecks have **50 HP**. Plasma Bolt, Pulse Burst and enemy projectiles can destroy them. Destruction reveals gold salvage without rewarding the attacker. Collect within **4 surface / 6 elevation units**; first living valid collector wins. Modern rival ships secure the same immutable three-choice offers and choose a legal boon/skip through their policy (`RIVAL_AI.md`). The legacy fixture archetype still takes skip; richer exploration/selection strategy remains future work.
 - Orbital arrivals descend radially for **3 seconds** from 60 units above the landing height, with no collision/damage while descending; they become solid/damageable at landing. Placeholder procedural hulls and gold salvage are original geometry.
-- Offers store **three distinct equal-weight catalog options**, generated once at collection. **H** opens pending rewards/summary; auto-opens on a new reward if another interface is not active. Escape/H defers. Multiple rewards remain independent and can be cycled; no reroll. H/B/M transfer interface ownership. Setup/results still pause, choices never do; death closes the panel and retains offers. Complete base loss ends the match, leaving unresolved offers unusable until reset.
+- Offers store **three distinct equal-weight catalog options**, generated once at collection. **H** opens the oldest pending reward; auto-opens on a newly secured reward if another interface is not active. Select a boon or **Reject**, then **Confirm**. Selection alone changes no gameplay state. Confirmation consumes one offer and closes without a second UI; additional rewards wait for H. H/Esc defers without rerolling. Empty H does not open a summary; F3 retains collected bonuses and tooltips retain full effects/stacks. H/B/M transfer input ownership; choices remain real time. Death closes the panel and retains offers. Complete base loss blocks unresolved offers until reset.
 - Skip awards **30 antimatter** directly through base deposit, with owned overflow outside the base. It increases capacity through stored antimatter without healing/refilling current energy. Choose/skip consume the offer exactly once. Capped choices remain displayed but disabled; another choice or skip remains available.
 - Each family stacks additively up to **10**. Percentage factor is `1 + 0.1 × stacks`; independent families multiply. Integer damage rounds once after all factors. Rank effects are calculated first; no equipment/rank/base tier mutations.
 
@@ -25,7 +25,7 @@ Implemented first pass, 2026-10-11. Exploration rewards are permanent, stacking 
 | Drone coordination | +10% summoned Guardian output as a deployable source tag, multiplying Energy focus; base strike research unchanged |
 | Reinforced hull | +20 maximum ship HP; acquisition never heals current HP; respawn restores the enlarged maximum |
 
-Damage attribution is scoped to this catalog: Plasma Bolt/Guardian are energy, Pulse Burst is explosive; deployable is an overlapping source tag. No kinetic weapon is currently offered. Base maximum-HP boons remain deferred so acquisition cannot silently restore lost layers; base HP/layer formulas are unchanged. H shows stack counts and live effective stats. Radar/survey show wrecks only within 220 m ship sensing, even after charting; intact wrecks and gold revealed salvage have distinct markers. Chart memory does not globally expose rewards.
+Damage attribution is scoped to this catalog: Plasma Bolt/Guardian are energy, Pulse Burst is explosive; deployable is an overlapping source tag. No kinetic weapon is currently offered. Base maximum-HP boons remain deferred so acquisition cannot silently restore lost layers; base HP/layer formulas are unchanged. F3 shows collected stacks/effective stats. Hull acquisition does not immediately heal, but ordinary out-of-combat recovery can subsequently fill the enlarged maximum. Radar/survey show wrecks only within 220 m ship sensing, even after charting; intact wrecks and gold revealed salvage have distinct markers. Chart memory does not globally expose rewards.
 
 See `SHIP_EQUIPMENT.md` for researched progression, `BASE_DEVELOPMENT.md` for resource accounting and `STRATEGIC_POINTS.md` for ownership-dependent economic sites.
 
@@ -51,9 +51,9 @@ The first-pass visuals, durability and harmless arrival policy are specified abo
 
 Each collected reward presents three boon options plus a skip option:
 
-1. Select one of the three boons and apply it once.
-2. Alternatively, skip the boons for an antimatter bonus.
-3. Either outcome consumes that reward; it cannot produce both a boon and a bonus.
+1. Select one of the three boons, or Reject for an antimatter bonus.
+2. Confirm the highlighted selection to apply it once and close the panel.
+3. Either outcome consumes that reward; it cannot produce both a boon and a bonus. Further pending offers remain secured until H reopens them.
 
 Selection runs in real time. The player may defer choosing after collection; the reward and its choice remain secured to that player. Use UI input ownership so selecting or dismissing a panel does not also fire equipment or Claim. No pause or slow-motion advantage is granted by the choice panel.
 

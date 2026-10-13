@@ -10,7 +10,7 @@ namespace MagicCarpetRemastered.Scripts.Game;
 public partial class EnemyEcosystemDirector : Node
 {
     private sealed record Habitat(string Id, Vector3 Position, EnemyEcosystemEnemy.EnemyRole Role,
-        int Members = 3, bool Heavy = false, StrategicPoint? Site = null);
+        int Members = 3, bool Heavy = false, StrategicPoint? Site = null, float Spread = 24);
     [Export] public bool UseFixedSeed { get; set; }
     [Export] public int GenerationSeed { get; set; }
     private readonly RandomNumberGenerator _random = new();
@@ -70,7 +70,7 @@ public partial class EnemyEcosystemDirector : Node
         if (UseFixedSeed) _random.Seed = unchecked((ulong)GenerationSeed); else _random.Randomize();
         if (_arena.IsSpherical)
         {
-            int population = _arena.PlanetRadius <= 200 ? 64 : _arena.PlanetRadius <= 300 ? 120 : _arena.PlanetRadius <= 400 ? 200 : 300;
+            int population = _arena.PlanetRadius <= 200 ? 96 : _arena.PlanetRadius <= 300 ? 180 : _arena.PlanetRadius <= 400 ? 300 : 450;
             if (MaxActiveEnemies == 24) MaxActiveEnemies = population;
             if (InitialWaveCount == 24) InitialWaveCount = population;
             if (MaxFlyingSwarms == 12) MaxFlyingSwarms = population * 3 / 4;
@@ -117,8 +117,8 @@ public partial class EnemyEcosystemDirector : Node
     {
         if (_arena == null) return;
         int desired = InitialWaveCount / 4 + 8;
-        // Region quotas prevent random clumping in one hemisphere. Bounded
-        // attempts retain terrain/base/scenery checks and seed replay.
+        // Seed broad coverage, then mix isolated habitats and nearby clusters.
+        // Unequal spacing avoids a regular grid without abandoning any region.
         for (int index = 0; _habitats.Count < desired && index < desired * 2; index++)
         {
             int region = index % PlanetLayout.RegionCount;
@@ -128,18 +128,29 @@ public partial class EnemyEcosystemDirector : Node
                 : EnemyEcosystemEnemy.EnemyRole.AntimatterThief;
             bool heavy = role == EnemyEcosystemEnemy.EnemyRole.GroundBeast && _random.Randf() < 0.4f;
             int members = role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm ? _random.RandiRange(6, 10)
-                : role == EnemyEcosystemEnemy.EnemyRole.GroundBeast ? heavy ? _random.RandiRange(1, 2) : 3
-                : role == EnemyEcosystemEnemy.EnemyRole.RangedCaster ? 3 : 2;
+                : role == EnemyEcosystemEnemy.EnemyRole.GroundBeast ? heavy ? _random.RandiRange(1, 3) : _random.RandiRange(2, 5)
+                : role == EnemyEcosystemEnemy.EnemyRole.RangedCaster ? _random.RandiRange(2, 4) : _random.RandiRange(1, 3);
+            float spacing = _random.RandfRange(22, 65);
+            var neighbors = _habitats.Where(h => h.Id.StartsWith("wild-") && PlanetLayout.RegionFor(_arena.UpAt(h.Position)) == region).ToArray();
+            Habitat? cluster = neighbors.Length > 0 && _random.Randf() < 0.65f ? neighbors[_random.RandiRange(0, neighbors.Length - 1)] : null;
             for (int attempt = 0; attempt < PlacementAttempts * 12; attempt++)
             {
                 float y = _random.RandfRange(-1, 1), angle = _random.RandfRange(0, Mathf.Tau);
                 float radial = Mathf.Sqrt(Mathf.Max(0, 1 - y * y));
                 Vector3 up = new(radial * Mathf.Cos(angle), y, radial * Mathf.Sin(angle));
+                if (cluster != null)
+                {
+                    Vector3 clusterUp = _arena.UpAt(cluster.Position);
+                    Basis frame = PlanetGeometry.Frame(clusterUp, Vector3.Forward);
+                    Vector3 tangent = frame.X.Rotated(clusterUp, angle);
+                    up = new Quaternion(clusterUp.Cross(tangent), _random.RandfRange(spacing, spacing + 45) / _arena.PlanetRadius) * clusterUp;
+                }
                 if (PlanetLayout.RegionFor(up) != region) continue;
                 Vector3 center = PlanetLayout.Position(_arena, up);
                 if (role != EnemyEcosystemEnemy.EnemyRole.FlyingSwarm && _arena.HeightAt(center) < _arena.WaterHeight) continue;
-                if (!IsSpawnPositionValid(center) || _habitats.Any(h => _arena.SurfaceDistance(center, h.Position) < 60)) continue;
-                _habitats.Add(new Habitat($"wild-{index}", center, role, members, heavy));
+                if (!IsSpawnPositionValid(center) || _habitats.Any(h => _arena.SurfaceDistance(center, h.Position) < spacing)) continue;
+                _habitats.Add(new Habitat($"wild-{index}", center, role, members, heavy,
+                    Spread: _random.RandfRange(role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm ? 16 : 12, 32)));
                 break;
             }
         }
@@ -255,11 +266,11 @@ public partial class EnemyEcosystemDirector : Node
             return false;
         }
         float clearance = role is EnemyEcosystemEnemy.EnemyRole.GroundBeast or EnemyEcosystemEnemy.EnemyRole.AntimatterThief ? 1.1f : 5.5f;
-        if (!TryPlace(habitat.Position, _arena.IsSpherical ? 14 : 8, _arena.IsSpherical ? 32 : 14, clearance, out Vector3 position,
+        if (!TryPlace(habitat.Position, 2, _arena.IsSpherical ? habitat.Spread : 14, clearance, out Vector3 position,
             landOnly: habitat.Site == null && role != EnemyEcosystemEnemy.EnemyRole.FlyingSwarm)) return false;
         GetParent().AddChild(new EnemyEcosystemEnemy { Name = $"{role}Enemy", Role = role,
             Position = GetParent<Node3D>().ToLocal(position), HabitatPosition = habitat.Position, HabitatId = habitat.Id,
-            IsHeavy = habitat.Heavy, NeutralAntimatterValue = habitat.Heavy ? 36 : role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm ? 3
+            IsHeavy = habitat.Heavy, WanderSeed = unchecked((int)_random.Randi()), NeutralAntimatterValue = habitat.Heavy ? 36 : role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm ? 3
                 : role == EnemyEcosystemEnemy.EnemyRole.GroundBeast ? 18 : 10 });
         RefreshCounts();
         int population = HabitatPopulation(habitat);

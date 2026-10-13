@@ -9,7 +9,7 @@ public static class ShipEquipmentCatalog
     public static string ProjectId(string id, int rank) => $"equipment-{id}-{rank}";
     public static string EffectSummary(string id, int rank) => id switch
     {
-        "plasma-bolt" => $"Projectile damage {25 + 10 * (rank - 1)}. Bases take 20% Plasma damage.",
+        "plasma-bolt" => $"Projectile damage {13 + 5 * (rank - 1)}, 2 energy per shot. Bases take 20% Plasma damage.",
         "pulse-burst" => $"Area damage {32 + 8 * (rank - 1)}, radius {8 + 2 * (rank - 1)}.",
         "energy-shield" => $"65% damage reduction for {4 + 2 * (rank - 1)}s.",
         "dash" => $"Dash speed {46 * (1 + 0.2f * (rank - 1)):0.0} with radial lift.",

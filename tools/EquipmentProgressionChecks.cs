@@ -78,7 +78,7 @@ public partial class EquipmentProgressionChecks : Node3D
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Position = point, GlobalPosition = point, Pressed = true }, true);
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Position = point, GlobalPosition = point, Pressed = false }, true);
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(player.GetEquipmentRank("plasma-bolt") == 2 && player.PlasmaBoltDamage == 35, "GUI applies pending rank at home");
+            Check(player.GetEquipmentRank("plasma-bolt") == 2 && player.PlasmaBoltDamage == 18, "GUI applies pending rank at home");
             Check(ui.InstallEquipment("pulse-burst", 1) && ui.InstallEquipment("energy-shield", 2) && ui.InstallEquipment("dash", 3), "Four mixed items install");
             int paid = home.StoredAntimatter;
             Check(ui.InstallEquipment("guardian-drone", 1) && player.EquipmentSlots.Count(id => id != null) == 4,
@@ -96,7 +96,7 @@ public partial class EquipmentProgressionChecks : Node3D
             Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId("plasma-bolt", 3)), "Cancelled rank can be ordered again");
             home.Construction.Advance(120);
             Check(player.GetOwnedEquipmentRank("plasma-bolt") == 3 && player.GetEquipmentRank("plasma-bolt") == 2, "Rank III waits for home application");
-            Check(ui.InstallEquipment("plasma-bolt", 0) && player.PlasmaBoltDamage == 45, "Sequential third rank applies exactly once");
+            Check(ui.InstallEquipment("plasma-bolt", 0) && player.PlasmaBoltDamage == 23, "Sequential third rank applies exactly once");
             foreach (string id in new[] { "pulse-burst", "energy-shield", "dash" })
             {
                 for (int rank = 2; rank <= 3; rank++)

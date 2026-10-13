@@ -1,5 +1,14 @@
 # Project Learnings
 
+## Centered HUD, Quiet Recovery And Seeded Wandering (2026-10-13)
+
+- A shared layout must drive both native HUD controls and custom-drawn radar; centering only the weapons leaves the complete group visibly off-centre. Validate the union's midpoint and radar/base-HP alignment at normal/small canvas sizes.
+- A selection modal needs separate selected and consumed states. Keep the offer immutable, highlight without spending, disable Confirm until selected, and close after commit without automatically advancing to the next pending offer. Preserve the input-release latch through confirmation.
+- Count only successful health damage as combat activity. Subtract the remaining quiet delay from a tick before accumulating healing, so large diagnostic deltas cannot heal for the whole wait. Rejected invulnerable hits, misses and wreck destruction are not outgoing combat health damage; actual attributed Guardian damage is.
+- Fixed minimum habitat spacing plus a fixed member ring creates artificial regularity despite random generation. Mix region coverage with nearby clusters and variable pack footprints, and seed each mob's destination/pause stream independently of Godot instance IDs/global RNG.
+- Even small pilot groups are costly when every idle mob creates native group arrays each physics tick. Cache membership briefly and stagger refreshes; still check current positions/liveness each tick. In the 450-mob XL workload, a pre-cache solo run recorded ~159 ms wall p95/~1,305 MiB over 480 samples; a cached run recorded ~50 ms/~46 MiB. Sample windows span different simulation durations, so this is workload improvement evidence, not equal-time allocation or universal FPS acceptance. Higher density still needs sustained physics/performance tuning.
+- Wandering tests should measure maximum excursion over a window, not require the actor to end far from its origin: random roaming can legitimately return home. Line-of-sight fixtures need physics synchronization after scripted collider teleports and must clear unrelated earlier death drops. Ballistic antimatter spheres intermittently occluded the supposedly open caster fixture; ray-collider diagnostics identified the real obstruction rather than weakening combat line-of-sight rules.
+
 ## Dense Population / Single-Resource Playtest (2026-10-12)
 
 - Neutral acquisition must scan actual pilots, not every neutral. At 120 mobs, per-mob `ecosystem_enemy` scans caused quadratic native Variant/array traffic. A dedicated `legacy_rival_pilot` group preserves diagnostic rivals alongside modern `pilots`. Initial rendered Medium observation: ~164 ms p95 wall frames/~6 GiB managed allocations across 480 samples; narrowing the scan reduced a corresponding run to ~18 ms/~71 MiB. This is workload evidence, not universal performance acceptance.

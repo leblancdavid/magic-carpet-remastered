@@ -142,13 +142,26 @@ public partial class NeutralBehaviorChecks : Node3D
                 Check(_pilot.Health == contactHp - contact.ContactDamage, "Neutral melee contact damages its rival target");
                 _pilot.Health = 36; contact.Free();
 
+                // Earlier lethal retaliation fixtures leave real ballistic
+                // drops. Clear their unrelated occluders before testing an
+                // explicitly unobstructed caster windup.
+                foreach (var drop in _room.GetChildren().OfType<AntimatterPickup>().ToArray()) drop.QueueFree();
+                await Frames(3);
+
                 FarPilots(); var caster = Mob(EnemyEcosystemEnemy.EnemyRole.RangedCaster);
-                _ship.GlobalPosition = Point(10); caster._PhysicsProcess(1);
+                _ship.GlobalPosition = Point(10); await Frames(2); caster._PhysicsProcess(1);
+                if (Windup(caster) <= 0)
+                {
+                    using var ray = PhysicsRayQueryParameters3D.Create(caster.GlobalPosition, _ship.GlobalPosition);
+                    ray.Exclude = new Godot.Collections.Array<Rid> { caster.GetRid(), _ship.GetRid() };
+                    using var hit = GetWorld3D().DirectSpaceState.IntersectRay(ray);
+                    GD.Print($"Caster diagnostic: spherical {spherical}, HP {_ship.Health}, state {caster.Territory!.State}, target {caster.Territory.Target}, from {caster.GlobalPosition}, to {_ship.GlobalPosition}, hit {hit}");
+                }
                 Check(Windup(caster) > 0, "Aggroed visible caster begins a real windup");
                 _ship.GlobalPosition = Point(220); caster._PhysicsProcess(0.2);
                 Check(Windup(caster) == 0 && !_room.GetChildren().OfType<EnemyProjectile>().Any(), "Escape cancels a queued shot");
                 caster.Free(); FarPilots(); caster = Mob(EnemyEcosystemEnemy.EnemyRole.RangedCaster);
-                _pilot.GlobalPosition = Point(10); caster._PhysicsProcess(1); caster._PhysicsProcess(0.2);
+                _pilot.GlobalPosition = Point(10); await Frames(2); caster._PhysicsProcess(1); caster._PhysicsProcess(0.2);
                 var shot = _room.GetChildren().OfType<EnemyProjectile>().Single(); shot.SetPhysicsProcess(false);
                 Check(caster.Territory!.Target == _pilot, "Caster aims its actual shot at the rival rather than the distant player");
                 int rivalHp = _pilot.Health; Invoke(shot, "OnBodyEntered", _pilot);
@@ -217,6 +230,38 @@ public partial class NeutralBehaviorChecks : Node3D
                 Check(_ship.Health < shipHp, "Real swarm descends to a low-flying pilot and lands contact hits before breaking away");
                 swarm.Free();
 
+                FarPilots();
+                var roamer = Mob(EnemyEcosystemEnemy.EnemyRole.FlyingSwarm);
+                var replay = Mob(EnemyEcosystemEnemy.EnemyRole.FlyingSwarm);
+                roamer.WanderSeed = replay.WanderSeed = 7183;
+                var wander = new NeutralTerritory(roamer, _arena, roamer.GlobalPosition);
+                var sameWander = new NeutralTerritory(replay, _arena, roamer.GlobalPosition);
+                var headings = new System.Collections.Generic.List<Vector3>();
+                bool paused = false;
+                Vector3 start = roamer.GlobalPosition;
+                float excursion = 0;
+                for (int step = 0; step < 240; step++)
+                {
+                    wander.Update(0.25f); sameWander.Update(0.25f);
+                    Vector3 move = wander.IdleMove();
+                    Check(move.IsEqualApprox(sameWander.IdleMove()), "Equal wander seeds replay identical idle steering");
+                    if (move.LengthSquared() > 0.01f)
+                    {
+                        headings.Add(move.Normalized());
+                        roamer.GlobalPosition = _arena.StepToward(roamer.GlobalPosition,
+                            roamer.GlobalPosition + move, move.Length() * 0.25f);
+                        replay.GlobalPosition = roamer.GlobalPosition;
+                        excursion = Mathf.Max(excursion, wander.Distance(start, roamer.GlobalPosition));
+                    }
+                    else paused = true;
+                    Check(wander.Distance(roamer.GlobalPosition, wander.Home) <= roamer.PatrolRadius + 1,
+                        "Random roaming stays within its habitat's patrol footprint");
+                }
+                Check(headings.Count > 60 && paused && headings.Any(h => h.Dot(headings[0]) < 0),
+                    $"Idle swarms move, pause and change direction rather than tracing one fixed circle: spherical {spherical}, steps {headings.Count}, paused {paused}, reverse {headings.Any(h => h.Dot(headings[0]) < 0)}");
+                Check(excursion > 1, "Idle wandering changes position with distant pilots");
+                roamer.Free(); replay.Free();
+
                 _room.QueueFree(); await Frames(10);
             }
 
@@ -242,8 +287,8 @@ public partial class NeutralBehaviorChecks : Node3D
             foreach (var e in game.GetChildren().OfType<EnemyEcosystemEnemy>()) e.SetPhysicsProcess(false);
             foreach (var d in game.GetChildren().OfType<CollectorDrone>()) d.SetPhysicsProcess(false);
             var initial = game.GetChildren().OfType<EnemyEcosystemEnemy>().Where(e => e.IsTerritorial).ToArray();
-            Check(director.InitialWaveCount == new[] { 64, 120, 200, 300 }[Array.IndexOf(PlanetSizes.Radii, radius)],
-                "Named-size population targets scale 64/120/200/300 across the globe");
+            Check(director.InitialWaveCount == new[] { 96, 180, 300, 450 }[Array.IndexOf(PlanetSizes.Radii, radius)],
+                "Named-size population targets scale 96/180/300/450 across the globe");
             GD.Print($"Encounters R{radius}: {initial.Length}/{director.InitialWaveCount}, habitats {director.HabitatCount}, wild {initial.Count(e => e.HabitatId.StartsWith("wild-"))}, regions {initial.Select(e => PlanetLayout.RegionFor(arena.UpAt(e.GlobalPosition))).Distinct().Count()}");
             Check(initial.All(e => Mathf.IsEqualApprox(e.AwarenessRadius, 20 + radius * 0.05f)
                 && e.RetaliationRadius > e.AwarenessRadius && e.DisengagementRadius >= e.RetaliationRadius

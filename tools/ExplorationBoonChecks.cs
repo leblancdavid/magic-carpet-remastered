@@ -36,7 +36,7 @@ public partial class ExplorationBoonChecks : Node3D
                 var home = new FactionBase { Position = arena.OnSurface(arena.PlanetCenter + Vector3.Up * radius) };
                 var rival = new FactionBase { IsPlayerBase = false, Position = arena.OnSurface(arena.PlanetCenter + Vector3.Down * radius) };
                 room.AddChild(home); room.AddChild(rival); home.SetPhysicsProcess(false); rival.SetPhysicsProcess(false);
-                var director = new ExplorationDirector(); room.AddChild(director); director.SetPhysicsProcess(false);
+                var director = new ExplorationDirector { UseFixedSeed = true, GenerationSeed = 7319 }; room.AddChild(director); director.SetPhysicsProcess(false);
                 var wrecks = room.GetChildren().OfType<ExplorationWreck>().ToArray();
                 Check(wrecks.Length == 12, $"{radius}: all initial wrecks placed");
                 foreach (var wreck in wrecks)
@@ -132,7 +132,7 @@ public partial class ExplorationBoonChecks : Node3D
             Check(Mathf.IsEqualApprox(ship.EffectiveMoveSpeed, 26.4f) && Mathf.IsEqualApprox(ship.EffectiveBoosterSpeed, 39.6f)
                 && Mathf.IsEqualApprox(ship.EffectiveDashSpeed, 50.6f), "Mobility affects normal / built-in / slotted speed");
             Check(Mathf.IsEqualApprox(ship.EnergyRechargePerSecond, 5.28f) && Mathf.IsEqualApprox(ship.EffectiveFireCooldown, 0.25f / 1.1f), "Recharge and primary fire-rate formulas");
-            Check(ship.PlasmaBoltDamage == Mathf.RoundToInt(27.5f) && ship.EffectiveAreaDamage == 35 && ship.EffectiveGuardianDamage == 15,
+            Check(ship.PlasmaBoltDamage == Mathf.RoundToInt(13 * 1.1f) && ship.EffectiveAreaDamage == 35 && ship.EffectiveGuardianDamage == 15,
                 "Rank-derived energy/explosive damage and overlapping deployable tag multiply consistently");
             ship.GlobalPosition = terrain.OnSurface(underside, 6); ship.RespawnAt(ship.GlobalPosition);
             Cast(ship, "CastPrimaryEquipment");
@@ -142,7 +142,7 @@ public partial class ExplorationBoonChecks : Node3D
             hub.TryCompleteTierUpgrade(2);
             Check(hub.Construction.TryStart("equipment-plasma-bolt-2", out _), "Research rank independently from boons");
             hub.Construction.Advance(100);
-            Check(ship.TryInstallEquipment("plasma-bolt", 0, out _) && ship.PlasmaBoltDamage == Mathf.RoundToInt(35 * 1.1f), "Rank effect precedes additive boon multiplier");
+            Check(ship.TryInstallEquipment("plasma-bolt", 0, out _) && ship.PlasmaBoltDamage == Mathf.RoundToInt(18 * 1.1f), "Rank effect precedes additive boon multiplier");
             hub.ApplyDamage(140);
             Check(hub.Tier == 1 && ship.Boons.Stacks("energy-damage") == 1 && ship.GetEquipmentRank("plasma-bolt") == 2,
                 "Tier loss retains both installed rank and match boons");
@@ -155,6 +155,7 @@ public partial class ExplorationBoonChecks : Node3D
             var management = new BaseManagement(); testRoom.AddChild(management);
             var ui = new BoonChoices(); testRoom.AddChild(ui);
             Check(ui.SetOpen(true) && ship.GameplayInputBlocked && !GetTree().Paused, "Choice UI owns input while simulation stays live");
+            Check(FindButton(ui, "ConfirmBoon").Disabled && !ui.Confirm(), "A reward cannot be confirmed before selection");
             int storage = hub.StoredAntimatter; ship._PhysicsProcess(0.2);
             Check(!ship.TryActivateBooster() && hub.StoredAntimatter == storage, "Live choice UI blocks combat/booster payment");
             var project = hub.Construction.Catalog.First(d => d.Id == "repair-matrix");
@@ -177,19 +178,45 @@ public partial class ExplorationBoonChecks : Node3D
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = click }, true);
             GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = click }, true);
             await Frames(2);
-            Check(ship.Boons.Pending.Count == 1, "GUI selection consumes exactly one displayed reward");
+            Check(ship.Boons.Pending.Count == 2 && ui.IsOpen, "GUI selection retains the reward until confirmation");
+            var confirm = FindButton(ui, "ConfirmBoon");
+            Check(!confirm.Disabled, "Valid selection enables confirmation");
+            click = confirm.GetGlobalRect().GetCenter();
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true, Position = click }, true);
+            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false, Position = click }, true);
+            await Frames(2);
+            Check(ship.Boons.Pending.Count == 1 && !ui.IsOpen && !ship.GameplayInputBlocked, "Confirmation consumes one reward, closes and restores input without a second UI");
             Check(testRoom.GetChildren().OfType<WeaponProjectile>().Count() <= projectileCount, "Choice click cannot also cast Plasma Bolt");
             string? capture = OS.GetCmdlineUserArgs().FirstOrDefault(a => a.StartsWith("--capture="))?.Substring(10);
             if (capture != null)
             {
-                await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
-                using var image = GetViewport().GetTexture().GetImage(); Check(image.SavePng(capture) == Error.Ok, "Rendered boon UI capture saves");
-                await Frames(2);
+                ui.SetOpen(true);
+                foreach (var size in new[] { new Vector2I(1280, 720), new Vector2I(960, 540) })
+                {
+                    GetTree().Root.ContentScaleSize = size; await Frames(3);
+                    ui.Select(FindButton(ui, "BoonChoice_0").Disabled ? 3 : 0);
+                    var panel = (PanelContainer)ui.FindChild("BoonPanel", true, false);
+                    Check(panel.GetGlobalRect().Position.X >= 0 && panel.GetGlobalRect().Position.Y >= 0
+                        && panel.GetGlobalRect().End.X <= GetViewport().GetVisibleRect().Size.X
+                        && panel.GetGlobalRect().End.Y <= GetViewport().GetVisibleRect().Size.Y,
+                        "Simple boon panel fits supported normal/small canvas sizes");
+                    await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
+                    using var image = GetViewport().GetTexture().GetImage();
+                    Check(image.SavePng(capture.Replace(".png", $"{size.X}.png")) == Error.Ok, "Rendered selected boon UI capture saves");
+                }
+                GetTree().Root.ContentScaleSize = new Vector2I(1280, 720);
             }
             ui.SetOpen(false); GetViewport().PushInput(new InputEventKey { Keycode = Key.H, PhysicalKeycode = Key.H, Pressed = true }, true);
             Check(ui.IsOpen && ship.GameplayInputBlocked, "Physical H opens secured choices");
             GetViewport().PushInput(new InputEventKey { Keycode = Key.Escape, Pressed = true }, true);
             Check(!ui.IsOpen && !ship.GameplayInputBlocked, "Escape defers and releases input");
+            ui.SetOpen(true); storage = hub.StoredAntimatter; tracker.Refresh(); beforeTotal = tracker.TotalAntimatter;
+            Check(ui.Select(3) && ship.Boons.Pending.Count == 1 && hub.StoredAntimatter == storage,
+                "Reject is only a selection until confirmed");
+            Check(ui.Confirm() && !ui.IsOpen && ship.Boons.Pending.Count == 0, "Confirmed rejection closes without a second UI");
+            tracker.Refresh(); Check(tracker.TotalAntimatter == beforeTotal + 30, "Confirmed rejection grants the exact antimatter reward including overflow");
+            Check(!ui.SetOpen(true), "H cannot open an empty follow-up summary");
+            ship.Boons.SecureOffer(random, 30);
             ui.SetOpen(true); hub.ApplyDamage(1000);
             Check(!ui.Skip() && !ui.Choose(0) && ship.Boons.Pending.Count == 1, "Terminal base destruction rejects unresolved choice/bonus without consuming it");
             ui._Process(0);

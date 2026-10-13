@@ -32,6 +32,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public float DisengagementRadius { get; set; } = 85;
     [Export] public float HabitatLeashRadius { get; set; } = 120;
     [Export] public float PatrolRadius { get; set; } = 12;
+    [Export] public int WanderSeed { get; set; }
     [Export] public float AttackRadius { get; set; } = 2.0f;
     [Export] public float RangedMinDistance { get; set; } = 6.0f;
     [Export] public float RangedMaxDistance { get; set; } = 24.0f;
@@ -127,7 +128,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
                 if (RetaliationRadius == 65) RetaliationRadius = Mathf.Clamp(_arena.PlanetRadius * 0.2f, 65, 100);
                 if (DisengagementRadius == 85) DisengagementRadius = Mathf.Clamp(_arena.PlanetRadius * 0.25f, 85, 125);
                 if (HabitatLeashRadius == 120) HabitatLeashRadius = Mathf.Clamp(_arena.PlanetRadius * 0.3f, 100, 150);
-                if (PatrolRadius == 12) PatrolRadius = Mathf.Clamp(_arena.PlanetRadius * 0.04f, 6, 12);
+                if (PatrolRadius == 12) PatrolRadius = Mathf.Clamp(_arena.PlanetRadius * 0.09f, 14, 36);
             }
             Territory = new NeutralTerritory(this, _arena, HabitatPosition ?? GlobalPosition);
         }

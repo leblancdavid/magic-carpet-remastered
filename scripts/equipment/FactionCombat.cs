@@ -33,6 +33,7 @@ public static class FactionCombat
 
     public static void Damage(Node3D target, int damage, Node3D? attacker)
     {
+        int before = HealthOf(target);
         switch (target)
         {
             case ShipFlightController ship: ship.ApplyDamage(damage, attacker); break;
@@ -41,5 +42,17 @@ public static class FactionCombat
             case FactionBase hub: hub.ApplyDamage(damage); break;
             case CollectorDrone drone: drone.ApplyDamage(damage); break;
         }
+        if (damage > 0 && before > HealthOf(target) && GodotObject.IsInstanceValid(attacker) && attacker is ShipFlightController pilot)
+            pilot.RecordCombatDamage();
     }
+
+    private static int HealthOf(Node3D target) => target switch
+    {
+        ShipFlightController ship => ship.Health,
+        EnemyEcosystemEnemy enemy => enemy.Health,
+        SimpleMonster monster => monster.Health,
+        FactionBase hub => hub.Health,
+        CollectorDrone drone => drone.Health,
+        _ => 0
+    };
 }

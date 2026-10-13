@@ -96,12 +96,24 @@ public partial class ShipFlightController : CharacterBody3D
     [Export] public float TerrainEquipmentDepth { get; set; } = 5.0f;
     [Export] public float TerrainEquipmentHeight { get; set; } = 4.0f;
     [Export] public float DamageInvulnerabilitySeconds { get; set; } = 1.0f;
+    [Export] public float HealthRecoveryDelaySeconds { get; set; } = 5;
+    [Export] public float HealthRecoveryPerSecond { get; set; } = 2;
+    private float _combatRecoveryRemaining;
+    private float _healthRecoveryAccumulator;
+    private float _hitFeedbackRemaining;
+    public float HitFeedbackStrength => Mathf.Clamp(_hitFeedbackRemaining / 0.28f, 0, 1);
+
+    public void RecordCombatDamage()
+    {
+        _combatRecoveryRemaining = HealthRecoveryDelaySeconds;
+        _healthRecoveryAccumulator = 0;
+    }
     [Export] public float TerrainFollowMaxLiftSpeed { get; set; } = 10.0f;
     [Export] public int InitialEnergy { get; set; } = 40;
     [Export] public float EnergyRegenFractionPerSecond { get; set; } = 0.04f;
     [Export] public int EnergyDepositReserve { get; set; } = 20;
     [Export] public float EnergyDepositRadius { get; set; } = 6.0f;
-    [Export] public int PrimaryEquipmentEnergyCost { get; set; } = 5;
+    [Export] public int PrimaryEquipmentEnergyCost { get; set; } = 2;
     [Export] public int TerrainEquipmentEnergyCost { get; set; } = 0;
     [Export] public int AreaEquipmentEnergyCost { get; set; } = 18;
     [Export] public float AreaEquipmentCooldownSeconds { get; set; } = 2.5f;
@@ -245,7 +257,7 @@ public string SummonEquipmentName => _summonEquipment?.RankedName ?? "Guardian D
     public string DiscoveryFeedbackMessage => _discoveryFeedbackTimer > 0 ? _discoveryFeedback : string.Empty;
     public string EquipmentProgressionText => string.Join("\n", new[] { _primaryEquipment, _areaEquipment, _shieldEquipment, _mobilityEquipment, _summonEquipment }
         .Select(equipment => $"{equipment.DisplayName} — owned {GetOwnedEquipmentRank(equipment.Id)}/3 · installed {(IsEquipmentInstalled(equipment.Id) ? equipment.Rank : 0)}"));
-    public int PlasmaBoltDamage => Mathf.RoundToInt((25 + 10 * Mathf.Max(0, GetEquipmentRank("plasma-bolt") - 1)) * Boons.Multiplier("energy-damage"));
+    public int PlasmaBoltDamage => Mathf.RoundToInt((13 + 5 * Mathf.Max(0, GetEquipmentRank("plasma-bolt") - 1)) * Boons.Multiplier("energy-damage"));
     public int EffectiveAreaDamage => Mathf.RoundToInt(AreaEquipmentDamage * (1 + 0.25f * Mathf.Max(0, GetEquipmentRank("pulse-burst") - 1)) * Boons.Multiplier("explosive-damage"));
     public float EffectiveAreaRadius => AreaEquipmentRadius * (1 + 0.25f * Mathf.Max(0, GetEquipmentRank("pulse-burst") - 1));
     public float EffectiveShieldDuration => ShieldDurationSeconds + 2 * Mathf.Max(0, GetEquipmentRank("energy-shield") - 1);
@@ -434,8 +446,15 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
 
     public override void _PhysicsProcess(double delta)
     {
-        if (Health <= 0 || GetTree().Paused) return;
+        if (GetTree().Paused || !double.IsFinite(delta) || delta < 0) return;
         float deltaF = (float)delta;
+        _hitFeedbackRemaining = Mathf.Max(0, _hitFeedbackRemaining - deltaF);
+        if (Health <= 0)
+        {
+            if (IsPlayerControlled) { _camera.HOffset = 0; _camera.VOffset = 0; }
+            return;
+        }
+        RecoverHealth(deltaF);
         _discoveryFeedbackTimer = Mathf.Max(0, _discoveryFeedbackTimer - deltaF);
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
         _areaEquipmentCooldown = Mathf.Max(0.0f, _areaEquipmentCooldown - deltaF);
@@ -567,6 +586,18 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         return spent;
     }
 
+    private void RecoverHealth(float delta)
+    {
+        float healingTime = Mathf.Max(0, delta - _combatRecoveryRemaining);
+        _combatRecoveryRemaining = Mathf.Max(0, _combatRecoveryRemaining - delta);
+        if (Health >= MaximumHealth || HealthRecoveryPerSecond <= 0)
+        { _healthRecoveryAccumulator = 0; return; }
+        _healthRecoveryAccumulator += healingTime * HealthRecoveryPerSecond;
+        int restored = Mathf.FloorToInt(_healthRecoveryAccumulator);
+        _healthRecoveryAccumulator -= restored;
+        Health = Mathf.Min(MaximumHealth, Health + restored);
+    }
+
     private void RegenerateEnergy(float delta)
     {
         if (Energy >= EnergyCapacity || EnergyCapacity <= 0 || EnergyRegenFractionPerSecond <= 0.0f)
@@ -595,6 +626,8 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
 
         int finalAmount = IsShielded ? Mathf.Max(1, Mathf.RoundToInt(amount * (1.0f - ShieldDamageReduction))) : amount;
         Health = Mathf.Max(0, Health - finalAmount);
+        RecordCombatDamage();
+        _hitFeedbackRemaining = IsPlayerControlled ? 0.28f : 0;
         LastAttacker = IsInstanceValid(attacker) ? attacker : null;
         StatusMessage = IsShielded ? $"Shield absorbed {amount - finalAmount}" : $"Hit for {finalAmount}";
         _feedbackTimer = 0.35f;
@@ -620,6 +653,8 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
     {
         GlobalPosition = position;
         Health = MaximumHealth;
+        _combatRecoveryRemaining = _healthRecoveryAccumulator = _hitFeedbackRemaining = 0;
+        if (IsPlayerControlled) { _camera.HOffset = 0; _camera.VOffset = 0; }
         RefreshBaseEnergyLimit();
         Energy = EnergyCapacity;
         Velocity = Vector3.Zero;
@@ -1119,7 +1154,7 @@ private void CycleQuickEquipment()
                 continue;
             }
 
-            enemy.ApplyDamage(damage, this);
+            FactionCombat.Damage(enemy, damage, this);
             hits++;
         }
 
@@ -1130,7 +1165,7 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
                 continue;
             }
 
-            monster.ApplyDamage(damage);
+            FactionCombat.Damage(monster, damage, this);
             hits++;
         }
 
@@ -1141,13 +1176,13 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
                 continue;
             }
 
-            drone.ApplyDamage(damage);
+            FactionCombat.Damage(drone, damage, this);
             hits++;
         }
 
         foreach (Node node in GetTree().GetNodesInGroup("pilots"))
             if (node is ShipFlightController ship && FactionCombat.CanDamage(ship, Ownership) && ship.GlobalPosition.DistanceTo(center) <= radius)
-            { ship.ApplyDamage(damage, this); hits++; }
+            { FactionCombat.Damage(ship, damage, this); hits++; }
 
         return hits;
     }
@@ -1186,6 +1221,10 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
             return;
         }
         _shipVisual.Visible = !_firstPersonCamera;
+        float shake = HitFeedbackStrength;
+        float phase = (0.28f - _hitFeedbackRemaining) * 95;
+        _camera.HOffset = Mathf.Sin(phase) * 0.085f * shake;
+        _camera.VOffset = Mathf.Sin(phase * 1.37f) * 0.055f * shake;
         Vector3 targetPosition = _firstPersonCamera
             ? new Vector3(0.0f, 0.25f, -0.45f)
             : new Vector3(0.0f, 2.1f, Mathf.Lerp(7.2f, 9.4f, Mathf.Clamp(Speed / MoveSpeed, 0.0f, 1.0f)));

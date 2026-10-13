@@ -35,6 +35,7 @@ public partial class Hud : CanvasLayer
     private LevelObjective? _levelObjective;
     private PanelContainer _resultPanel = null!;
     private Label _result = null!;
+    private ColorRect _hitShade = null!;
 
     public override void _Ready()
     {
@@ -42,6 +43,9 @@ public partial class Hud : CanvasLayer
         _root = root;
         AddChild(root);
         root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+
+        _hitShade = new ColorRect { Name = "HitShade", Color = Colors.Transparent, MouseFilter = Control.MouseFilterEnum.Ignore };
+        root.AddChild(_hitShade); _hitShade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
         BuildVitals(root);
         _equipmentBar = new EquipmentBar(); root.AddChild(_equipmentBar);
@@ -139,6 +143,9 @@ public partial class Hud : CanvasLayer
 
     public override void _Process(double delta)
     {
+        _player ??= GetTree().GetFirstNodeInGroup("player") as ShipFlightController;
+        float hit = _player?.HitFeedbackStrength ?? 0;
+        _hitShade.Color = new Color(0.01f, 0.005f, 0.015f, hit * 0.28f);
         _refreshTimer -= (float)delta;
         if (_refreshTimer > 0)
         {
@@ -195,11 +202,9 @@ public partial class Hud : CanvasLayer
         _mapAction.Visible = GetTree().GetFirstNodeInGroup("tactical_map_ui") != null;
         _mapAction.TooltipText = "World survey / waypoint. Gameplay stays live.";
         _boonAction.Text = _player.Boons.Pending.Count > 0 ? $"H  Boons {_player.Boons.Pending.Count}" : "H  Boons";
-        _boonAction.TooltipText = "Secured choices and permanent match bonuses. Gameplay stays live.";
+        _boonAction.TooltipText = "Select and confirm a secured boon or reject it for antimatter. Gameplay stays live. F3 shows collected bonuses.";
         _equipmentBar.Refresh(); LayoutHud();
-        _feedback.Text = _player.Health <= 0 ? $"Pilot down · respawn {_levelObjective?.PlayerRespawnRemaining:0.0}s"
-            : !string.IsNullOrEmpty(_player.DiscoveryFeedbackMessage) ? _player.DiscoveryFeedbackMessage
-            : !string.IsNullOrEmpty(_enemyEcosystem?.RaidFeedbackMessage) ? _enemyEcosystem!.RaidFeedbackMessage : _player.ActiveFeedbackMessage;
+        _feedback.Text = _player.Health <= 0 ? $"Pilot down · respawn {_levelObjective?.PlayerRespawnRemaining:0.0}s" : string.Empty;
         _feedbackPanel.Visible = !_resultPanel.Visible && !livePanel && !string.IsNullOrEmpty(_feedback.Text);
 
         if (!_debugPanel.Visible)
@@ -212,7 +217,7 @@ public partial class Hud : CanvasLayer
             + $"Storage-backed energy limit: {_player.EnergyCapacity}\nRecharge: {_player.EnergyRechargePerSecond:0.0}/s\nAntimatter collection: collector drone delivery\n{_player.ShieldStatusText}\n\n"
             + Section("EQUIPMENT / MATCH BOONS")
             + _player.EquipmentProgressionText + "\nB researches ranks; install explicitly at home.\n"
-            + $"H choices / summary · {_player.Boons.Pending.Count} secured rewards\n{_player.Boons.Summary}\n"
+            + $"H pending choices · {_player.Boons.Pending.Count} secured rewards\nCollected bonuses:\n{_player.Boons.Summary}\n"
             + "Destroy wrecks; fly within 4 surface units to secure gold salvage.\nBoons survive respawn/tier loss; R resets them.\n\n"
             + Section("ANTIMATTER ECONOMY")
             + (_antimatterTracker == null ? "Tracker unavailable\n" : $"World total: {_antimatterTracker.TotalAntimatter}\nNeutral loose: {_antimatterTracker.NeutralLooseAntimatter}\nNeutral creatures: {_antimatterTracker.NeutralCreatureAntimatter}\nPlayer: {_antimatterTracker.PlayerControlledAntimatter}\nRival: {_antimatterTracker.EnemyControlledAntimatter}\n")
@@ -254,25 +259,26 @@ public partial class Hud : CanvasLayer
     private void LayoutHud()
     {
         if (_actions == null) return;
-        Place(_equipmentBar, Control.LayoutPreset.BottomRight, new Vector2(-588, -186), new Vector2(380, 144));
-        Place(_vitalBars, Control.LayoutPreset.BottomRight, new Vector2(-828, -186), new Vector2(224, 144));
-        Place(_actions, Control.LayoutPreset.BottomRight, new Vector2(-588, -36), new Vector2(380, 28));
-        Place(_baseHealthPanel, Control.LayoutPreset.BottomRight, new Vector2(-192, -38), new Vector2(176, 30));
-        Place(_capturePanel, Control.LayoutPreset.BottomRight, new Vector2(-588, -264), new Vector2(380, 66));
-        Place(_feedbackPanel, Control.LayoutPreset.BottomRight, new Vector2(-588, -322), new Vector2(380, 46));
+        Place(_equipmentBar, Control.LayoutPreset.CenterBottom, new Vector2(FlightHudLayout.WeaponsLeft, -186), new Vector2(380, 144));
+        Place(_vitalBars, Control.LayoutPreset.CenterBottom, new Vector2(FlightHudLayout.Left, -186), new Vector2(112, 144));
+        Place(_actions, Control.LayoutPreset.CenterBottom, new Vector2(FlightHudLayout.WeaponsLeft, -36), new Vector2(380, 28));
+        Place(_baseHealthPanel, Control.LayoutPreset.CenterBottom, new Vector2(FlightHudLayout.RadarLeft, -38), new Vector2(176, 30));
+        Place(_capturePanel, Control.LayoutPreset.CenterBottom, new Vector2(FlightHudLayout.WeaponsLeft, -264), new Vector2(380, 66));
+        Place(_feedbackPanel, Control.LayoutPreset.CenterBottom, new Vector2(FlightHudLayout.WeaponsLeft, -322), new Vector2(380, 46));
     }
 
     private void BuildVitals(Control root)
     {
         _vitalBars = new HBoxContainer { Name = "VitalBars", MouseFilter = Control.MouseFilterEnum.Ignore };
-        _vitalBars.AddThemeConstantOverride("separation", 8); root.AddChild(_vitalBars);
+        _vitalBars.AddThemeConstantOverride("separation", 5); root.AddChild(_vitalBars);
         string[] titles = { "HP", "Energy", "Antimatter" };
+        string[] captions = { "H", "E", "A" };
         Color[] colors = { new(0.2f, 0.8f, 0.3f), new(0.15f, 0.5f, 1), new(1, 0.65f, 0.15f) };
         for (int i = 0; i < 3; i++)
         {
-            var column = new VBoxContainer { CustomMinimumSize = new Vector2(68, 0), MouseFilter = Control.MouseFilterEnum.Ignore };
+            var column = new VBoxContainer { CustomMinimumSize = new Vector2(34, 0), SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Ignore };
             _vitalBars.AddChild(column);
-            _gaugeValues[i] = CreateLabel("0/0", 11); _gaugeValues[i].HorizontalAlignment = HorizontalAlignment.Center;
+            _gaugeValues[i] = CreateLabel("0", 11); _gaugeValues[i].HorizontalAlignment = HorizontalAlignment.Center;
             column.AddChild(_gaugeValues[i]);
             var center = new CenterContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill }; column.AddChild(center);
             _gauges[i] = new ProgressBar { Name = $"{titles[i]}Gauge", FillMode = (int)ProgressBar.FillModeEnum.BottomToTop,
@@ -281,14 +287,14 @@ public partial class Hud : CanvasLayer
             var fill = UiTile.Frame(colors[i], Colors.Transparent, 0);
             _gauges[i].AddThemeStyleboxOverride("fill", fill);
             if (i == 0) _healthFill = fill; else fill.Dispose();
-            var caption = CreateLabel(titles[i], 11); caption.HorizontalAlignment = HorizontalAlignment.Center; column.AddChild(caption);
+            var caption = CreateLabel(captions[i], 11); caption.HorizontalAlignment = HorizontalAlignment.Center; column.AddChild(caption);
         }
     }
 
     private void RefreshGauge(int index, int value, int maximum)
     {
         _gauges[index].MaxValue = Mathf.Max(1, maximum); _gauges[index].Value = value;
-        _gaugeValues[index].Text = $"{value}/{maximum}";
+        _gaugeValues[index].Text = $"{value}";
     }
     public override void _ExitTree() => _healthFill?.Dispose();
 

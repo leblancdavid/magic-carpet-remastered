@@ -11,7 +11,7 @@ public partial class WeaponProjectile : Area3D
     [Export] public float LifetimeSeconds { get; set; } = 2.0f;
     [Export] public float TerrainCraterRadius { get; set; } = 4.5f;
     [Export] public float TerrainCraterDepth { get; set; } = 2.2f;
-    [Export] public int Damage { get; set; } = 25;
+    [Export] public int Damage { get; set; } = 13;
 
     private Vector3 _direction = Vector3.Forward;
     private ShipFlightController? _owner;
@@ -86,7 +86,7 @@ public partial class WeaponProjectile : Area3D
 
             if (GlobalPosition.DistanceTo(drone.GlobalPosition) <= stepDistance + 0.6f)
             {
-                drone.ApplyDamage(Damage);
+                FactionCombat.Damage(drone, Damage, IsInstanceValid(_owner) ? _owner : null);
                 SpawnImpactBurst();
                 QueueFree();
                 return;

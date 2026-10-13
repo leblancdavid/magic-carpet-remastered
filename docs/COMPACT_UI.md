@@ -2,9 +2,10 @@
 
 Redesigned from user playtest feedback, 2026-10-12. See `PLAYTEST_SIMPLIFICATION.md` for approved economy/density/UI rules and `PROGRESS_LOG.md` for verification. Hands-on readability remains iterative.
 
-- A bottom-right grouped 4×1 equipment bar shows number, original glyph, short name/rank, selected outline, cooldown overlay and energy-unavailable state. Cursor-visible slot clicks select only and suppress held combat until release.
-- Three vertical gauges immediately left of weapons show HP/energy/antimatter with current/max numbers. Health changes green/yellow/red at 50%/25%; energy is blue and storage amber. Basic controls/B/M/H sit below weapons; F3 is on demand.
-- A bottom-right radar has home-base HP beneath it. Persistent corner vitals/objective/planet-size hints are removed. Capture and important action/reward/raid/respawn feedback remain contextual.
+- The entire bottom HUD is centered: compact gauges left, 4×1 equipment bar middle, radar/base HP right, controls/B/M/H beneath weapons. `FlightHudLayout` shares offsets between native controls and the drawn radar. Cursor-visible slot clicks select only and suppress held combat until release.
+- Three narrow vertical gauges show current values only, with **H/E/A** placeholders beneath. Health changes green/yellow/red at 50%/25%; energy is blue and storage amber. Gauge fills retain their real maxima.
+- Capture and respawn have dedicated contextual displays. Routine action/reward/pickup/raid toast messages are removed. Actual health hits briefly darken the world behind readable HUD controls and shake either camera mode for 0.28s.
+- H presents three short boon choices, selectable Reject and Confirm. Selection highlights without applying; confirmation consumes one reward and closes. H/Esc defers, further offers wait for H, and there is no empty/second summary panel. Full effects/stacks remain in tooltips/F3.
 - Management shows resources, surviving tier and a base upgrade/rebuild button above four tabs: Offense, Defense, Resources, Ship. Five backend slots remain concurrent, represented by progress on their buttons and tab titles.
 - Ship research and equipment selection share one view. Click owned equipment tiles to toggle at home, up to four items with row-order keys; pending equipped ranks have explicit Apply actions. Preserve selected item identity and scroll state.
 - Use original procedural line glyphs and consistent normal/hover/selected/disabled styling. No imported art is required. Tooltip width is bounded and small viewports use fewer grid columns/scrolling.

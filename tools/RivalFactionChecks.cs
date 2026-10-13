@@ -58,7 +58,7 @@ public partial class RivalFactionChecks : Node3D
                 int energy = rival.Energy;
                 rival.SetAutonomousControls(Vector3.Zero, player.GlobalPosition - rival.AimOrigin);
                 Check(rival.TryActivateEquipmentSlot(0) && rival.Energy == energy - player.PrimaryEquipmentEnergyCost, "AI weapon pays the same current-energy cost");
-                Check(!rival.TryActivateEquipmentSlot(0) && rival.Energy == energy - 5, "AI cannot bypass primary cooldown");
+                Check(!rival.TryActivateEquipmentSlot(0) && rival.Energy == energy - 2, "AI cannot bypass primary cooldown");
                 var shot = room.GetChildren().OfType<WeaponProjectile>().Single(); shot.SetPhysicsProcess(false);
                 int enemyHp = enemy.Health; Invoke(shot, "OnBodyEntered", enemy);
                 Check(enemy.Health == enemyHp, "AI projectile cannot damage its own base"); shot.Free();
@@ -66,7 +66,7 @@ public partial class RivalFactionChecks : Node3D
                 Check(rival.TryActivateEquipmentSlot(0), "Cooldown expiry permits the next paid shot");
                 shot = room.GetChildren().OfType<WeaponProjectile>().Single(); shot.SetPhysicsProcess(false); int hp = player.Health;
                 Invoke(shot, "OnBodyEntered", player);
-                Check(player.Health == hp - rival.PlasmaBoltDamage && rival.Energy == energy - 5, "Shared rival plasma damages the human ship"); shot.Free();
+                Check(player.Health == hp - rival.PlasmaBoltDamage && rival.Energy == energy - 2, "Shared rival plasma damages the human ship"); shot.Free();
                 GetTree().Paused = true; energy = rival.Energy;
                 Check(!rival.TryActivateEquipmentSlot(0) && !rival.TryActivateClaim() && !rival.TryActivateBooster() && rival.Energy == energy, "Pause rejects all AI activations without payment");
                 GetTree().Paused = false;

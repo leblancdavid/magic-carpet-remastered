@@ -80,7 +80,7 @@ public partial class TacticalMapCanvas : Control
 
     private void DrawRadar()
     {
-        Vector2 origin = new(Size.X - 192, Size.Y - 222);
+        Vector2 origin = FlightHudLayout.RadarOrigin(Size);
         DrawRect(new Rect2(origin, new Vector2(176, 176)), PanelColor);
         Vector2 center = origin + new Vector2(88, 88);
         const float radius = 72;
