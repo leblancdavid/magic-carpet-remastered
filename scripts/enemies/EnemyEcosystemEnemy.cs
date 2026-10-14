@@ -102,7 +102,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         ConfigureForRole();
         if (IsHeavy && Role == EnemyRole.GroundBeast)
         {
-            Health = 150; ContactDamage = 18; MoveSpeed = 4.8f;
+            Health = 175; ContactDamage = 26; MoveSpeed = 4.8f;
             AttackRadius = 3.2f; GroundClearance = 1.3f;
             foreach (Node child in GetChildren()) if (child is Node3D body) body.Scale *= 1.7f;
         }
@@ -236,25 +236,25 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             case EnemyRole.FlyingSwarm:
                 MoveSpeed = 11.0f;
                 Health = 16;
-                ContactDamage = 5;
+                ContactDamage = 8;
                 AttackRadius = 1.6f;
                 OrbitalRadius = 7.0f;
                 break;
             case EnemyRole.GroundBeast:
                 MoveSpeed = 6.0f;
-                Health = 42;
-                ContactDamage = 10;
+                Health = 50;
+                ContactDamage = 15;
                 AttackRadius = 2.2f;
                 GroundClearance = 0.8f;
                 break;
             case EnemyRole.RangedCaster:
                 MoveSpeed = 7.5f;
-                Health = 28;
-                ContactDamage = 4;
-                RangedDamage = 10;
+                Health = 32;
+                ContactDamage = 6;
+                RangedDamage = 14;
                 RangedMinDistance = 2.5f;
                 RangedMaxDistance = 40.0f;
-                RangedAttackCooldownSeconds = 1.4f;
+                RangedAttackCooldownSeconds = 1.2f;
                 RangedWindupSeconds = 0.15f;
                 break;
             case EnemyRole.BaseAttacker:
@@ -951,8 +951,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         return Role switch
         {
             EnemyRole.FlyingSwarm => 16,
-            EnemyRole.GroundBeast => 42,
-            EnemyRole.RangedCaster => 28,
+            EnemyRole.GroundBeast => IsHeavy ? 175 : 50,
+            EnemyRole.RangedCaster => 32,
             EnemyRole.BaseAttacker => 34,
             EnemyRole.AntimatterThief => 22,
             EnemyRole.RivalShip => 36,

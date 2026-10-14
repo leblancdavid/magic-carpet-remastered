@@ -217,6 +217,11 @@ public partial class CompactUiChecks : Node3D
                             "Tier row columns remain aligned inside management bounds");
                     }
                 }
+                tabs.CurrentTab = 2; ((ScrollContainer)tabs.GetChild(2)).ScrollVertical = 0; await Frames(2);
+                Check(Find<GridContainer>(tabs.GetChild(2), "TierGrid_2").Columns == 4
+                    && Find<UiTile>(ui, "Order_harvester-drone").TooltipText.Contains("Collectors haul"),
+                    "Harvester fits the four-column Resources-II row and explains physical hauling");
+                if (DisplayServer.GetName() != "headless") await Capture($"HarvesterUi{size.X}.png");
                 tabs.CurrentTab = 3; ((ScrollContainer)tabs.GetChild(3)).ScrollVertical = 0; await Frames(2);
                 Check(Find<UiTile>(ui, "Order_particle-beam").Disabled && Find<UiTile>(ui, "Order_particle-beam").TooltipText.Contains("not yet playable"),
                     "Future content is visibly pending and cannot take payment");

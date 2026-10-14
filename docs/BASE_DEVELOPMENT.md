@@ -1,23 +1,29 @@
 # Base Development
 
+**Latest 2026-10-14 tuning:** `ECONOMY_COMBAT_PLAYTEST.md` supersedes older numbers below: **300/500/750/1000/1500** capacity; next-tier cost half current nominal capacity (**150/250/375/500 A**); **80-A** collectors with 120/160/200 cargo stars; **0.35-A/s** extractors with +20/40/60% optimization; stronger attackers and a Resources-II **Harvester** automatic fleet for mob kills/physical claiming. Catalog **68 types / 27 playable**. Half-price rebuilding, exact refunds/siege and storage-backed energy remain. Medium balance is pending human acceptance.
+
+## Automatic Fleets — 2026-10-14
+
+`AUTOMATIC_FLEETS_PLAYTEST.md` supersedes paid production/target-dropdown rules below. Scout/Attack/Defensive/Strike/Siphon research now grants automatic units with free independent 10s replacements (Strike 20s). Gold unlocks paid extra fleet slots, provisionally capped at five/type. Targets spread automatically; Siphons physically steal enemy base storage. The catalog is **67 types / 24 playable**. Ordinary five-slot AM research/expansion payments, exact refunds and siege/rebuilding remain. Ship Guardian stays manual.
+
 ## Latest Logistics / Defense Stage — 2026-10-13
 
 Collectors carry **30 A internally**, take partial spheres and have no object-count cap or visible hanging cargo. `WorldAntimatterTracker` counts this cargo independently. Station theft changes the cargo faction with its drone. Match home fleets provide **one collector per surviving tier**, replacing losses after 15s; tier-loss extras deliver before retirement. Logistics collectors are additional. Storage-full cargo is retained without loss.
 
 Each base has a basic **30m / 6-damage / 1.2s** retaliatory pulse weapon: actual attacker identity, opposing faction/liveness, eight-second attack memory, range and line of sight; no AM/current-energy spending. Peaceful neutrals are not hunted. Ordinary neutrals damage bases they contact, preserving local habitats.
 
-**Latest tree/order stage:** `UPGRADE_TREE_PLAN.md` is authoritative for the 65-type catalog, its **22 playable types**, star pricing and staged remaining content. B now uses tier rows in all four tabs; each tile purchases its next sequential star. Remote ship plans auto-install at home, without Apply buttons. Offense means base capabilities; Ship contains personal equipment/passives. Scout/attack/defensive units and strikes have separate paid target-dropdown production orders. Non-playable entries cannot accept payment. Early passive effects derive from owned star records, not repeated mutation of base tuning.
+**Latest tree/fleet stage:** `UPGRADE_TREE_PLAN.md` and `AUTOMATIC_FLEETS_PLAYTEST.md` describe the **67-type catalog / 24 playable types**, star pricing and remaining content. B uses tier rows in all four tabs; each tile purchases its next sequential star. Remote ship plans auto-install at home, without Apply buttons. Base unit research grants automatic fleets; gold unlocks extra-slot purchases. Non-playable entries cannot accept payment. Passive effects derive from owned star records, not repeated mutation of base tuning.
 
 ## Current Rules — 2026-10-12 Playtest Simplification
 
 **Antimatter is the sole resource; matter has been removed.** Current authoritative tuning and UI are in `PLAYTEST_SIMPLIFICATION.md`. The older foundation notes below retain implementation history and are superseded wherever they describe matter, old prices/capacities/HP or the previous five-tab management layout.
 
-- Capacities: **200/350/550/800/1100**. Tier II–V cost **150/275/450/650 A**, taking **60/80/100/120s** before station bonuses. Start at tier I with 30 antimatter; aim for economy-focused Medium tier V in **10–15 minutes**, pending hands-on validation.
-- Each layer has **400 HP**. Plasma deals 20% base damage, keeping its normal mob/ship damage. Strike drones deal 120 once for 100 A/20s.
+- Capacities: **300/500/750/1000/1500**. Tier II–V cost half the preceding tier's nominal capacity: **150/250/375/500 A**, taking **60/80/100/120s**. Start at I with 30 A; economy-focused Medium tier V in **10–15 minutes** remains a human-playtest target. These values supersede the 2026-10-12 tuning.
+- Each layer has **400 HP**. Plasma deals 20% base damage, keeping its normal mob/ship damage. Strike drones deal 120/160/200 once; research grants automatic 20s production/replacement without per-unit payment.
 - Bronze Repair/Collector drive/Claim Calibration cost **40 A / 30s**; Ship Energy Grid **70 A / 40s / tier II**. Sequential stars follow `UPGRADE_TREE_PLAN.md`. Equipment pricing is in `SHIP_EQUIPMENT.md`.
 - Five backend project slots pay antimatter immediately, support exact full-refund cancellation with owned overflow, destroy all active investments on tier loss with floor-half neutral spill/remainder loss, and rebuild previously purchased tiers sequentially at rounded-up half price.
 - Storage damage still scales the top layer's incremental capacity; passive repair cannot recover destroyed tiers or resources. Energy limit equals retained antimatter, recharging at 4%/s before modifiers; delivery does not directly refill energy.
-- Eight economic sites now include four 0.2-A/s extractors. Collectors haul antimatter only. No material storage/payment/refund/siege ledger remains.
+- Eight economic sites include four **0.35-A/s** extractors before +20/40/60% optimization. Collectors haul AM only, **80 A** baseline or **120/160/200** with cargo stars. No material storage/payment/refund/siege ledger remains.
 - B shows resources and one base advancement/rebuild button above **Offense / Defense / Resources / Ship**. Each tier row has three base/four ship types; progress/cancel overlay tiles, metal-colored stars indicate completed research. Equipment buttons select a remote four-slot plan; home proximity applies it and newest ranks automatically. Ship passives require no slot/installation. The panel remains real time and owns ship input.
 
 ## Historical Foundation Notes

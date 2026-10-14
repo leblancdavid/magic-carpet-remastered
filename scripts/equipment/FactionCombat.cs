@@ -16,6 +16,7 @@ public static class FactionCombat
         BaseTacticalDrone drone => drone.Ownership,
         BaseStrikeDrone drone => drone.IsPlayerOwned ? AntimatterOwnership.Player : AntimatterOwnership.Enemy,
         GuardianDrone drone => drone.Ownership,
+        SeekerMissile missile => missile.Ownership,
         _ => AntimatterOwnership.Neutral
     };
 
@@ -32,6 +33,7 @@ public static class FactionCombat
             BaseTacticalDrone drone => drone.Health > 0,
             BaseStrikeDrone drone => drone.Health > 0,
             GuardianDrone drone => drone.Health > 0,
+            SeekerMissile missile => missile.Health > 0,
             _ => false
         };
         return alive && (OwnershipOf(target) == AntimatterOwnership.Neutral || OwnershipOf(target) != attacker);
@@ -50,6 +52,7 @@ public static class FactionCombat
             case BaseTacticalDrone drone: drone.ApplyDamage(damage); break;
             case BaseStrikeDrone drone: drone.ApplyDamage(damage); break;
             case GuardianDrone drone: drone.ApplyDamage(damage); break;
+            case SeekerMissile missile: missile.ApplyDamage(damage); break;
         }
         if (damage > 0 && before > HealthOf(target) && GodotObject.IsInstanceValid(attacker) && attacker is ShipFlightController pilot)
             pilot.RecordCombatDamage();
@@ -65,6 +68,7 @@ public static class FactionCombat
         BaseTacticalDrone drone => drone.Health,
         BaseStrikeDrone drone => drone.Health,
         GuardianDrone drone => drone.Health,
+        SeekerMissile missile => missile.Health,
         _ => 0
     };
 }

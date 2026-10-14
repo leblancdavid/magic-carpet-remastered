@@ -27,7 +27,7 @@ public partial class LogisticsDefenseChecks : Node3D
             var room = new Node3D(); AddChild(room);
             var home = new FactionBase { InitialStoredAntimatter = 0 }; room.AddChild(home); home.SetPhysicsProcess(false);
             home.GetNode<BaseDefense>("BaseDefense").SetPhysicsProcess(false);
-            var drone = new CollectorDrone(); room.AddChild(drone); drone.SetPhysicsProcess(false);
+            var drone = new CollectorDrone { CarryCapacity = 30 }; room.AddChild(drone); drone.SetPhysicsProcess(false);
             var tracker = new WorldAntimatterTracker(); room.AddChild(tracker); tracker.SetPhysicsProcess(false);
             for (int i = 0; i < 12; i++)
             {

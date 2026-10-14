@@ -89,6 +89,13 @@ public partial class WorldAntimatterTracker : Node
             else EnemyControlledAntimatter += drone.CarriedAntimatter;
         }
 
+        foreach (Node node in GetTree().GetNodesInGroup("base_tactical_drone"))
+            if (node is BaseTacticalDrone drone && !drone.IsQueuedForDeletion())
+            {
+                if (drone.Ownership == AntimatterOwnership.Player) PlayerControlledAntimatter += drone.CarriedAntimatter;
+                else EnemyControlledAntimatter += drone.CarriedAntimatter;
+            }
+
         foreach (Node node in GetTree().GetNodesInGroup("player_base"))
         {
             if (node is FactionBase hub)

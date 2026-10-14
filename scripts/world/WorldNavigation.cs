@@ -179,7 +179,7 @@ public partial class WorldNavigation : Node
         foreach (string group in new[] { "base_tactical_drone", "base_strike_drone", "guardian-drone" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
                 if (node is Node3D drone && !drone.IsQueuedForDeletion() && Nearby(drone))
-                    Add(drone, drone is BaseTacticalDrone tactical ? $"{tactical.Role} drone · {tactical.Health} HP"
+                    Add(drone, drone is BaseTacticalDrone tactical ? $"{tactical.Role} drone · {tactical.Health} HP" + (tactical.Role == BaseTacticalDrone.DroneRole.Siphon ? $" · {tactical.CarriedAntimatter} A cargo" : "")
                         : drone is BaseStrikeDrone ? "Strike drone" : "Guardian drone",
                         MapMarkerKind.Drone, Equipment.FactionCombat.OwnershipOf(drone) == AntimatterOwnership.Player ? Colors.Cyan : Colors.OrangeRed);
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
@@ -192,10 +192,22 @@ public partial class WorldNavigation : Node
 
     private bool Nearby(Node3D actor) => Arena.SurfaceDistance(Player.GlobalPosition, actor.GlobalPosition) <= LocalRevealRange;
 
+    public bool HasLineOfSight(Node3D actor)
+    {
+        if (!Nearby(actor)) return false;
+        using var ray = PhysicsRayQueryParameters3D.Create(Player.AimOrigin, actor.GlobalPosition);
+        ray.Exclude = new Godot.Collections.Array<Rid> { Player.GetRid() };
+        // The first physical obstruction must be the rival (or there must be no obstruction).
+        using var hit = Player.GetWorld3D().DirectSpaceState.IntersectRay(ray);
+        return hit.Count == 0 || hit["collider"].AsGodotObject() == actor;
+    }
+
     public bool CanDisplay(MapMarker marker)
     {
         if (!marker.TryGetLiveUp(Arena, out Vector3 up)) return false;
         if (marker.Kind == MapMarkerKind.Player || marker.Kind == MapMarkerKind.Home) return true;
+        if (marker.Actor is ShipFlightController { IsPlayerControlled: false } rival) return HasLineOfSight(rival);
+        if (marker.Actor is EnemyEcosystemEnemy { Role: EnemyEcosystemEnemy.EnemyRole.RivalShip } legacy) return HasLineOfSight(legacy);
         if (marker.Actor is StrategicPoint point)
             return point.Ownership == AntimatterOwnership.Player || Nearby(point);
         if (marker.Kind == MapMarkerKind.RivalBase) return true;

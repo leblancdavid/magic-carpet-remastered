@@ -17,6 +17,11 @@ public partial class UiIcon : Control
         void Ring(float radius) => DrawArc(new Vector2(16, 16), radius, 0, Mathf.Tau, 32, Ink, 2, true);
         switch (_id)
         {
+            case "teleport-home": Ring(12); Line(7, 17, 16, 9); Line(16, 9, 25, 17); DrawRect(new Rect2(11, 17, 10, 9), Ink, false, 2); break;
+            case "siphon-drone": Ring(8); Line(3, 16, 12, 16); Line(20, 16, 29, 16); Line(24, 11, 29, 16); Line(24, 21, 29, 16); break;
+            case "harvester-drone": Ring(5); Line(3, 5, 16, 27); Line(16, 27, 29, 5); Line(5, 28, 27, 28); break;
+            case "scatter-cannon": Line(4, 16, 14, 16); Line(14, 16, 27, 5); Line(14, 16, 29, 16); Line(14, 16, 27, 27); break;
+            case "seeker-missile": Ring(12); Line(7, 25, 23, 9); Line(23, 9, 23, 18); Line(14, 9, 23, 9); break;
             case "plasma-bolt": Ring(5); Line(4, 16, 11, 16); Line(21, 16, 28, 16); Line(22, 10, 28, 16); Line(22, 22, 28, 16); break;
             case "pulse-burst":
                 Ring(7); for (int i = 0; i < 8; i++) { Vector2 v = Vector2.Right.Rotated(i * Mathf.Tau / 8); DrawLine(new Vector2(16, 16) + v * 10, new Vector2(16, 16) + v * 14, Ink, 2, true); } break;
@@ -52,5 +57,6 @@ public partial class UiIcon : Control
     }
     public static string ShortName(string id) => id switch
     { "plasma-bolt" => "Plasma", "pulse-burst" => "Burst", "energy-shield" => "Shield", "dash" => "Dash", "guardian-drone" => "Guardian",
-        "repair-matrix" => "Repair matrix", "energy-grid" => "Energy grid", "collector-drive" => "Collector drive", "claim-range" => "Claim range", "strike-drone" => "Strike drone", _ => id };
+        "scatter-cannon" => "Scatter", "seeker-missile" => "Seeker",
+        "repair-matrix" => "Repair matrix", "energy-grid" => "Energy grid", "collector-drive" => "Collector drive", "claim-range" => "Claim magnetism", "strike-drone" => "Strike drone", _ => id };
 }

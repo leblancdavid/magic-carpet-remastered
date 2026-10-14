@@ -15,8 +15,8 @@ public partial class EnemyEcosystemDirector : Node
     [Export] public int GenerationSeed { get; set; }
     private readonly RandomNumberGenerator _random = new();
     public override void _ExitTree() => _random.Dispose();
-    [Export] public float SpawnIntervalSeconds { get; set; } = 8;
-    [Export] public float ReplenishDelaySeconds { get; set; } = 35;
+    [Export] public float SpawnIntervalSeconds { get; set; } = 6;
+    [Export] public float ReplenishDelaySeconds { get; set; } = 25;
     [Export] public int MaxActiveEnemies { get; set; } = 24;
     [Export] public int InitialWaveCount { get; set; } = 24;
     [Export] public int MaximumPerHabitat { get; set; } = 10;
@@ -42,7 +42,9 @@ public partial class EnemyEcosystemDirector : Node
     public float EffectiveBaseExclusion => _arena?.IsSpherical == true ? BaseExclusionDistance : FlatBaseExclusionDistance;
     public string RaidFeedbackMessage => _feedbackRemaining > 0 ? _raidFeedback : string.Empty;
     public string StatusText => $"Ecosystem: {_activeByRole[0]} swarms, {_activeByRole[1]} beasts, {_activeByRole[2]} casters, {_activeByRole[4]} scavengers, {_activeRaiderCount} raiders, {_activeByRole[5]} pilots\n"
-        + $"Local habitats · raids {(RaidsEnabled ? $"next check {_raidTimer:0}s · {SpawnedRaids} launched" : "disabled")}";
+        + $"Habitats: {_habitats.Count} · owned/suppressed {_ownedHabitats.Count} · recovering {_replenishTimers.Count(pair => pair.Value > 0 && !_ownedHabitats.Contains(pair.Key))} · ship-blocked {ShipBlockedHabitatCount}\n"
+        + $"Wild recovery {ReplenishDelaySeconds:0}s / {SpawnIntervalSeconds:0}s replacements · raids {(RaidsEnabled ? $"next check {_raidTimer:0}s · {SpawnedRaids} launched" : "disabled")}";
+    public int ShipBlockedHabitatCount { get; private set; }
 
     private HeightmapArena? _arena;
     private readonly List<Habitat> _habitats = new();
@@ -70,7 +72,7 @@ public partial class EnemyEcosystemDirector : Node
         if (UseFixedSeed) _random.Seed = unchecked((ulong)GenerationSeed); else _random.Randomize();
         if (_arena.IsSpherical)
         {
-            int population = _arena.PlanetRadius <= 200 ? 96 : _arena.PlanetRadius <= 300 ? 180 : _arena.PlanetRadius <= 400 ? 300 : 450;
+            int population = _arena.PlanetRadius <= 200 ? 72 : _arena.PlanetRadius <= 300 ? 135 : _arena.PlanetRadius <= 400 ? 225 : 338;
             if (MaxActiveEnemies == 24) MaxActiveEnemies = population;
             if (InitialWaveCount == 24) InitialWaveCount = population;
             if (MaxFlyingSwarms == 12) MaxFlyingSwarms = population * 3 / 4;
@@ -171,6 +173,8 @@ public partial class EnemyEcosystemDirector : Node
         if (_populationClock < 0.5f) return;
         elapsed = _populationClock; _populationClock = 0;
         RefreshCounts();
+        ShipBlockedHabitatCount = 0;
+        var livingShips = GetTree().GetNodesInGroup("pilots").OfType<Node3D>().Where(NeutralTerritory.IsLivingPilot).ToArray();
         foreach (var habitat in _habitats)
         {
             int count = HabitatPopulation(habitat);
@@ -187,13 +191,19 @@ public partial class EnemyEcosystemDirector : Node
                 _lastPopulation[habitat.Id] = count;
                 continue;
             }
-            if (_lastPopulation.GetValueOrDefault(habitat.Id) > count)
+            // Start recovery at the first vacancy. Further wild kills must not
+            // continually postpone it; site guards retain their loss-reset policy.
+            if (_lastPopulation.GetValueOrDefault(habitat.Id) > count
+                && (habitat.Site != null || _lastPopulation.GetValueOrDefault(habitat.Id) >= _populationTargets.GetValueOrDefault(habitat.Id)))
                 _replenishTimers[habitat.Id] = Mathf.Max(0, ReplenishDelaySeconds);
             float remaining = _replenishTimers.GetValueOrDefault(habitat.Id);
             _replenishTimers[habitat.Id] = Mathf.Max(0, remaining - elapsed);
+            bool shipBlocked = count < _populationTargets.GetValueOrDefault(habitat.Id)
+                && livingShips.Any(ship => _arena.SurfaceDistance(ship.GlobalPosition, habitat.Position) < 64);
+            if (shipBlocked) ShipBlockedHabitatCount++;
             if (_replenishTimers[habitat.Id] <= 0 && count < _populationTargets.GetValueOrDefault(habitat.Id))
             {
-                TrySpawnNeutral(habitat);
+                if (!shipBlocked) TrySpawnNeutral(habitat);
                 // Failed/capped placements are bounded retries, not 64 new
                 // terrain probes per habitat on every physics frame.
                 _replenishTimers[habitat.Id] = Mathf.Max(1, SpawnIntervalSeconds);

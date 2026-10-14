@@ -272,7 +272,7 @@ public partial class AntimatterLoopChecks : Node3D
         tracker.Refresh();
         Check(hub.Tier == 1 && hub.StoredAntimatter == 20 && player.EnergyCapacity == 20 && player.Energy == 20, "Payment immediately lowers limit/clamps energy without demotion");
         Check(tracker.TotalAntimatter == 20 && tracker.SpentAntimatter == 100, "Intentional expenditure is a separate sink, never physical world antimatter");
-        Check(hub.TryCompleteTierUpgrade(2) && hub.AntimatterStorageCapacity == 350, "Sequential explicit completion raises live capacity");
+        Check(hub.TryCompleteTierUpgrade(2) && hub.AntimatterStorageCapacity == 500, "Sequential explicit completion raises live capacity");
         Check(!hub.TryCompleteTierUpgrade(2) && hub.StoredAntimatter == 20 && player.EnergyCapacity == 20, "Duplicate completion rejected and completion never refunds investment");
         player.SpendEnergy(10);
         Check(hub.DepositAntimatter(100) == 100 && player.EnergyCapacity == 120 && player.Energy == 10, "Delivery raises limit without current-energy refill");
@@ -280,13 +280,13 @@ public partial class AntimatterLoopChecks : Node3D
         Check(player.Energy == 14, "Recharge is configurable fraction of retained storage");
         hub.ApplyDamage(70);
         hub._PhysicsProcess(100);
-        Check(hub.Tier == 2 && hub.AntimatterStorageCapacity == 350, "Legacy HP repair cannot advance explicit tiers");
+        Check(hub.Tier == 2 && hub.AntimatterStorageCapacity == 500, "Legacy HP repair cannot advance explicit tiers");
         for (int tier = 3; tier <= FactionBase.MaximumTier; tier++)
             Check(hub.TryCompleteTierUpgrade(tier), "Foundation supports all five sequential tiers");
-        Check(hub.AntimatterStorageCapacity == 1100 && !hub.TryCompleteTierUpgrade(6), "Tier five is maximum with no separate energy power cap");
-        hub.DepositAntimatter(1100);
-        Check(player.EnergyCapacity == 1100 && hub.Tier == 5, "Storage-backed energy can exceed legacy 400 cap");
-        hub.TrySpendAntimatter(1100);
+        Check(hub.AntimatterStorageCapacity == 1500 && !hub.TryCompleteTierUpgrade(6), "Tier five is maximum with no separate energy power cap");
+        hub.DepositAntimatter(10000);
+        Check(player.EnergyCapacity == 1500 && hub.Tier == 5, "Storage-backed energy can exceed legacy 400 cap");
+        hub.TrySpendAntimatter(1500);
         Invoke(player, "RegenerateEnergy", 100.0f);
         player.RespawnAt(player.GlobalPosition);
         Check(player.EnergyCapacity == 0 && player.Energy == 0 && hub.Tier == 5, "Empty storage prevents recharge/respawn allowance without losing tier");
@@ -443,7 +443,7 @@ public partial class AntimatterLoopChecks : Node3D
         bolt._PhysicsProcess(0.02);
         Check(Mathf.Abs(bolt.GlobalPosition.Y - 2 - bolt.SurfaceClearance) < 0.001f, "Bolt skims water rather than submerged terrain");
 
-        var hub = AddActor(new FactionBase { InitialStoredAntimatter = 200 });
+        var hub = AddActor(new FactionBase { InitialStoredAntimatter = 300 });
         var player = AddActor(new ShipFlightController());
         Check(hub.AvailableStorage == 0, "Claim casting fixture has full storage");
         Check(InputMap.ActionHasEvent("activate_claim", new InputEventMouseButton { ButtonIndex = MouseButton.Right }), "RMB binds claim");

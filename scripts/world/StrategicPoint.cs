@@ -13,7 +13,7 @@ public partial class StrategicPoint : Node3D
     [Export] public float CaptureRadius { get; set; } = 18;
     [Export] public double CaptureSeconds { get; set; } = 10;
     [Export] public double CaptureDecayMultiplier { get; set; } = 0.5;
-    [Export] public double IncomePerSecond { get; set; } = 0.2;
+    [Export] public double IncomePerSecond { get; set; } = 0.35;
     [Export] public double ResearchBonus { get; set; } = 0.25;
     public AntimatterOwnership Ownership { get; private set; }
     public AntimatterOwnership Claimant { get; private set; }
@@ -27,7 +27,7 @@ public partial class StrategicPoint : Node3D
     public CollectorDrone? Drone { get; private set; }
     public string BenefitText => Role switch
     {
-        StrategicPointRole.Extractor => $"+{IncomePerSecond:0.#} antimatter/s (room permitting)",
+        StrategicPointRole.Extractor => $"+{IncomePerSecond * (1 + 0.2 * (BaseFor(Ownership)?.Construction.UpgradeRank("extractor-optimization", true) ?? 0)):0.##} antimatter/s (room permitting)",
         StrategicPointRole.Research => $"+{ResearchBonus * 100:0}% project speed",
         _ => Drone == null ? "Collector activates on first capture" : GodotObject.IsInstanceValid(Drone) && !Drone.IsQueuedForDeletion()
             ? $"Station drone{(Drone.StationSuspended ? " · suspended" : "")} · {Drone.CarriedAntimatter} A cargo" : "Station drone destroyed"
@@ -143,7 +143,7 @@ public partial class StrategicPoint : Node3D
         int available = hub.AvailableStorage;
         if (available == 0) { _incomeFraction = 0; return; }
         double accrued = _incomeFraction + delta * Math.Max(0, IncomePerSecond)
-            * (1 + 0.1 * hub.Construction.UpgradeRank("extractor-optimization", true));
+            * (1 + 0.2 * hub.Construction.UpgradeRank("extractor-optimization", true));
         int request = (int)Math.Min(available, Math.Floor(accrued));
         GeneratedAntimatter += hub.DepositAntimatter(request);
         _incomeFraction = hub.AvailableStorage == 0 ? 0 : accrued - Math.Floor(accrued);

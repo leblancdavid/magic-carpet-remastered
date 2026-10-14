@@ -32,14 +32,15 @@ public partial class UpgradeTreeChecks : Node3D
             var game = GD.Load<PackedScene>("res://scenes/PlanetGame.tscn").Instantiate<MagicCarpetRemastered.Scripts.Game.Game>(); AddChild(game);
             foreach (Node node in game.GetChildren()) { node.SetPhysicsProcess(false); if (node is not CanvasLayer) node.SetProcess(false); }
             var home = game.GetNode<FactionBase>("PlayerBase"); var rival = game.GetNode<FactionBase>("EnemyBase");
+            home.Fleet.SetPhysicsProcess(false); rival.Fleet.SetPhysicsProcess(false);
             home.GetNode<BaseDefense>("BaseDefense").SetPhysicsProcess(false); rival.GetNode<BaseDefense>("BaseDefense").SetPhysicsProcess(false);
             var ship = game.GetNode<ShipFlightController>("PlayerShip"); var arena = game.GetNode<HeightmapArena>("HeightmapArena");
             var navigation = game.GetNode<WorldNavigation>("WorldNavigation");
             var ui = game.GetNode<BaseManagement>("BaseManagement");
             await Frames(2);
-            Check(UpgradeCatalog.Items.Count == 65 && UpgradeCatalog.Items.Select(item => item.Id).Distinct().Count() == 65, "65 unique approved upgrade types");
+            Check(UpgradeCatalog.Items.Count == 68 && UpgradeCatalog.Items.Select(item => item.Id).Distinct().Count() == 68, "68 unique upgrade types including Harvester");
             foreach (var slot in new[] { ConstructionSlot.Offense, ConstructionSlot.Defense, ConstructionSlot.Resources, ConstructionSlot.Ship })
-                for (int tier = 1; tier <= 5; tier++) Check(UpgradeCatalog.Items.Count(item => item.Slot == slot && item.Tier == tier) == (slot == ConstructionSlot.Ship ? 4 : 3), "Each category preserves its tier-row shape");
+                for (int tier = 1; tier <= 5; tier++) Check(UpgradeCatalog.Items.Count(item => item.Slot == slot && item.Tier == tier) == (slot == ConstructionSlot.Ship ? 4 : 3) + (tier == 2 && slot is ConstructionSlot.Ship or ConstructionSlot.Offense or ConstructionSlot.Resources ? 1 : 0), "Tier rows include new researched abilities");
             Check(!home.Construction.TryStart(UpgradeCatalog.ProjectId("repair-matrix", 2), out _), "Cannot skip the first star");
             Check(!home.Construction.TryStart(UpgradeCatalog.ProjectId("particle-cannon", 1), out _), "Pending content cannot take payment");
             for (int rank = 1; rank <= 3; rank++) Research(home, "repair-matrix", rank);
@@ -73,48 +74,20 @@ public partial class UpgradeTreeChecks : Node3D
             Check(Mathf.IsEqualApprox(home.EnergyRechargeMultiplier, 1.15f), "Ship passive is effective remotely without occupying a slot");
             Research(home, "cargo-compression", 1); Research(home, "collector-drive", 1); Research(home, "scoop-array", 1);
             var collector = game.GetChildren().OfType<CollectorDrone>().First(drone => drone.UsePlayerAntimatter);
-            Check(collector.EffectiveCarryCapacity == 40 && collector.EffectiveScoopRadius > collector.ScoopRadius && home.CollectorSpeedMultiplier == 1.15f,
+            Check(collector.EffectiveCarryCapacity == 120 && collector.EffectiveScoopRadius > collector.ScoopRadius && home.CollectorSpeedMultiplier == 1.15f,
                 "Resource stars alter actual collectors");
             Research(home, "scout-drone", 1); Research(home, "defensive-drone", 1); Research(home, "strike-drone", 1);
             stored = home.StoredAntimatter;
             Check(!home.Construction.TryStart("strike-drone", out _) && home.StoredAntimatter == stored, "Research tile cannot accidentally launch a paid strike");
-            ship.GlobalPosition = atHome; navigation.Refresh();
-            Check(!home.Construction.TryStartOrder("strike-drone", rival, out _) && home.StoredAntimatter == stored, "Hidden enemy base cannot appear as a payable target");
-            ship.GlobalPosition = arena.OnSurface(rival.GlobalPosition, 6); navigation.Refresh(); ship.GlobalPosition = atHome;
-            home.DepositAntimatter(10000); stored = home.StoredAntimatter;
-            Check(home.Construction.TryStartOrder("strike-drone", rival, out _) && home.StoredAntimatter == stored - 100, "Discovered enemy strike charges a separate production price");
-            var project = home.Construction.GetActive(ConstructionSlot.Offense)!;
-            Check(ReferenceEquals(project.OrderedTarget, rival) && project.Definition.UpgradeId == null, "Production stores its selected target separately from permanent research");
-            home.Construction.Advance(20);
+            home.Fleet._PhysicsProcess(0.01); home.Fleet._PhysicsProcess(20);
             var strike = game.GetChildren().OfType<BaseStrikeDrone>().Single(); strike.SetPhysicsProcess(false);
-            Check(strike.Target == rival && strike.Damage == 120 && strike.Health == 30, "Production launches the researched interceptable strike at its actual target");
-            FactionCombat.Damage(strike, 1000, ship); Check(strike.IsQueuedForDeletion(), "Ships can intercept deployed strikes");
-            Check(ui.SetOpen(true) && ui.OpenTargetOrder("scout-drone"), "Scout dropdown opens in live management");
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            var dropdown = (OptionButton)ui.FindChild("OrderTargets", true, false);
-            Check(dropdown.ItemCount > 1, "Scout dropdown offers automatic and discovered explicit destinations");
-            dropdown.GetPopup().EmitSignal(PopupMenu.SignalName.IndexPressed, 1);
-            Check(dropdown.Selected == 1, "Native dropdown selection updates the explicit target choice");
-            dropdown.GetPopup().EmitSignal(PopupMenu.SignalName.IndexPressed, 0);
-            long spentBeforeDialog = home.SpentAntimatter;
-            var background = (Button)ui.FindChild("Order_attack-drone", true, false);
-            Vector2 blocked = background.GetGlobalRect().GetCenter();
-            GetViewport().PushInput(new InputEventMouseButton { Position = blocked, GlobalPosition = blocked, ButtonIndex = MouseButton.Left, Pressed = true }, true);
-            GetViewport().PushInput(new InputEventMouseButton { Position = blocked, GlobalPosition = blocked, ButtonIndex = MouseButton.Left, Pressed = false }, true);
-            Check(home.SpentAntimatter == spentBeforeDialog && home.Construction.GetActive(ConstructionSlot.Offense) == null,
-                "Target dialog backdrop blocks background research clicks without payment");
-            if (DisplayServer.GetName() != "headless")
-            {
-                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-                await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
-                using var image = GetViewport().GetTexture().GetImage();
-                Check(image.SavePng("C:/Users/lblan/AppData/Local/Temp/opencode/UpgradeTargetOrder.png") == Error.Ok, "Save rendered paid-target dropdown");
-            }
-            Check(ui.ConfirmTargetOrder(), "Automatic nearest scout order can be confirmed"); home.Construction.Advance(10);
-            var scout = game.GetChildren().OfType<BaseTacticalDrone>().Single(); scout.SetPhysicsProcess(false);
+            Check(strike.Target == rival && strike.Damage == 120 && strike.Health == 30, "Automatic production launches an interceptable researched strike");
+            FactionCombat.Damage(strike, 1000, ship); Check(strike.IsQueuedForDeletion(), "Ships can intercept automatic strikes");
+            Check(ui.SetOpen(true) && !ui.OpenTargetOrder("scout-drone"), "Automatic fleets have no manual target dropdown");
+            var scout = game.GetChildren().OfType<BaseTacticalDrone>().Single(drone => drone.Role == BaseTacticalDrone.DroneRole.Scout); scout.SetPhysicsProcess(false);
             Check(scout.Role == BaseTacticalDrone.DroneRole.Scout && scout.Target is StrategicPoint { Ownership: not AntimatterOwnership.Player }, "Scout immediately targets the nearest non-owned point");
             var site = (StrategicPoint)scout.Target!; site.Advance(100, true, false);
-            scout._PhysicsProcess(0); Check(scout.Target != site, "Scout retargets after its point becomes friendly");
+            home.Fleet._PhysicsProcess(1); Check(scout.Target != site, "Fleet retargets scout after its point becomes friendly");
             site.Advance(20, false, true); // Enemy-owned point must also be eligible.
             scout.GlobalPosition = arena.OnSurface(site.GlobalPosition, 5); scout.Target = site; ship.GlobalPosition = atHome;
             var rivalShip = game.GetNode<ShipFlightController>("RivalPilot"); rivalShip.GlobalPosition = arena.OnSurface(rival.GlobalPosition, 6);
@@ -126,21 +99,15 @@ public partial class UpgradeTreeChecks : Node3D
             site._PhysicsProcess(10); Check(site.IsContested && site.CaptureProgress == 0, "Opposing capture drones freeze progress");
             opposing.QueueFree(); await Frames(2); site._PhysicsProcess(20);
             Check(site.Ownership == AntimatterOwnership.Player && !site.PlayerPresent, "Scout completes capture without remote ship capture HUD");
-            home.DepositAntimatter(10000);
-            Check(home.Construction.TryStartOrder("launch-defensive-drone", site, out _), "Defender can target an owned point");
-            home.Construction.Advance(10);
             var defender = game.GetChildren().OfType<BaseTacticalDrone>().Single(drone => drone.Role == BaseTacticalDrone.DroneRole.Defender); defender.SetPhysicsProcess(false);
+            defender.Target = site;
             defender.GlobalPosition = arena.OnSurface(site.GlobalPosition, 5);
             site.Advance(20, false, true); defender._PhysicsProcess(1);
             Check(defender.Ownership == AntimatterOwnership.Player && arena.SurfaceDistance(defender.GlobalPosition, home.GlobalPosition) < arena.SurfaceDistance(site.GlobalPosition, home.GlobalPosition), "Site loss sends defender toward its original home without ownership transfer");
             defender.GlobalPosition = arena.OnSurface(home.GlobalPosition, 5); defender._PhysicsProcess(0);
             Check(!defender.IsQueuedForDeletion() && defender.Target == home, "Retreating defender stays to protect home instead of disappearing");
             stored = home.StoredAntimatter;
-            Check(!home.Construction.TryStartOrder("launch-defensive-drone", site, out _) && home.StoredAntimatter == stored, "Cannot deploy defenders to enemy points");
-            site.Advance(20, true, false); home.DepositAntimatter(10000); stored = home.StoredAntimatter;
-            Check(home.Construction.TryStartOrder("launch-defensive-drone", site, out _), "Start another paid site deployment");
-            project = home.Construction.GetActive(ConstructionSlot.Defense)!; site.Advance(20, false, true); home.Construction.Advance(10);
-            Check(project.State == ConstructionState.Cancelled && home.StoredAntimatter == stored, "Invalidated production target returns the exact payment once");
+            Check(!home.Construction.TryStartOrder("launch-defensive-drone", site, out _) && home.StoredAntimatter == stored, "Legacy paid deployment is unavailable");
             var hostileGuardian = new GuardianDrone { OwnerPilot = rivalShip, Position = scout.Position };
             game.AddChild(hostileGuardian); hostileGuardian.SetPhysicsProcess(false);
             int friendlyHp = scout.Health;
@@ -153,12 +120,11 @@ public partial class UpgradeTreeChecks : Node3D
             ui.SetOpen(false); ship.GlobalPosition = atHome; ship._PhysicsProcess(0);
             Check(ship.TryActivateClaim(), "Gold built-in Claim uses the normal paid action");
             var claim = game.GetChildren().OfType<ClaimProjectile>().Single(); claim.SetPhysicsProcess(false);
-            Check(claim.MaxRange == 210 && Mathf.IsEqualApprox(claim.HitRadius, 2.2f) && claim.LifetimeSeconds * claim.Speed >= claim.MaxRange,
-                "Gold Claim's range and width are real; lifetime does not truncate the upgraded range");
+            Check(claim.MaxRange == 120 && Mathf.IsEqualApprox(claim.HitRadius, 1.3f) && claim.LifetimeSeconds * claim.Speed >= claim.MaxRange,
+                "Gold magnetism research keeps Claim's baseline range and width");
             Research(rival, "scout-drone", 1); rival.DepositAntimatter(10000); int rivalStored = rival.StoredAntimatter;
-            Check(rival.Construction.TryStartOrder("launch-scout-drone", null, out _) && rival.StoredAntimatter == rivalStored - 25,
-                "Rival scout uses the same research, payment and automatic target order");
-            rival.Construction.Advance(10);
+            rival.Fleet._PhysicsProcess(10);
+            Check(rival.StoredAntimatter == rivalStored, "Rival automatic production costs time only");
             var rivalScout = game.GetChildren().OfType<BaseTacticalDrone>().Single(drone => drone.Home == rival && !drone.IsQueuedForDeletion());
             rivalScout.SetPhysicsProcess(false);
             Check(rivalScout.Target is StrategicPoint { Ownership: not AntimatterOwnership.Enemy }, "Rival scout chooses a point not owned by its own faction");

@@ -49,7 +49,8 @@ public partial class ShipFlightController : CharacterBody3D
     {
         "plasma-bolt" => _fireCooldown, "pulse-burst" => _areaEquipmentCooldown,
         "energy-shield" => _shieldEquipmentCooldown, "dash" => _mobilityEquipmentCooldown,
-        "guardian-drone" => _summonEquipmentCooldown, _ => 0
+        "guardian-drone" => _summonEquipmentCooldown, "scatter-cannon" => _scatterCooldown,
+        "seeker-missile" => _seekerCooldown, _ => 0
     };
 
     public bool TryActivateEquipmentSlot(int slot)
@@ -116,7 +117,7 @@ public partial class ShipFlightController : CharacterBody3D
     [Export] public float EnergyDepositRadius { get; set; } = 6.0f;
     [Export] public int PrimaryEquipmentEnergyCost { get; set; } = 2;
     [Export] public int TerrainEquipmentEnergyCost { get; set; } = 0;
-    [Export] public int AreaEquipmentEnergyCost { get; set; } = 18;
+    [Export] public int AreaEquipmentEnergyCost { get; set; } = 5;
     [Export] public float AreaEquipmentCooldownSeconds { get; set; } = 2.5f;
     [Export] public float AreaEquipmentRange { get; set; } = 70.0f;
     [Export] public float AreaEquipmentRadius { get; set; } = 8.0f;
@@ -248,7 +249,7 @@ public partial class ShipFlightController : CharacterBody3D
     }
     public float EnergyRechargePerSecond => EnergyCapacity * EnergyRegenFractionPerSecond
         * (IsInstanceValid(_homeBase) ? _homeBase!.EnergyRechargeMultiplier : 1) * Boons.Multiplier("recharge");
-    public float EffectiveClaimRange => 120 + 30 * (IsInstanceValid(_homeBase) ? _homeBase!.Construction.UpgradeRank("claim-range", true) : 0);
+    public float EffectiveClaimRange => 120;
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : _arena.Elevation(GlobalPosition) - _arena.HeightAt(GlobalPosition);
@@ -309,6 +310,7 @@ public string SummonEquipmentName => _summonEquipment?.RankedName ?? "Guardian D
     private Vector3 LocalUp => _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
     private float _pitch = -0.2f;
     private float _fireCooldown;
+    private float _scatterCooldown, _seekerCooldown;
     private float _areaEquipmentCooldown;
     private float _shieldEquipmentCooldown;
     private float _mobilityEquipmentCooldown;
@@ -324,6 +326,7 @@ private float _feedbackTimer;
     private bool _firstPersonCamera = true;
     private TerrainEquipmentMode _terrainEquipmentMode = TerrainEquipmentMode.Crater;
     private EquipmentDefinition _primaryEquipment = null!;
+    private EquipmentDefinition _scatterEquipment = null!, _seekerEquipment = null!;
     private EquipmentDefinition _areaEquipment = null!;
     private EquipmentDefinition _shieldEquipment = null!;
     private EquipmentDefinition _mobilityEquipment = null!;
@@ -343,6 +346,8 @@ private EquipmentDefinition _summonEquipment = null!;
     {
         "plasma-bolt" => _primaryEquipment,
         "pulse-burst" => _areaEquipment,
+        "scatter-cannon" => _scatterEquipment,
+        "seeker-missile" => _seekerEquipment,
         "energy-shield" => _shieldEquipment,
         "dash" => _mobilityEquipment,
         "guardian-drone" => _summonEquipment,
@@ -368,6 +373,8 @@ private EquipmentDefinition _summonEquipment = null!;
         RefreshBaseEnergyLimit();
         _primaryEquipment = new EquipmentDefinition("plasma-bolt", "Plasma Bolt", EquipmentKind.Projectile, PrimaryEquipmentEnergyCost, FireCooldownSeconds, "Fast projectile damage equipment.");
         _areaEquipment = new EquipmentDefinition("pulse-burst", "Pulse Burst", EquipmentKind.Projectile, AreaEquipmentEnergyCost, AreaEquipmentCooldownSeconds, "Area damage blast at the aimed point.");
+        _scatterEquipment = new EquipmentDefinition("scatter-cannon", "Scatter Cannon", EquipmentKind.Projectile, 5, 0.8f, "Seven close-range pellets; wide spread and short reach.");
+        _seekerEquipment = new EquipmentDefinition("seeker-missile", "Seeker Missile", EquipmentKind.Projectile, 7, 1.8f, "Shootable guided missile; lock a visible mobile enemy near the crosshair.");
         _shieldEquipment = new EquipmentDefinition("energy-shield", "Energy Shield", EquipmentKind.Defense, ShieldEquipmentEnergyCost, ShieldEquipmentCooldownSeconds, "Briefly reduces incoming damage.");
         _mobilityEquipment = new EquipmentDefinition("dash", "Dash", EquipmentKind.Mobility, MobilityEquipmentEnergyCost, MobilityEquipmentCooldownSeconds, "Dash quickly in the aimed direction.");
 _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", EquipmentKind.Summoning, SummonEquipmentEnergyCost, SummonEquipmentCooldownSeconds, "Summon a temporary ally that attacks nearby enemies.");
@@ -411,6 +418,10 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
     public override void _UnhandledInput(InputEvent @event)
     {
         if (!IsPlayerControlled || GameplayInputBlocked) return;
+        if (@event is InputEventKey { Pressed: true, Echo: false, PhysicalKeycode: Key.T })
+        {
+            TryActivateTeleport(); GetViewport().SetInputAsHandled(); return;
+        }
         if (@event.IsActionPressed("jump") && !@event.IsEcho())
         {
             if (Health > 0 && !GetTree().Paused)
@@ -470,9 +481,11 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
     {
         if (GetTree().Paused || !double.IsFinite(delta) || delta < 0) return;
         float deltaF = (float)delta;
+        _teleportCooldown = Mathf.Max(0, _teleportCooldown - deltaF);
         _hitFeedbackRemaining = Mathf.Max(0, _hitFeedbackRemaining - deltaF);
         if (Health <= 0)
         {
+            CancelTeleport();
             if (IsPlayerControlled) { _camera.HOffset = 0; _camera.VOffset = 0; }
             return;
         }
@@ -481,6 +494,8 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
         _discoveryFeedbackTimer = Mathf.Max(0, _discoveryFeedbackTimer - deltaF);
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
         _areaEquipmentCooldown = Mathf.Max(0.0f, _areaEquipmentCooldown - deltaF);
+        _scatterCooldown = Mathf.Max(0, _scatterCooldown - deltaF);
+        _seekerCooldown = Mathf.Max(0, _seekerCooldown - deltaF);
         _shieldEquipmentCooldown = Mathf.Max(0.0f, _shieldEquipmentCooldown - deltaF);
         _mobilityEquipmentCooldown = Mathf.Max(0.0f, _mobilityEquipmentCooldown - deltaF);
         _boosterCooldown = Mathf.Max(0, _boosterCooldown - deltaF);
@@ -524,6 +539,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         }
 
         Vector3 horizontalInput = new(localInput.X, 0.0f, localInput.Z);
+        if (AdvanceTeleport(deltaF, horizontalInput.LengthSquared() > 0.001f)) { UpdateCamera(deltaF); return; }
         if (horizontalInput.LengthSquared() > 1.0f)
         {
             horizontalInput = horizontalInput.Normalized();
@@ -606,6 +622,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
 
     public int SpendEnergy(int amount)
     {
+        CancelTeleport();
         if (amount <= 0)
         {
             return 0;
@@ -655,6 +672,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         }
 
         int finalAmount = IsShielded ? Mathf.Max(1, Mathf.RoundToInt(amount * (1.0f - ShieldDamageReduction))) : amount;
+        CancelTeleport();
         Health = Mathf.Max(0, Health - finalAmount);
         RecordCombatDamage();
         _hitFeedbackRemaining = IsPlayerControlled ? 0.28f : 0;
@@ -681,6 +699,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
 
     public void RespawnAt(Vector3 position)
     {
+        CancelTeleport();
         GlobalPosition = position;
         Health = MaximumHealth;
         _combatRecoveryRemaining = _healthRecoveryAccumulator = _hitFeedbackRemaining = 0;
@@ -697,6 +716,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         _boosterTimer = _boosterCooldown = 0;
         _energyRegenAccumulator = 0;
         _fireCooldown = _areaEquipmentCooldown = _shieldEquipmentCooldown = _mobilityEquipmentCooldown = _summonEquipmentCooldown = _claimCooldown = 0;
+        _scatterCooldown = _seekerCooldown = 0;
         _damageInvulnerabilityTimer = 2.0f;
         CollisionLayer = _aliveCollisionLayer;
         CollisionMask = _aliveCollisionMask;
@@ -734,6 +754,16 @@ private void CycleQuickEquipment()
         if (GetSelectedQuickEquipment() is not { } equipment) return;
         switch (equipment.Id)
         {
+            case "scatter-cannon":
+                if (_scatterCooldown > 0 || Energy < equipment.EnergyCost || !CanActivateEquipment(equipment)) return;
+                _scatterCooldown = equipment.CooldownSeconds;
+                CastScatterEquipment();
+                break;
+            case "seeker-missile":
+                if (_seekerCooldown > 0 || Energy < equipment.EnergyCost || !CanActivateEquipment(equipment)) return;
+                _seekerCooldown = equipment.CooldownSeconds;
+                CastSeekerEquipment();
+                break;
             case "plasma-bolt":
                 if (_fireCooldown > 0.0f)
                 {
@@ -818,9 +848,13 @@ private void CycleQuickEquipment()
         Vector3 direction = AimDirection;
         Vector3 origin = AimOrigin;
         Vector3 target = origin + direction * AreaEquipmentRange;
-        if (!TryFindTerrainHit(origin, target, out Vector3 hitPosition))
+        Vector3 hitPosition = target;
+        using (var ray = PhysicsRayQueryParameters3D.Create(origin, target))
         {
-            hitPosition = target;
+            ray.Exclude = new Godot.Collections.Array<Rid> { GetRid() };
+            using var hit = GetWorld3D().DirectSpaceState.IntersectRay(ray);
+            if (hit.Count > 0) hitPosition = (Vector3)hit["position"];
+            else if (TryFindTerrainHit(origin, target, out Vector3 terrainHit)) hitPosition = terrainHit;
         }
 
         SpendEnergy(_areaEquipment.EnergyCost);
@@ -967,7 +1001,7 @@ private void CycleQuickEquipment()
         SpendEnergy(_claimEquipment.EnergyCost);
         Vector3 direction = AimDirection;
         var projectile = new ClaimProjectile { Name = "ClaimProjectile", MaxRange = EffectiveClaimRange, Ownership = Ownership,
-            HitRadius = 1.3f + 0.3f * (IsInstanceValid(_homeBase) ? _homeBase!.Construction.UpgradeRank("claim-range", true) : 0),
+            HitRadius = 1.3f,
             LifetimeSeconds = Mathf.Max(4, EffectiveClaimRange / 48f + 0.05f) };
         projectile.AntimatterClaimed += OnAntimatterClaimed;
         GetParent().AddChild(projectile);
@@ -1219,7 +1253,7 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
         foreach (Node node in GetTree().GetNodesInGroup("pilots"))
             if (node is ShipFlightController ship && FactionCombat.CanDamage(ship, Ownership) && ship.GlobalPosition.DistanceTo(center) <= radius)
             { FactionCombat.Damage(ship, damage, this); hits++; }
-        foreach (string group in new[] { "base_tactical_drone", "base_strike_drone", "guardian-drone" })
+        foreach (string group in new[] { "base_tactical_drone", "base_strike_drone", "guardian-drone", "guided_projectile" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
                 if (node is Node3D unit && FactionCombat.CanDamage(unit, Ownership) && unit.GlobalPosition.DistanceTo(center) <= radius)
                 { FactionCombat.Damage(unit, damage, this); hits++; }

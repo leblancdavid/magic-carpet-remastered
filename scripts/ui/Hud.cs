@@ -204,7 +204,7 @@ public partial class Hud : CanvasLayer
         _boonAction.Text = _player.Boons.Pending.Count > 0 ? $"H  Boons {_player.Boons.Pending.Count}" : "H  Boons";
         _boonAction.TooltipText = "Select and confirm a secured boon or reject it for antimatter. Gameplay stays live. F3 shows collected bonuses.";
         _equipmentBar.Refresh(); LayoutHud();
-        _feedback.Text = _player.Health <= 0 ? $"Pilot down · respawn {_levelObjective?.PlayerRespawnRemaining:0.0}s" : string.Empty;
+        _feedback.Text = _player.Health <= 0 ? $"Pilot down · respawn {_levelObjective?.PlayerRespawnRemaining:0.0}s" : _player.TeleportStatus;
         _feedbackPanel.Visible = !_resultPanel.Visible && !livePanel && !string.IsNullOrEmpty(_feedback.Text);
 
         if (!_debugPanel.Visible)

@@ -16,7 +16,7 @@ public partial class CollectorDrone : Node3D
     [Export] public bool UsePlayerAntimatter { get; set; } = true;
     [Export] public float MoveSpeed { get; set; } = 10.0f;
     [Export] public float ScoopRadius { get; set; } = 2.2f;
-    [Export] public int CarryCapacity { get; set; } = 30;
+    [Export] public int CarryCapacity { get; set; } = 80;
     [Export] public float HomeRadius { get; set; } = 1.8f;
     [Export] public float MaxSeekRadius { get; set; } = 46.0f;
     [Export] public float DockDelaySeconds { get; set; } = 0.6f;
@@ -27,7 +27,7 @@ public partial class CollectorDrone : Node3D
     public bool StationSuspended { get; set; }
     public bool Retiring { get; set; }
     public int CarriedAntimatter { get; private set; }
-    public int EffectiveCarryCapacity => CarryCapacity + 10 * (_base?.Construction.UpgradeRank("cargo-compression", true) ?? 0);
+    public int EffectiveCarryCapacity => CarryCapacity + 40 * (_base?.Construction.UpgradeRank("cargo-compression", true) ?? 0);
     public float EffectiveScoopRadius => ScoopRadius * (1 + 0.25f * (_base?.Construction.UpgradeRank("scoop-array", true) ?? 0));
     public float EffectiveDockDelay => DockDelaySeconds * (1 - 0.2f * (_base?.Construction.UpgradeRank("dock-automation", true) ?? 0));
     // Legacy diagnostics use this only as an empty/loaded flag. Cargo is AM,

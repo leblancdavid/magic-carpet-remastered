@@ -1,5 +1,9 @@
 # Compact Pre-Playtest UI
 
+**Latest economy/combat UI — 2026-10-14:** Resources-II has four columns including Harvester research/automatic fleet status/expansion. Scatter/Seeker are payable equipable Ship-II items with original glyphs and concrete cost/effect tooltips. Seven owned items still share four active/planned slots. F3 includes habitat recovery/suppression/ship-blocking diagnostics. See `ECONOMY_COMBAT_PLAYTEST.md`; rendered grid bounds/captures are checked at 1280×720 and 960×540.
+
+**2026-10-14 override:** automatic fleet counts/clocks and post-gold +1 controls replace the paid drone dropdowns described below. Tier-II Offense/Ship rows expand to four/five columns for Siphon/Teleport. T-key Teleport shows readiness/channel/cooldown after research. Both maps use one-pixel mob/AM markers, role-specific drone glyphs and physical line-of-sight-gated rival pilots. See `AUTOMATIC_FLEETS_PLAYTEST.md`; `AutomaticFleetChecks` supplements updated grid/management/navigation regressions.
+
 Redesigned from user playtest feedback, 2026-10-12. See `PLAYTEST_SIMPLIFICATION.md` for approved economy/density/UI rules and `PROGRESS_LOG.md` for verification. Hands-on readability remains iterative.
 
 - The entire bottom HUD is centered: compact gauges left, 4×1 equipment bar middle, radar/base HP right, controls/B/M/H beneath weapons. `FlightHudLayout` shares offsets between native controls and the drawn radar. Cursor-visible slot clicks select only and suppress held combat until release.

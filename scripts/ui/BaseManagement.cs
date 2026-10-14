@@ -66,7 +66,7 @@ public partial class BaseManagement : CanvasLayer
             {
                 var row = new HBoxContainer { Name = $"TierRow_{tier}" }; row.AddThemeConstantOverride("separation", 8); tiers.AddChild(row);
                 var label = Text($"TIER\n{Rank(tier)}", 14); label.CustomMinimumSize = new Vector2(48, 0); row.AddChild(label);
-                var grid = new GridContainer { Name = $"TierGrid_{tier}", Columns = slot == ConstructionSlot.Ship ? 4 : 3,
+                var grid = new GridContainer { Name = $"TierGrid_{tier}", Columns = Math.Max(slot == ConstructionSlot.Ship ? 4 : 3, UpgradeCatalog.Items.Count(item => item.Slot == slot && item.Tier == tier)),
                     SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
                 grid.AddThemeConstantOverride("h_separation", 8); row.AddChild(grid);
                 foreach (var item in UpgradeCatalog.Items.Where(item => item.Slot == slot && item.Tier == tier))
@@ -85,12 +85,17 @@ public partial class BaseManagement : CanvasLayer
                     }
                     else if (item.Deployable)
                     {
-                        var launch = Button($"Launch_{item.Id}", "Deploy"); cell.AddChild(launch);
-                        _launchButtons.Add(item.Id, launch); launch.Pressed += () => OpenTargetOrder(item.Id);
+                        var launch = Button($"Launch_{item.Id}", "Deploy"); launch.ClipText = true; cell.AddChild(launch);
+                        _launchButtons.Add(item.Id, launch); launch.Pressed += () =>
+                        {
+                            if (AutomaticDroneFleet.Supports(item.Id))
+                                OrderProject(AutomaticDroneFleet.ExpansionId(item.Id, _base.Fleet.Entitlement(item.Id) + 1));
+                            else OpenTargetOrder(item.Id);
+                        };
                     }
                     else
                     {
-                        var passive = Text("Passive", 12); passive.HorizontalAlignment = HorizontalAlignment.Center; cell.AddChild(passive);
+                        var passive = Text(item.Id == "teleport-home" ? "Built-in · T" : "Passive", 12); passive.HorizontalAlignment = HorizontalAlignment.Center; cell.AddChild(passive);
                     }
                 }
             }
@@ -126,7 +131,7 @@ public partial class BaseManagement : CanvasLayer
     }
     public bool OpenTargetOrder(string capability)
     {
-        if (!CanIssueOrders || _orderPanel.Visible || UpgradeCatalog.Find(capability) is not { Deployable: true, Playable: true }) return false;
+        if (!CanIssueOrders || _orderPanel.Visible || AutomaticDroneFleet.Supports(capability) || UpgradeCatalog.Find(capability) is not { Deployable: true, Playable: true }) return false;
         _selectedOrder = BaseOrders.OrderId(capability); _targetActors.Clear(); _targets.Clear();
         foreach (var target in BaseOrders.Targets(_base, _selectedOrder))
         {
@@ -252,6 +257,24 @@ public partial class BaseManagement : CanvasLayer
             }
             if (_launchButtons.TryGetValue(item.Id, out var launch))
             {
+                if (AutomaticDroneFleet.Supports(item.Id))
+                {
+                    int count = _base.Fleet.Entitlement(item.Id);
+                    string expansion = AutomaticDroneFleet.ExpansionId(item.Id, count + 1);
+                    string expansionReason = count >= AutomaticDroneFleet.MaximumUnitsPerType ? "Fleet limit reached" : _base.Construction.GetStartReason(expansion);
+                    var expanding = active?.Definition.Id == expansion ? active : null;
+                    launch.Text = rank < 3 ? _base.Fleet.Status(item.Id) : count >= AutomaticDroneFleet.MaximumUnitsPerType
+                        ? $"Fleet {count}/{AutomaticDroneFleet.MaximumUnitsPerType}" : $"+1 drone · {UpgradeCatalog.Definition(item, 3).Cost * count} A";
+                    launch.Disabled = rank < 3 || expansionReason.Length > 0 || _orderPanel.Visible;
+                    launch.TooltipText = _base.Fleet.Status(item.Id) + "\nFree automatic replacements; independent production clocks.\n" + expansionReason;
+                    if (expanding != null)
+                    {
+                        tile.SetProject(expanding, item.Tier, false);
+                        tile.State.Text = $"Expanding fleet {expanding.Progress:P0}";
+                    }
+                    else if (rank > 0 && research == null) tile.State.Text = _base.Fleet.Status(item.Id);
+                    continue;
+                }
                 var order = _base.Construction.Catalog.FirstOrDefault(project => project.Id == BaseOrders.OrderId(item.Id));
                 string launchReason = order == null ? "Not yet playable" : _base.Construction.GetStartReason(order.Id);
                 string action = item.Id is "particle-cannon" or "rocket-battery" or "orbital-lance" or "electronic-warfare-array" ? "Fire"

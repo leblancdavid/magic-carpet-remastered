@@ -6,20 +6,21 @@ namespace MagicCarpetRemastered.Scripts.World;
 public partial class FactionBase : StaticBody3D
 {
     [Export] public bool IsPlayerBase { get; set; } = true;
-    [Export] public int Tier1StorageCapacity { get; set; } = 200;
-    [Export] public int Tier2StorageCapacity { get; set; } = 350;
-    [Export] public int Tier3StorageCapacity { get; set; } = 550;
-    [Export] public int Tier4StorageCapacity { get; set; } = 800;
-    [Export] public int Tier5StorageCapacity { get; set; } = 1100;
+    [Export] public int Tier1StorageCapacity { get; set; } = 300;
+    [Export] public int Tier2StorageCapacity { get; set; } = 500;
+    [Export] public int Tier3StorageCapacity { get; set; } = 750;
+    [Export] public int Tier4StorageCapacity { get; set; } = 1000;
+    [Export] public int Tier5StorageCapacity { get; set; } = 1500;
     [Export] public int InitialStoredAntimatter { get; set; } = 30;
     [Export] public int MaxHealth { get; set; } = 400;
     [Export] public float ScalePerTier { get; set; } = 0.18f;
     [Export] public float RepairDelaySeconds { get; set; } = 5.0f;
     [Export] public float RepairHealthPerSecond { get; set; } = 3.0f;
-    [Export] public int Tier2UpgradeCost { get; set; } = 150;
-    [Export] public int Tier3UpgradeCost { get; set; } = 275;
-    [Export] public int Tier4UpgradeCost { get; set; } = 450;
-    [Export] public int Tier5UpgradeCost { get; set; } = 650;
+    // Zero uses half the preceding nominal capacity; positive values are fixture/inspector overrides.
+    [Export] public int Tier2UpgradeCost { get; set; }
+    [Export] public int Tier3UpgradeCost { get; set; }
+    [Export] public int Tier4UpgradeCost { get; set; }
+    [Export] public int Tier5UpgradeCost { get; set; }
     [Export] public float Tier2UpgradeSeconds { get; set; } = 60;
     [Export] public float Tier3UpgradeSeconds { get; set; } = 80;
     [Export] public float Tier4UpgradeSeconds { get; set; } = 100;
@@ -31,9 +32,11 @@ public partial class FactionBase : StaticBody3D
     public int Tier { get; private set; } = 1;
     public int HighestPurchasedTier { get; private set; } = 1;
     public BaseConstruction Construction { get; private set; } = null!;
+    public AutomaticDroneFleet Fleet { get; private set; } = null!;
     public float EnergyRechargeMultiplier => 1 + 0.15f * Construction.UpgradeRank("energy-grid", true);
     public float CollectorSpeedMultiplier => 1 + 0.15f * Construction.UpgradeRank("collector-drive", true);
     public float EffectiveRepairHealthPerSecond => RepairHealthPerSecond * (1 + 0.25f * Construction.UpgradeRank("repair-matrix", true));
+    public void NotifyHostileAction(Node3D attacker) => _defense.NotifyAttack(attacker);
     public long RefundedAntimatter { get; private set; }
     public long InvestmentSpilledAntimatter { get; private set; }
     public long NetCommittedAntimatter => SpentAntimatter - RefundedAntimatter - InvestmentSpilledAntimatter;
@@ -72,6 +75,8 @@ public partial class FactionBase : StaticBody3D
         BuildBaseVisuals();
         _defense = new BaseDefense { Name = "BaseDefense" };
         AddChild(_defense);
+        Fleet = new AutomaticDroneFleet { Home = this, Name = "AutomaticFleet" };
+        AddChild(Fleet);
         UpdateEconomy();
     }
 
@@ -157,10 +162,12 @@ public partial class FactionBase : StaticBody3D
         return true;
     }
 
-    public int UpgradeCostForTier(int tier) => tier switch
+    public int UpgradeCostForTier(int tier)
     {
-        2 => Tier2UpgradeCost, 3 => Tier3UpgradeCost, 4 => Tier4UpgradeCost, 5 => Tier5UpgradeCost, _ => 0
-    };
+        if (tier < 2 || tier > MaximumTier) return 0;
+        int configured = tier switch { 2 => Tier2UpgradeCost, 3 => Tier3UpgradeCost, 4 => Tier4UpgradeCost, _ => Tier5UpgradeCost };
+        return configured > 0 ? configured : Mathf.Max(1, (StorageCapacityForTier(tier - 1) + 1) / 2);
+    }
 
     public double UpgradeSecondsForTier(int tier) => tier switch
     {

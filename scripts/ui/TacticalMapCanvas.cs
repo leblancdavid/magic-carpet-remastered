@@ -90,8 +90,10 @@ public partial class TacticalMapCanvas : Control
         DrawLine(center - Vector2.Right * radius, center + Vector2.Right * radius, LineColor.Darkened(0.4f));
         DrawLine(center - Vector2.Down * radius, center + Vector2.Down * radius, LineColor.Darkened(0.4f));
         Basis playerFrame = Navigation.Player.GlobalBasis;
+        for (int layer = 0; layer < 2; layer++)
         foreach (MapMarker marker in Navigation.Markers)
         {
+            if ((marker.Kind is MapMarkerKind.Antimatter or MapMarkerKind.Enemy ? 0 : 1) != layer) continue;
             if (marker.Kind == MapMarkerKind.Player || !Navigation.CanDisplay(marker)) continue;
             if (!marker.TryGetLiveUp(Navigation.Arena, out Vector3 up)) continue;
             Vector2 offset = MapProjection.LocalOffset(up, playerFrame, Navigation.Arena.PlanetRadius);
@@ -119,8 +121,10 @@ public partial class TacticalMapCanvas : Control
         MapMarker? hover = null;
         float nearest = 15 * 15;
         Vector2 mouse = GetLocalMousePosition();
+        for (int layer = 0; layer < 2; layer++)
         foreach (MapMarker marker in Navigation.Markers)
         {
+            if ((marker.Kind is MapMarkerKind.Antimatter or MapMarkerKind.Enemy ? 0 : 1) != layer) continue;
             if (!Navigation.CanDisplay(marker) || !marker.TryGetLiveUp(Navigation.Arena, out Vector3 up)) continue;
             Vector2 point = rect.Position + MapProjection.Project(up) * rect.Size;
             if (marker.Kind == MapMarkerKind.Player)
@@ -135,7 +139,7 @@ public partial class TacticalMapCanvas : Control
         }
         Cross(rect.Position + MapProjection.Project(Navigation.TargetUp) * rect.Size, Gold);
         float bottom = rect.End.Y + 26;
-        Text(new Vector2(rect.Position.X, bottom), "■ Base   □ Wreck   ◇ Landmark / drone   ● Mob: black · Antimatter: orange · Factions: cyan/red", new Color(0.8f, 0.87f, 0.95f), 14);
+        Text(new Vector2(rect.Position.X, bottom), "■ Base   □ Wreck   ◇ Landmark   Drones: role icons   · Mob: gray / AM: orange   Factions: cyan/red", new Color(0.8f, 0.87f, 0.95f), 14);
         Text(new Vector2(rect.Position.X, bottom + 27), $"Target: {Navigation.TargetName} · {Navigation.TargetDistance:0} m · {Navigation.BearingText()}", Gold, 16);
         Text(new Vector2(rect.Position.X, bottom + 53), hover != null ? Navigation.VisibleTitle(hover) : "Economic sites: ring/cross markers. Hover for role/owner/benefit. Remain in ring to capture; opposing pilots contest.", Colors.White, 14);
     }
@@ -152,11 +156,11 @@ public partial class TacticalMapCanvas : Control
         }
         else if (marker.Kind == MapMarkerKind.Wreck)
             DrawRect(new Rect2(point - Vector2.One * size, Vector2.One * size * 2), marker.Color, false, 1.5f);
-        else if (marker.Kind == MapMarkerKind.Antimatter || marker.Actor is MagicCarpetRemastered.Scripts.Enemies.EnemyEcosystemEnemy)
+        else if (marker.Kind == MapMarkerKind.Antimatter || marker.Actor is MagicCarpetRemastered.Scripts.Enemies.EnemyEcosystemEnemy { Role: not MagicCarpetRemastered.Scripts.Enemies.EnemyEcosystemEnemy.EnemyRole.RivalShip })
         {
-            if (marker.Color == Colors.Black) DrawCircle(point, size + 1, Colors.LightGray);
-            DrawCircle(point, size, marker.Color);
+            DrawRect(new Rect2(point.Round(), Vector2.One), marker.Color == Colors.Black ? Colors.LightGray : marker.Color);
         }
+        else if (marker.Kind == MapMarkerKind.Drone) DroneGlyph(point, marker);
         else if (marker.Kind is MapMarkerKind.Landmark or MapMarkerKind.Upgrade or MapMarkerKind.Drone or MapMarkerKind.Reward)
         {
             _diamond[0] = point + Vector2.Up * size;
@@ -180,6 +184,35 @@ public partial class TacticalMapCanvas : Control
         DrawArc(point, 9, 0, Mathf.Tau, 24, color, 1.5f, true);
         DrawLine(point - Vector2.Right * 12, point + Vector2.Right * 12, color);
         DrawLine(point - Vector2.Down * 12, point + Vector2.Down * 12, color);
+    }
+
+    private void DroneGlyph(Vector2 point, MapMarker marker)
+    {
+        Color color = marker.Color;
+        void Line(Vector2 a, Vector2 b) => DrawLine(point + a, point + b, color, 1);
+        if (marker.Actor is BaseTacticalDrone tactical)
+        {
+            switch (tactical.Role)
+            {
+                case BaseTacticalDrone.DroneRole.Scout:
+                    DrawArc(point, 3, 0, Mathf.Tau, 8, color); Line(Vector2.Zero, new Vector2(4, -4)); break;
+                case BaseTacticalDrone.DroneRole.Attacker:
+                    Line(new Vector2(-3, 3), new Vector2(0, -4)); Line(new Vector2(0, -4), new Vector2(3, 3)); Line(new Vector2(-3, 3), new Vector2(3, 3)); break;
+                case BaseTacticalDrone.DroneRole.Defender:
+                    DrawRect(new Rect2(point - new Vector2(3, 3), new Vector2(6, 6)), color, false); Line(new Vector2(-3, 0), new Vector2(3, 0)); break;
+                case BaseTacticalDrone.DroneRole.Siphon:
+                    DrawArc(point, 3, 0, Mathf.Pi, 8, color); Line(new Vector2(-3, -3), new Vector2(-3, 0)); Line(new Vector2(3, -3), new Vector2(3, 0)); break;
+                case BaseTacticalDrone.DroneRole.Harvester:
+                    Line(new Vector2(-4, -3), new Vector2(0, 3)); Line(new Vector2(0, 3), new Vector2(4, -3));
+                    Line(new Vector2(-4, 3), new Vector2(4, 3)); break;
+            }
+        }
+        else if (marker.Actor is BaseStrikeDrone)
+        { Line(new Vector2(0, -4), new Vector2(0, 4)); Line(new Vector2(-3, 0), new Vector2(0, -4)); Line(new Vector2(3, 0), new Vector2(0, -4)); }
+        else if (marker.Actor is MagicCarpetRemastered.Scripts.Equipment.GuardianDrone)
+        { Line(new Vector2(-3, -3), new Vector2(3, 3)); Line(new Vector2(3, -3), new Vector2(-3, 3)); DrawCircle(point, 1, color); }
+        else
+        { DrawRect(new Rect2(point - Vector2.One * 2, Vector2.One * 4), color, false); Line(new Vector2(-4, 3), new Vector2(4, 3)); }
     }
 
     private void Arrow(Vector2 point, Vector2 direction, Color color)

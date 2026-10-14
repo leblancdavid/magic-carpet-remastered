@@ -203,10 +203,10 @@ public partial class StrategicPointChecks : Node3D
                     Check(Mathf.Abs(a - b) < 1 && a > 30 && b > 30, $"{radius}: mirrored opening distances are comparable and outside bases");
                 }
                 var incomeSite = (StrategicPoint)points[0]; incomeSite.SetPhysicsProcess(false); home.SetPhysicsProcess(false);
-                Check(incomeSite.IncomePerSecond == 0.2, "Live extractors produce one antimatter per five seconds");
+                Check(incomeSite.IncomePerSecond == 0.35, "Live extractors produce 21 antimatter per minute before research");
                 incomeSite.Advance(10, true, false); int before = home.StoredAntimatter;
-                incomeSite.Advance(4.9, true, false); Check(home.StoredAntimatter == before, "Slow income holds fractional work below five seconds");
-                incomeSite.Advance(0.1, true, false); Check(home.StoredAntimatter == before + 1, "Slow income deposits one at five seconds");
+                incomeSite.Advance(2.8, true, false); Check(home.StoredAntimatter == before, "Extractor retains fractional income below one AM");
+                incomeSite.Advance(0.1, true, false); Check(home.StoredAntimatter == before + 1, "Extractor deposits after crossing one AM of accrued income");
                 if (radius == 200 && DisplayServer.GetName() != "headless")
                 {
                     var ship = (ShipFlightController)GetTree().GetFirstNodeInGroup("player");

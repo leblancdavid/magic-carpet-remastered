@@ -37,16 +37,17 @@ public partial class BaseManagementChecks : Node3D
                 if (child is not CanvasLayer) { child.SetPhysicsProcess(false); child.SetProcess(false); }
             var hub = game.GetNode<FactionBase>("PlayerBase");
             var rival = game.GetNode<FactionBase>("EnemyBase");
+            hub.Fleet.SetPhysicsProcess(false); rival.Fleet.SetPhysicsProcess(false);
             var player = game.GetNode<ShipFlightController>("PlayerShip");
             var panel = game.GetNode<BaseManagement>("BaseManagement");
             var map = game.GetNode<TacticalMap>("TacticalMap");
             await Frames(3);
-            Check(!panel.IsOpen && hub.Construction.Catalog.Count() == 69, "Fresh match has three-star playable catalog and closed management");
+            Check(!panel.IsOpen && hub.Construction.Catalog.Count() == 104, "Fresh match has playable star research and fleet expansions with closed management");
             hub.DepositAntimatter(90);
             player.RespawnAt(player.GlobalPosition);
             Key(Godot.Key.B); await Frames(2);
             Check(panel.IsOpen && !GetTree().Paused && player.GameplayInputBlocked, "Actual B opens real-time management and owns input");
-            Check(panel.SummaryText.Contains("120/200") && panel.SummaryText.Contains("BASE  I"), "Panel shows antimatter and surviving tier");
+            Check(panel.SummaryText.Contains("120/300") && panel.SummaryText.Contains("BASE  I"), "Panel shows antimatter and surviving tier");
             var tabs = (TabContainer)panel.FindChild("ProjectTabs", true, false);
             tabs.CurrentTab = 1;
             await Frames(3);
@@ -74,7 +75,7 @@ public partial class BaseManagementChecks : Node3D
             panel.SetOpen(true);
             hub.DepositAntimatter(1000);
             await Click(((UiTile)panel.FindChild("Order_repair-matrix", true, false)).CancelButton);
-            Check(repair.State == ConstructionState.Cancelled && hub.StoredAntimatter == 200,
+            Check(repair.State == ConstructionState.Cancelled && hub.StoredAntimatter == 300,
                 "GUI cancellation returns payment when storage has refilled");
             Check(GetTree().GetNodesInGroup("loose_antimatter").OfType<AntimatterPickup>()
                 .Any(p => p.Name.ToString().Contains("ConstructionRefundSpill") && p.Ownership == AntimatterOwnership.Player),
@@ -87,7 +88,7 @@ public partial class BaseManagementChecks : Node3D
             hub.DepositAntimatter(1000);
             Check(panel.OrderProject("collector-drive") && panel.OrderProject("claim-range"), "Resources and ship categories can run concurrently");
             hub._PhysicsProcess(60);
-            Check(hub.CollectorSpeedMultiplier == 1.15f && player.EffectiveClaimRange == 150, "Bronze collector speed and built-in Claim range effects apply");
+            Check(hub.CollectorSpeedMultiplier == 1.15f && player.EffectiveClaimRange == 120 && hub.Construction.UpgradeRank("claim-range") == 1, "Bronze collector speed and magnetism research apply without changing Claim range");
             var collector = game.GetNode<CollectorDrone>("PlayerDrone");
             Vector3 departure = collector.GlobalPosition;
             var arena = game.GetNode<HeightmapArena>("HeightmapArena");
@@ -111,7 +112,7 @@ public partial class BaseManagementChecks : Node3D
             Check(player.TryActivateClaim(), "Closed management allows the ordinary Claim action");
             var claim = game.GetChildren().OfType<ClaimProjectile>().Single();
             claim.SetPhysicsProcess(false);
-            Check(claim.MaxRange == 150, "Actual built-in Claim cast receives researched range");
+            Check(claim.MaxRange == 120, "Actual built-in Claim retains baseline range with magnetism research");
             claim.QueueFree();
             panel.SetOpen(true);
             hub.DepositAntimatter(1000);
@@ -120,8 +121,8 @@ public partial class BaseManagementChecks : Node3D
             Vector3 previousPosition = player.GlobalPosition;
             player.GlobalPosition = arena.OnSurface(rival.GlobalPosition, 6);
             game.GetNode<WorldNavigation>("WorldNavigation").Refresh(); player.GlobalPosition = previousPosition;
-            Check(panel.OpenTargetOrder("strike-drone") && panel.ConfirmTargetOrder(), "Panel confirms a separately paid discovered-target launch");
-            hub._PhysicsProcess(20);
+            Check(!panel.OpenTargetOrder("strike-drone"), "Automatic strike fleets do not expose paid-target controls");
+            hub.Fleet._PhysicsProcess(20);
             var strike = GetTree().GetNodesInGroup("base_strike_drone").OfType<BaseStrikeDrone>().Single();
             strike.SetPhysicsProcess(false);
             int rivalHealth = rival.Health;
@@ -148,7 +149,7 @@ public partial class BaseManagementChecks : Node3D
                 hub.DepositAntimatter(200);
                 Check(panel.OrderNextTier(), "Capture has active base construction");
                 hub.DepositAntimatter(200);
-                Check(panel.OpenTargetOrder("strike-drone") && panel.ConfirmTargetOrder(), "Capture has concurrent paid offense construction");
+                Check(panel.OrderProject("attack-drone"), "Capture has concurrent automatic-unit research");
                 hub._PhysicsProcess(5);
                 tabs.CurrentTab = 1;
                 panel.Refresh();

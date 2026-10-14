@@ -42,6 +42,19 @@ public partial class AntimatterPickup : RigidBody3D
     public bool IsAvailable => AntimatterAmount > 0 && !IsQueuedForDeletion() && !IsCarried && !IsDropPending;
 
     private HeightmapArena? _arena;
+    private FactionBase? _playerBase, _enemyBase;
+    public int MagnetismRank
+    {
+        get
+        {
+            if (Ownership == AntimatterOwnership.Neutral) return 0;
+            ref FactionBase? home = ref (Ownership == AntimatterOwnership.Player ? ref _playerBase : ref _enemyBase);
+            if (!IsInstanceValid(home)) home = GetTree().GetFirstNodeInGroup(Ownership == AntimatterOwnership.Player ? "player_base" : "enemy_base") as FactionBase;
+            return IsInstanceValid(home) && !home!.IsDestroyed ? home.Construction.UpgradeRank("claim-range", true) : 0;
+        }
+    }
+    public float EffectiveAttractionGap => AttractionGap + 2 * MagnetismRank;
+    public float EffectiveMergeContactSeconds => MagnetismRank switch { 1 => 1, 2 => 0.8f, 3 => 0.6f, _ => MergeContactSeconds };
     private MeshInstance3D _mesh = null!;
     private static readonly StandardMaterial3D[] OwnershipMaterials =
     {
@@ -147,17 +160,20 @@ public partial class AntimatterPickup : RigidBody3D
         contacts.Clear();
         if (grounded)
         {
+            int magnetism = MagnetismRank;
+            float attractionGap = AttractionGap + 2 * magnetism;
+            float mergeTime = magnetism switch { 1 => 1, 2 => 0.8f, 3 => 0.6f, _ => MergeContactSeconds };
             Vector3 up = _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
             float nearestGap = float.MaxValue;
             Vector3 attractionDirection = Vector3.Zero;
-            AntimatterNeighborhood.Query(GetTree(), GlobalPosition, Radius + AttractionGap, _neighbors);
+            AntimatterNeighborhood.Query(GetTree(), GlobalPosition, Radius + attractionGap, _neighbors);
             foreach (AntimatterPickup other in _neighbors)
             {
                 if (other == this || !other.IsAvailable
                     || other.Ownership != Ownership) continue;
                 Vector3 offset = other.GlobalPosition - GlobalPosition;
                 float gap = offset.Length() - Radius - other.Radius;
-                if (gap > AttractionGap || !other.IsGrounded()) continue;
+                if (gap > attractionGap || !other.IsGrounded()) continue;
                 // Support/contact jitter and shared downhill motion must not
                 // continually reset the timer. Fast relative impacts still wait.
                 if (!IsGrowing && !other.IsGrowing && gap <= ContactSkin && GetInstanceId() < other.GetInstanceId()
@@ -166,7 +182,7 @@ public partial class AntimatterPickup : RigidBody3D
                     ulong id = other.GetInstanceId();
                     float seconds = _contactSeconds.GetValueOrDefault(id) + (float)delta;
                     contacts[id] = seconds;
-                    if (seconds >= MergeContactSeconds)
+                    if (seconds >= mergeTime)
                         Callable.From(() => MergeWith(other)).CallDeferred();
                 }
                 if (gap < nearestGap)
@@ -180,7 +196,7 @@ public partial class AntimatterPickup : RigidBody3D
             float approachSpeed = LinearVelocity.Dot(attractionDirection);
             if (nearestGap < float.MaxValue && approachSpeed < AttractionSpeed)
                 _attractionAcceleration = attractionDirection * Mathf.Min(
-                    AttractionAcceleration * (1 - 0.75f * Mathf.Clamp(nearestGap / AttractionGap, 0, 1)),
+                    AttractionAcceleration * (1 + 0.25f * magnetism) * (1 - 0.75f * Mathf.Clamp(nearestGap / attractionGap, 0, 1)),
                     (AttractionSpeed - approachSpeed) / (float)delta);
         }
 
@@ -452,7 +468,7 @@ public partial class AntimatterPickup : RigidBody3D
     private void MergeWith(AntimatterPickup other)
     {
         if (!CanMergeWith(other) || !_contactSeconds.TryGetValue(other.GetInstanceId(), out float seconds)
-            || seconds < MergeContactSeconds || GlobalPosition.DistanceTo(other.GlobalPosition) > Radius + other.Radius + ContactSkin
+            || seconds < EffectiveMergeContactSeconds || GlobalPosition.DistanceTo(other.GlobalPosition) > Radius + other.Radius + ContactSkin
             || (long)AntimatterAmount + other.AntimatterAmount > int.MaxValue) return;
         _growthStartRadius = Radius;
         Vector3 momentum = LinearVelocity * AntimatterAmount + other.LinearVelocity * other.AntimatterAmount;

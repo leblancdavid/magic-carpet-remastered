@@ -1,5 +1,25 @@
 # Project Learnings
 
+## Automated Hunting And Progression Incentives (2026-10-14)
+
+- Diagnose throughput as a whole: reward size, cargo, travel, claiming, passive income and competing research/advancement spending. Bigger rewards alone do not remove repeated hauling or give players a reason to buy situational equipment.
+- Wild recovery should start with the first vacancy, not reset on every kill. Repeated partial clearing can otherwise indefinitely defer replacement. Keep owned-site suppression and ship-nearby safety distinct; report why habitats cannot refill.
+- Automated hunting must follow real kill → staggered drop → claim → collector → bank accounting. Hold the last kill location long enough for delayed fragments; reserve habitats rather than individual mob identities when spreading hunters.
+- Verify aimed abilities against physical actor hits, not only terrain fallbacks. Terrain-only aim can make area weapons miss airborne packs despite correct damage/radius properties.
+- Aim line-of-sight structure attacks above the ground anchor. Excluding a base collider while casting to its ground-level origin can make the terrain itself block the intended shot. Verify actual structure HP damage through the native query.
+- Derive capacity-based advancement from nominal capacity, not damage-reduced storage; preserve explicit fixture overrides and exact paid project snapshots. Test odd rounding and damage as well as default prices.
+- Verify new weapons through actual projectile/pellet hits, turning, occlusion and interception plus paid research/installation/input/cooldown gates; a new catalog entry alone is not playable content.
+
+## Persistent Fleets, Theft And Return Travel (2026-10-14)
+
+- Give each automatic entitlement slot its own replacement clock, separate from paid category research. Detect death once; pause rather than advance clocks below the unlock tier. Snapshot expendable sorties, update persistent tactical stats deliberately, and avoid deleting loaded units without spilling cargo.
+- Assign units centrally with assignment-count priority before distance, excluding the current unit from its own reservation. Scouts need a hard one-assignment-per-point rule because their capture speed does not stack. Excess scouts wait and must resume when objectives change.
+- Theft is a transfer, not income generation: withdraw actual storage, count internal cargo, deposit only accepted amounts, retain overflow and clear cargo atomically on spilling. A storage raid should notify retaliatory defense even though it deals no structural damage.
+- A return ability must not call respawn: that refills health/energy and resets cooldowns. Validate actual collision geometry at arrival candidates and pay only after a valid destination is found. Distinguish horizontal travel from harmless hover settling when interrupting a channel.
+- Share ownership-derived magnetism with the existing physical attraction/contact implementation. Keep its approach-speed cap to avoid stronger attraction undermining the low-relative-speed merge condition. Test native convergence beyond baseline range plus exact merging, not just new property values.
+- Render importance and selection tie-breaking are separate policies. Layer small dots below landmarks without reordering click selection: equal-position loot otherwise steals landmark waypoint selection. Visibility must be rechecked on cached rival markers so occlusion does not leak live positions until the next metadata refresh.
+- Adding catalog entries can silently wrap GridContainer rows. Compute columns from the row's actual content, clip auxiliary button text and run normal/small real-control bounds checks rather than accepting compilation as UI verification.
+
 ## Tier Grids, Planned Equipment And Paid Deployments (2026-10-13)
 
 - Separate the approved UI tree from playable payment definitions. Pending types can explain their roles/unlock tiers, but should have no payable project until an effect exists. One upgrade tile should buy its next sequential star, not mix research with repeatable production; store explicit type/rank metadata on immutable project definitions.

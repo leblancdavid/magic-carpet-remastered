@@ -5,6 +5,6 @@ public static class BaseProjectCatalog
     public static void Register(BaseConstruction construction)
     {
         UpgradeCatalog.Register(construction);
-        BaseOrders.Register(construction);
+        AutomaticDroneFleet.Register(construction);
     }
 }

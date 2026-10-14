@@ -117,7 +117,7 @@ public partial class GuardianDrone : CharacterBody3D
             if (node is ShipFlightController ship && FactionCombat.CanDamage(ship, _ownership)
                 && GlobalPosition.DistanceTo(ship.GlobalPosition) < bestDistance)
             { best = ship; bestDistance = GlobalPosition.DistanceTo(ship.GlobalPosition); }
-        foreach (string group in new[] { "base_tactical_drone", "base_strike_drone", "guardian-drone" })
+        foreach (string group in new[] { "base_tactical_drone", "base_strike_drone", "guardian-drone", "guided_projectile" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
                 if (node is Node3D unit && FactionCombat.CanDamage(unit, _ownership) && GlobalPosition.DistanceTo(unit.GlobalPosition) < bestDistance)
                 { best = unit; bestDistance = GlobalPosition.DistanceTo(unit.GlobalPosition); }

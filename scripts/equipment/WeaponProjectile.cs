@@ -69,7 +69,7 @@ public partial class WeaponProjectile : Area3D
             if (_arena.TrySurfaceHit(previous, GlobalPosition, out Vector3 hit))
             {
                 GlobalPosition = hit;
-                _arena.ApplyCrater(hit, TerrainCraterRadius, TerrainCraterDepth);
+                if (TerrainCraterRadius > 0 && TerrainCraterDepth > 0) _arena.ApplyCrater(hit, TerrainCraterRadius, TerrainCraterDepth);
                 SpawnImpactBurst();
                 QueueFree();
                 return;
@@ -126,7 +126,7 @@ public partial class WeaponProjectile : Area3D
             FactionCombat.Damage(body, body is FactionBase && Damage > 0 ? Mathf.Max(1, Mathf.RoundToInt(Damage * 0.2f)) : Damage,
                 IsInstanceValid(_owner) ? _owner : null);
 
-        if (body.IsInGroup("deformable_terrain") && GetTree().GetFirstNodeInGroup("heightmap_arena") is HeightmapArena arena)
+        if (TerrainCraterRadius > 0 && TerrainCraterDepth > 0 && body.IsInGroup("deformable_terrain") && GetTree().GetFirstNodeInGroup("heightmap_arena") is HeightmapArena arena)
         {
             arena.ApplyCrater(GlobalPosition, TerrainCraterRadius, TerrainCraterDepth);
         }

@@ -2,6 +2,10 @@
 
 ## Status
 
+**Latest economy/combat override — 2026-10-14:** `ECONOMY_COMBAT_PLAYTEST.md` supersedes older cargo/recovery/economic/combat values. **68 types / 27 playable**: adds Resources-II **Harvester Drone**, enables Ship-II **Scatter Cannon / Seeker Missile**. Harvester joins free-replacement fleets with post-gold expansion. Collector baseline 80 A / cargo stars 120–160–200, recovery 25s/6s without wild repeated-kill resets, stronger attackers/mobs, affordable body-aimed Pulse. Resources tier II now has four columns. **Next content: Hunter/Rocket/Flak**, then III–V after Medium hands-on acceptance.
+
+**2026-10-14 override implemented:** `AUTOMATIC_FLEETS_PLAYTEST.md` supersedes the manual paid-production/target orders and range-based Claim entries below. **67 types / 24 playable** now include tier-II Siphon Drone and built-in researched Teleport Home. Base unit research grants automatic free-replacement fleet slots with post-gold paid expansion; Guardian remains manual. Claim Calibration improves owned AM magnetism. Reduced populations and map readability/line-of-sight rules accompany this pass. Older numbers/descriptions below are retained as the original approved pass, not current production policy.
+
 Approved for implementation. This plan supersedes older catalog category/rank UI and explicit home Apply rules. Initial numbers are provisional playtest tuning. Implementation is staged; approval does not mean the content below is already playable.
 
 **Implemented:** first gameplay stage plus shared tier/star catalog and all four tier-row grids, remotely planned/home-auto-synchronized loadouts/HUD markers, paid target orders, scout/attack/defensive deployment and interceptable strike drones. **22 of 65 types are playable** (all thirteen tier-I types, eight tier-II types and the existing Guardian moved to IV). The other 43 are visible as disabled Coming later tiles, absent from the payable research catalog. Verification is in the progress log. **Next content:** remaining tier-II Hunter Drone/Rocket Battery/Flak Battery/Scatter Cannon/Seeker Missile, then III–V. Hands-on economy/UI and dense XL performance remain pending.

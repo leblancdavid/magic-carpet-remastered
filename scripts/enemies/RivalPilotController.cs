@@ -212,7 +212,7 @@ public partial class RivalPilotController : Node
         // reserve policy cannot demand resources the base cannot hold.
         if (tier != null && home.StoredAntimatter - tier.Cost >= Math.Min(StorageReserve,
             Math.Max(0, home.EffectiveStorageCapacity - tier.Cost)) && home.Construction.TryStartNextTier(out _)) OrdersPlaced++;
-        string[] projects = { "collector-drive", "equipment-energy-shield-1", "equipment-dash-1", "energy-grid", "repair-matrix", "claim-range",
+        string[] projects = { "collector-drive", "scout-drone", "equipment-energy-shield-1", "attack-drone", "harvester-drone", "equipment-pulse-burst-1", "equipment-dash-1", "defensive-drone", "energy-grid", "repair-matrix", "claim-range", "siphon-drone", "upgrade-strike-drone-1",
             "equipment-plasma-bolt-2", "equipment-pulse-burst-1", "equipment-energy-shield-2", "equipment-dash-2", "equipment-plasma-bolt-3", "equipment-pulse-burst-2" };
         foreach (string id in projects) if (TryOrderProject(id)) break;
     }

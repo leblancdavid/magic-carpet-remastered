@@ -127,7 +127,7 @@ public partial class BaseConstructionChecks : Node3D
     {
         var home = new FactionBase(); AddChild(home); home.SetPhysicsProcess(false);
         var ship = Add(new ShipFlightController());
-        int[] capacities = { 200, 350, 550, 800, 1100 }, costs = { 150, 275, 450, 650 };
+        int[] capacities = { 300, 500, 750, 1000, 1500 }, costs = { 150, 250, 375, 500 };
         for (int tier = 1; tier <= 5; tier++)
         {
             Check(home.Tier == tier && home.MaxHealth == tier * 400 && home.AntimatterStorageCapacity == capacities[tier - 1],
@@ -140,9 +140,11 @@ public partial class BaseConstructionChecks : Node3D
             Check(ship.EnergyCapacity == capacities[tier - 1] - next.Cost, "Paid live upgrade immediately lowers storage-backed energy");
             home.Construction.Advance(next.DurationSeconds);
         }
-        Check(home.SpentAntimatter == 1525, "Tier V requires 1,525 spent antimatter before optional research");
-        Check(home.Construction.Catalog.All(p => p.Cost <= home.StorageCapacityForTier(p.RequiredTier)),
+        Check(home.SpentAntimatter == 1275, "Tier V requires 1,275 spent antimatter before optional research");
+        Check(home.Construction.Catalog.Where(p => !p.Id.StartsWith("fleet-")).All(p => p.Cost <= home.StorageCapacityForTier(p.RequiredTier)),
             "Every research item is purchasable within its unlock-tier capacity");
+        Check(home.Construction.Catalog.All(p => p.Cost <= home.StorageCapacityForTier(5)),
+            "Optional fleet expansions remain affordable within the eventual storage ceiling");
         var rival = new FactionBase { IsPlayerBase = false }; AddChild(rival); rival.SetPhysicsProcess(false);
         var impact = typeof(WeaponProjectile).GetMethod("OnBodyEntered", BindingFlags.Instance | BindingFlags.NonPublic)!;
         for (int shot = 0; shot < 134; shot++)
@@ -155,7 +157,7 @@ public partial class BaseConstructionChecks : Node3D
         var beast = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.GroundBeast });
         var ordinaryBolt = Add(new WeaponProjectile { Damage = ship.PlasmaBoltDamage }); ordinaryBolt.Launch(Vector3.Forward, ship);
         impact.Invoke(ordinaryBolt, new object[] { beast });
-        Check(beast.Health == 29, "Base resistance leaves normal 13-damage Plasma mob combat intact");
+        Check(beast.Health == 37, "Base resistance leaves normal 13-damage Plasma mob combat intact");
     }
 
     private void CheckSiegeAndRebuilding()
