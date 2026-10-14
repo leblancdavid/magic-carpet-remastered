@@ -169,10 +169,10 @@ public partial class EquipmentProgressionChecks : Node3D
             var fresh = game.GetNode<ShipFlightController>("PlayerShip");
             Check(fresh.GetOwnedEquipmentRank("plasma-bolt") == 1 && fresh.EquipmentSlots.Count(id => id != null) == 1, "New match resets equipment state");
             game.GetNode<BaseManagement>("BaseManagement").SetOpen(true);
-            game.GetNode<BaseManagement>("BaseManagement")._Input(new InputEventKey { Keycode = Key.R, Pressed = true });
+            game.GetNode<BaseManagement>("BaseManagement")._Input(new InputEventKey { Keycode = Key.F4, Pressed = true });
             await ToSignal(GetTree(), SceneTree.SignalName.SceneChanged);
             fresh = GetTree().CurrentScene.GetNode<ShipFlightController>("PlayerShip");
-            Check(fresh.GetOwnedEquipmentRank("guardian-drone") == 0 && fresh.GetEquipmentRank("plasma-bolt") == 1, "R creates a fresh starter loadout");
+            Check(fresh.GetOwnedEquipmentRank("guardian-drone") == 0 && fresh.GetEquipmentRank("plasma-bolt") == 1, "F4 creates a fresh starter loadout");
             Node restartedWorld = GetTree().CurrentScene;
             GetTree().CurrentScene = null;
             restartedWorld.QueueFree();

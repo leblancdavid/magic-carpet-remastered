@@ -177,7 +177,7 @@ public partial class Hud : CanvasLayer
         if (_resultPanel.Visible)
         {
             _result.Text = $"{(_levelObjective!.State == LevelObjective.LevelState.Victory ? "VICTORY" : "DEFEAT")}\n"
-                + $"{_levelObjective.ResultMessage}\n\nPress R to restart";
+                + $"{_levelObjective.ResultMessage}\n\nPress F4 to restart";
         }
         bool livePanel = _player.GameplayInputBlocked;
         StrategicPoint? capture = null;
@@ -218,7 +218,7 @@ public partial class Hud : CanvasLayer
             + Section("EQUIPMENT / MATCH BOONS")
             + _player.EquipmentProgressionText + "\nB researches ranks; install explicitly at home.\n"
             + $"H pending choices · {_player.Boons.Pending.Count} secured rewards\nCollected bonuses:\n{_player.Boons.Summary}\n"
-            + "Destroy wrecks; fly within 4 surface units to secure gold salvage.\nBoons survive respawn/tier loss; R resets them.\n\n"
+            + "Destroy wrecks; fly within 4 surface units to secure gold salvage.\nBoons survive respawn/tier loss; F4 resets them.\n\n"
             + Section("ANTIMATTER ECONOMY")
             + (_antimatterTracker == null ? "Tracker unavailable\n" : $"World total: {_antimatterTracker.TotalAntimatter}\nNeutral loose: {_antimatterTracker.NeutralLooseAntimatter}\nNeutral creatures: {_antimatterTracker.NeutralCreatureAntimatter}\nPlayer: {_antimatterTracker.PlayerControlledAntimatter}\nRival: {_antimatterTracker.EnemyControlledAntimatter}\n")
             + $"Extractor supply accepted: {_antimatterTracker?.SiteGeneratedAntimatter ?? 0}\n"
@@ -228,13 +228,13 @@ public partial class Hud : CanvasLayer
             + (_enemyEcosystem?.StatusText ?? "Ecosystem unavailable") + "\n\n"
             + "Rival AI: " + ((GetTree().GetFirstNodeInGroup("rival_ai") as MagicCarpetRemastered.Scripts.Enemies.RivalPilotController)?.StatusText ?? "unavailable") + "\n\n"
             + Section("TERRAIN")
-            + (GetParent() is MagicCarpetRemastered.Scripts.Game.Game world ? $"World seed: {world.ActiveWorldSeed}\nR retries this world; F2 creates a fresh world or replays a seed.\n" : string.Empty)
+            + (GetParent() is MagicCarpetRemastered.Scripts.Game.Game world ? $"World seed: {world.ActiveWorldSeed}\nF4 retries this world; F2 creates a fresh world or replays a seed.\n" : string.Empty)
             + (GetParent().GetNodeOrNull<HeightmapArena>("HeightmapArena") is { } seedArena
                 ? $"Terrain seed: {seedArena.TerrainSeed} · generation attempts: {seedArena.GenerationAttempts}\n" : string.Empty)
             + _player.TerrainDebugText.Replace("   ", "\n")
             + "\n\n"
             + Section("CONTROLS")
-            + "WASD — hover / steer\nSpace — jump (2 current energy, fresh press)\nShift — built-in forward boost (fresh press)\nMouse — look / aim\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nR — restart arena\n\n"
+            + "WASD — hover / steer\nSpace — jump (2 current energy, fresh press)\nShift — built-in forward boost (fresh press)\nMouse — look / aim\nV — camera mode\nB — base management (real time)\nM — world map / waypoint (real time, planet)\nEsc — close panel / capture / release mouse\nF4 — restart arena\n\n"
             + $"1–4 — select equipped slot (no activation)\nLMB — activate {_player.PrimaryEquipmentName}\nTab — cycle installed slots\n"
             + $"RMB — Claim ({_player.ClaimEquipmentEnergyCost} energy): aim at a globe or the ground before it; the bolt follows terrain after landing.\n\n"
             + Section("OWNERSHIP / ROLE GUIDE")

@@ -301,7 +301,7 @@ public partial class BaseManagement : CanvasLayer
         if (key.Keycode == Key.B || IsOpen && key.Keycode == Key.Escape) { SetOpen(!IsOpen); GetViewport().SetInputAsHandled(); return; }
         if (!IsOpen) return;
         if (key.Keycode is Key.F2 or Key.F6 or Key.M or Key.H) { SetOpen(false); return; }
-        if (key.Keycode == Key.R) { SetOpen(false); GetTree().Paused = false; Callable.From(() => GetTree().ReloadCurrentScene()).CallDeferred(); }
+        if (@event.IsActionPressed("restart_arena")) { SetOpen(false); GetTree().Paused = false; Callable.From(() => GetTree().ReloadCurrentScene()).CallDeferred(); }
         GetViewport().SetInputAsHandled();
     }
     public override void _ExitTree()

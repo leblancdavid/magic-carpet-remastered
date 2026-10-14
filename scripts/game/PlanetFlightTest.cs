@@ -92,7 +92,7 @@ public partial class PlanetFlightTest : Node3D
         VBoxContainer column = new VBoxContainer();
         panel.AddChild(column);
         column.AddChild(new Label { Text = "SPHERICAL FLIGHT LAB" });
-        column.AddChild(new Label { Text = "WASD flight · Space/C altitude · Mouse look · V camera\nF dash (46 m/s) · R reset · Esc mouse/settings · F6 arena" });
+        column.AddChild(new Label { Text = "WASD flight · Space/C altitude · Mouse look · V camera\nF dash (46 m/s) · F4 reset · Esc mouse/settings · F6 arena" });
         _radiusSetting = AddSetting(column, "Radius (m)", 500, 4000, 100, PlanetRadius, value => { PlanetRadius = (float)value; BuildWorld(); });
         AddSetting(column, "Flight speed (m/s)", 8, 60, 1, FlightSpeed, value => _player.MoveSpeed = FlightSpeed = (float)value);
         _altitude = AddSetting(column, "Clearance (m)", 2, 12, 0.5, FlightClearance, value => _player.TargetClearance = (float)value);
@@ -132,7 +132,7 @@ public partial class PlanetFlightTest : Node3D
         if (@event is InputEventKey key && key.Pressed && !key.Echo)
         {
             if (key.Keycode == Key.Escape) Input.MouseMode = Input.MouseMode == Input.MouseModeEnum.Captured ? Input.MouseModeEnum.Visible : Input.MouseModeEnum.Captured;
-            if (key.Keycode == Key.R) _player.ResetFlight();
+            if (@event.IsActionPressed("restart_arena")) _player.ResetFlight();
             if (key.Keycode == Key.F6) GetTree().ChangeSceneToFile("res://scenes/PlanetGame.tscn");
         }
     }

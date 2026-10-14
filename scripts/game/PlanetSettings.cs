@@ -33,7 +33,7 @@ public partial class PlanetSettings : CanvasLayer
         _size.Select(PlanetSizes.SelectedIndex);
         column.AddChild(_size);
         int current = GetParent() is Game game ? game.ActiveWorldSeed : WorldSeeds.Current;
-        _seedStatus = new Label { Text = $"Current seed: {current}\nR restarts this world", HorizontalAlignment = HorizontalAlignment.Center };
+        _seedStatus = new Label { Text = $"Current seed: {current}\nF4 restarts this world", HorizontalAlignment = HorizontalAlignment.Center };
         column.AddChild(_seedStatus);
         _seed = new LineEdit { Name = "WorldSeed", PlaceholderText = "Optional seed to replay (blank = fresh random world)", MaxLength = 11 };
         column.AddChild(_seed);
@@ -80,7 +80,7 @@ public partial class PlanetSettings : CanvasLayer
             _size.Select(PlanetSizes.SelectedIndex);
             _seed.Text = string.Empty;
             int current = GetParent() is Game game ? game.ActiveWorldSeed : WorldSeeds.Current;
-            _seedStatus.Text = $"Current seed: {current}\nR restarts this world";
+            _seedStatus.Text = $"Current seed: {current}\nF4 restarts this world";
             GetTree().Paused = true;
             Input.MouseMode = Input.MouseModeEnum.Visible;
             _panel.Show();

@@ -246,7 +246,7 @@ public partial class StrategicNavigationChecks : Node
             game.GetNode<BoonChoices>("BoonChoices").SetProcess(false);
             map.SetExpanded(true);
             // Scene restart from an open map must not leave the next match paused.
-            map._Input(new InputEventKey { Keycode = Key.R, Pressed = true });
+            map._Input(new InputEventKey { Keycode = Key.F4, Pressed = true });
             await ToSignal(GetTree(), SceneTree.SignalName.SceneChanged);
             var restarted = (MagicCarpetRemastered.Scripts.Game.Game)GetTree().CurrentScene;
             var newNavigation = restarted.GetNode<WorldNavigation>("WorldNavigation");

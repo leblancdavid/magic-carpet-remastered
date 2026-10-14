@@ -2,6 +2,12 @@
 
 ## 2026-10-14
 
+### Move Accidental Restart Off R To F4
+
+- Rebound `restart_arena` from R to **F4**. Management, tactical map, boon choices and flight-lab reset now consult the shared action rather than hard-coding R; gameplay ignores key-repeat restart events. Same-seed/current-size retry and normal fresh-match state remain.
+- Updated result/debug/map/setup/flight-lab hints and README/current control guidance. R has no remaining restart/reset handler or binding; earlier log entries retain historical key names. Gameplay priorities are unchanged.
+- **Verification:** build passes with zero warnings/errors; existing equipment/management-restart checks **104** and navigation/map-restart checks **81** pass using F4. Source audit finds no R restart handlers/hints in scripts. Navigation retains its known ObjectDB teardown warning. Existing user work preserved; no commit requested or created.
+
 ### Economy Throughput, Harvester Automation, Stronger Threats And Weapon Roles
 
 - Implemented the approved coordinated pass in `ECONOMY_COMBAT_PLAYTEST.md`: capacities **300/500/750/1000/1500**; advancement uses rounded-up half current nominal capacity (**150/250/375/500 A**), unaffected by damage, with positive inspector overrides retained for diagnostics. Durations, sequential half-price rebuilding, exact paid snapshots/refunds/siege and 30-A start remain. Collectors carry **80 A** baseline / **120/160/200** cargo stars. Extractors produce **0.35 A/s**, Optimization **+20/40/60%**; income tooltips show actual owned rate.

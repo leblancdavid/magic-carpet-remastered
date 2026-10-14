@@ -32,7 +32,7 @@ public partial class Game : Node3D
             GetTree().ChangeSceneToFile("res://scenes/PlanetFlightTest.tscn");
             return;
         }
-        if (@event.IsActionPressed("restart_arena"))
+        if (@event.IsActionPressed("restart_arena") && !@event.IsEcho())
         {
             GetTree().Paused = false;
             GetTree().ReloadCurrentScene();

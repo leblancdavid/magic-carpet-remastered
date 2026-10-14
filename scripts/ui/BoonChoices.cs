@@ -153,7 +153,7 @@ public partial class BoonChoices : CanvasLayer
         { SetOpen(!IsOpen); GetViewport().SetInputAsHandled(); return; }
         if (!IsOpen) return;
         if (key.Keycode is Key.B or Key.M or Key.F2 or Key.F6) { SetOpen(false); return; }
-        if (key.Keycode == Key.R)
+        if (@event.IsActionPressed("restart_arena"))
         { SetOpen(false); GetTree().Paused = false; Callable.From(() => GetTree().ReloadCurrentScene()).CallDeferred(); }
         GetViewport().SetInputAsHandled();
     }

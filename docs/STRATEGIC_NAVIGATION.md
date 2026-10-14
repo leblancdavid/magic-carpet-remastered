@@ -61,7 +61,7 @@ Spherical balloon search covers half the circumference, allowing possession anyw
 - Heading-relative **220 m local radar** sits below vitals. Forward is up; distant castles/landmarks/upgrades sit on the rim. Gold target line/ring and text give surface distance and left/right bearing. Default guidance is home.
 - **M** opens/closes the world survey; **Esc** closes. The match stays live and cursor releases while open; ship input is blocked and closing restores prior mouse mode. It cannot open over a size menu or terminal result. **B** transfers to base management.
 - **Left click** a marker or surface location for a static waypoint (twelve-pixel marker snap). **Right click / Delete** clears it, returning guidance to home. Waypoints do not automate flight or command balloons.
-- **R** restarts with the map open. Input is modal: close the map before F2/F3/F6. It cannot steal/unpause another menu's pause.
+- **F4** restarts with the map open. R no longer restarts. Input is modal: close the map before F2/F3/F6. It cannot steal/unpause another menu's pause.
 - Castles show known locations plus health/storage/ruins. Owned loose mana and allied balloon are globally tracked. Balloon cargo uses a count rather than duplicate loose dots.
 - Neutral/rival loose mana, rival balloons and threats reveal within **120 surface units**. Pending/carried/consumed globes are excluded. Ownership colors update when claiming, and deleted actors disappear.
 - Five sites begin as anonymous survey hints. Map name/habitat is retained after a living player approaches within **65 surface units**. Nearby upgrades reveal within 120 m; a visited site's uncollected upgrade remains charted afterward. Collected upgrades disappear; landmarks remain.

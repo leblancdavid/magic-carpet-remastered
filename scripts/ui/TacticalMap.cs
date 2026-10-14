@@ -57,7 +57,7 @@ public partial class TacticalMap : CanvasLayer
                 if (key.Keycode is Key.M or Key.Escape) SetExpanded(false);
                 else if (key.Keycode is Key.H or Key.B) { SetExpanded(false); return; }
                 else if (key.Keycode == Key.Delete) Navigation.ClearWaypoint();
-                else if (key.Keycode == Key.R)
+                else if (@event.IsActionPressed("restart_arena"))
                 {
                     SetExpanded(false);
                     GetTree().Paused = false;
