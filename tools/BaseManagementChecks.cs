@@ -41,7 +41,7 @@ public partial class BaseManagementChecks : Node3D
             var panel = game.GetNode<BaseManagement>("BaseManagement");
             var map = game.GetNode<TacticalMap>("TacticalMap");
             await Frames(3);
-            Check(!panel.IsOpen && hub.Construction.Catalog.Count() == 19, "Fresh match has starter/equipment catalog and closed management");
+            Check(!panel.IsOpen && hub.Construction.Catalog.Count() == 69, "Fresh match has three-star playable catalog and closed management");
             hub.DepositAntimatter(90);
             player.RespawnAt(player.GlobalPosition);
             Key(Godot.Key.B); await Frames(2);
@@ -52,7 +52,7 @@ public partial class BaseManagementChecks : Node3D
             await Frames(3);
             await Click((Button)panel.FindChild("Order_repair-matrix", true, false));
             var repair = hub.Construction.GetActive(ConstructionSlot.Defense);
-            Check(repair != null && hub.StoredAntimatter == 50 && player.EnergyCapacity == 50, "Actual GUI click starts research and lowers limit");
+            Check(repair != null && hub.StoredAntimatter == 80 && player.EnergyCapacity == 80, "Actual GUI click starts bronze research and lowers limit");
             hub.SetPhysicsProcess(true);
             await Frames(8);
             hub.SetPhysicsProcess(false);
@@ -81,19 +81,19 @@ public partial class BaseManagementChecks : Node3D
                 "Cancellation preserves owned overflow in the world");
             Check(panel.OrderProject("repair-matrix"), "Restart cancelled research");
             hub._PhysicsProcess(60);
-            Check(hub.EffectiveRepairHealthPerSecond == 4.5f && hub.Construction.IsCompleted("repair-matrix"), "Completed repair matrix has a live repair effect");
+            Check(hub.EffectiveRepairHealthPerSecond == 3.75f && hub.Construction.IsCompleted("repair-matrix"), "Completed bronze repair matrix has a live repair effect");
             hub.ApplyDamage(20); hub._PhysicsProcess(6);
-            Check(hub.Health == 384 && hub.Tier == 1, "Actual quiet repair uses researched rate without adding tiers");
+            Check(hub.Health == 383 && hub.Tier == 1, "Actual quiet repair uses researched rate without adding tiers");
             hub.DepositAntimatter(1000);
             Check(panel.OrderProject("collector-drive") && panel.OrderProject("claim-range"), "Resources and ship categories can run concurrently");
             hub._PhysicsProcess(60);
-            Check(hub.CollectorSpeedMultiplier == 1.25f && player.EffectiveClaimRange == 150, "Collector speed and built-in Claim range effects apply");
+            Check(hub.CollectorSpeedMultiplier == 1.15f && player.EffectiveClaimRange == 150, "Bronze collector speed and built-in Claim range effects apply");
             var collector = game.GetNode<CollectorDrone>("PlayerDrone");
             Vector3 departure = collector.GlobalPosition;
             var arena = game.GetNode<HeightmapArena>("HeightmapArena");
             Vector3 destination = arena.StepToward(departure, rival.GlobalPosition, 100);
             typeof(CollectorDrone).GetMethod("MoveToward", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(collector, new object[] { destination, 1f });
-            Check(arena.SurfaceDistance(departure, collector.GlobalPosition) > 12, "Real collector movement uses researched speed");
+            Check(arena.SurfaceDistance(departure, collector.GlobalPosition) > 11, "Real collector movement uses researched speed");
             hub.DepositAntimatter(1000);
             Check(panel.OrderNextTier(), "Panel orders tier advancement");
             hub._PhysicsProcess(60);
@@ -101,7 +101,7 @@ public partial class BaseManagementChecks : Node3D
             hub.DepositAntimatter(200);
             Check(panel.OrderProject("energy-grid"), "Tier two unlocks energy grid");
             hub._PhysicsProcess(90);
-            Check(hub.EnergyRechargeMultiplier == 1.25f && player.EnergyRechargePerSecond == player.EnergyCapacity * player.EnergyRegenFractionPerSecond * 1.25f,
+            Check(hub.EnergyRechargeMultiplier == 1.15f && player.EnergyRechargePerSecond == player.EnergyCapacity * player.EnergyRegenFractionPerSecond * 1.15f,
                 "Completed energy grid changes actual ship recharge");
             player.SpendEnergy(player.Energy);
             typeof(ShipFlightController).GetMethod("RegenerateEnergy", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, new object[] { 1f });
@@ -114,7 +114,13 @@ public partial class BaseManagementChecks : Node3D
             Check(claim.MaxRange == 150, "Actual built-in Claim cast receives researched range");
             claim.QueueFree();
             panel.SetOpen(true);
-            Check(panel.OrderProject("strike-drone"), "Panel orders offensive unit");
+            hub.DepositAntimatter(1000);
+            Check(panel.OrderProject(UpgradeCatalog.ProjectId("strike-drone", 1)), "Panel researches the bronze offensive capability");
+            hub._PhysicsProcess(40); hub.DepositAntimatter(1000);
+            Vector3 previousPosition = player.GlobalPosition;
+            player.GlobalPosition = arena.OnSurface(rival.GlobalPosition, 6);
+            game.GetNode<WorldNavigation>("WorldNavigation").Refresh(); player.GlobalPosition = previousPosition;
+            Check(panel.OpenTargetOrder("strike-drone") && panel.ConfirmTargetOrder(), "Panel confirms a separately paid discovered-target launch");
             hub._PhysicsProcess(20);
             var strike = GetTree().GetNodesInGroup("base_strike_drone").OfType<BaseStrikeDrone>().Single();
             strike.SetPhysicsProcess(false);
@@ -125,12 +131,12 @@ public partial class BaseManagementChecks : Node3D
             strike._PhysicsProcess(1);
             Check(rival.Health == rivalHealth - 120 && !hub.Construction.IsCompleted("strike-drone"), "Repeatable unit cannot hit twice or become one-time research");
             hub.ApplyDamage(400); panel.Refresh();
-            Check(hub.Tier == 1 && hub.EnergyRechargeMultiplier == 1 && panel.AlertText.Contains("SIEGE"),
-                "Lost tier suspends higher-tier effects and shows siege alert");
+            Check(hub.Tier == 1 && hub.EnergyRechargeMultiplier == 1.15f && hub.Construction.UpgradeRank("strike-drone", true) == 0 && panel.AlertText.Contains("SIEGE"),
+                "Lost tier suspends base capability effects but retains ship passive research");
             hub.DepositAntimatter(120);
             Check(panel.OrderNextTier(), "UI exposes rebuilding after siege");
             hub._PhysicsProcess(60);
-            Check(hub.Tier == 2 && hub.EnergyRechargeMultiplier == 1.25f, "Rebuilding restores retained research effect");
+            Check(hub.Tier == 2 && hub.Construction.UpgradeRank("strike-drone", true) == 1, "Rebuilding restores retained base capability effect");
             Key(Godot.Key.M); await Frames(2);
             Check(map.IsExpanded && !panel.IsOpen && player.GameplayInputBlocked && !GetTree().Paused,
                 "M transfers input to real-time survey without simultaneous panels");
@@ -142,7 +148,7 @@ public partial class BaseManagementChecks : Node3D
                 hub.DepositAntimatter(200);
                 Check(panel.OrderNextTier(), "Capture has active base construction");
                 hub.DepositAntimatter(200);
-                Check(panel.OrderProject("strike-drone"), "Capture has concurrent offense construction");
+                Check(panel.OpenTargetOrder("strike-drone") && panel.ConfirmTargetOrder(), "Capture has concurrent paid offense construction");
                 hub._PhysicsProcess(5);
                 tabs.CurrentTab = 1;
                 panel.Refresh();

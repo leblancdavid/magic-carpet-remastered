@@ -1,5 +1,7 @@
 using System;
 using System.Reflection;
+using System.Linq;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Godot;
 using MagicCarpetRemastered.Scripts.Player;
@@ -21,6 +23,11 @@ public partial class AntimatterPhysicsChecks : Node3D
     {
         try
         {
+            if (OS.GetCmdlineUserArgs().Contains("--mob-scatter-only"))
+            {
+                await CheckMobScatter();
+                GD.Print($"Mob scatter checks passed: {_checks}"); GetTree().Quit(); return;
+            }
             await CheckGroundAndSlope();
             await ClearActors();
             await CheckObstacle();
@@ -36,6 +43,8 @@ public partial class AntimatterPhysicsChecks : Node3D
             CheckSupportCache();
             await ClearActors();
             await CheckBaseSpills();
+            await ClearActors();
+            await CheckMobScatter();
             GD.Print($"Antimatter physics checks passed: {_checks}");
             GetTree().Quit();
         }
@@ -51,6 +60,46 @@ public partial class AntimatterPhysicsChecks : Node3D
         if (actor is Node3D spatial) spatial.Position = position;
         AddChild(actor);
         return actor;
+    }
+
+    private async Task CheckMobScatter()
+    {
+        AddFloor();
+        AntimatterScatter.Spawn(this, new Vector3(0, 5, 0), 72, mobDrop: true);
+        var fragments = GetChildren().OfType<AntimatterPickup>().ToArray();
+        Check(fragments.Length == 54 && fragments.Sum(p => p.AntimatterAmount) == 72,
+            "Heavy mob emits 54 positive fragments conserving all 72 antimatter");
+        Check(fragments.Count(p => p.IsDropPending) == 53, "Only first mob fragment releases immediately");
+        Vector3 expected = fragments[20].LinearVelocity;
+        Check(expected.Y > 0 && expected.Slide(Vector3.Up).Length() > 1,
+            "Mob fragment carries a gentle lift and outward scatter");
+        fragments[20]._PhysicsProcess(20 * 0.09);
+        Check(!fragments[20].IsDropPending && fragments[20].LinearVelocity.IsEqualApprox(expected),
+            "Delayed release preserves its own scatter velocity");
+        await Frames(60);
+        Check(fragments.Count(p => p.IsDropPending) > 30, "Longer stagger remains visible after a second");
+        await Frames(300);
+        var released = GetChildren().OfType<AntimatterPickup>().Where(p => !p.IsQueuedForDeletion()).ToArray();
+        Check(released.Sum(p => p.AntimatterAmount) == 72 && released.All(p => !p.IsDropPending),
+            "Real-physics scatter and merging preserve the reserve after full release");
+        Check(released.Any(p => new Vector2(p.GlobalPosition.X, p.GlobalPosition.Z).Length() > 1.5f),
+            "Mob fragments land across a salvage patch instead of one vertical pile");
+        await ClearActors();
+        AddFloor();
+        var clock = Stopwatch.StartNew();
+        for (int i = 0; i < 8; i++) AntimatterScatter.Spawn(this, new Vector3(i * 7 - 24, 6, 0), 72, mobDrop: true);
+        double creation = clock.Elapsed.TotalMilliseconds;
+        var wall = new double[360]; clock.Restart();
+        for (int i = 0; i < wall.Length; i++)
+        {
+            await Frames(1); wall[i] = clock.Elapsed.TotalMilliseconds; clock.Restart();
+        }
+        Array.Sort(wall);
+        GD.Print($"Mob scatter mass kill ({DisplayServer.GetName()}): 432 bodies, creation {creation:0.00} ms, "
+            + $"360 wall samples p95/max {wall[342]:0.00}/{wall[^1]:0.00} ms");
+        Check(GetChildren().OfType<AntimatterPickup>().Where(p => !p.IsQueuedForDeletion()).Sum(p => p.AntimatterAmount) == 576,
+            "Eight-heavy mass kill retains exact resource accounting through 432 ballistic bodies");
+        await ClearActors();
     }
 
     private StaticBody3D AddFloor(float angle = 0)
@@ -328,7 +377,7 @@ public partial class AntimatterPhysicsChecks : Node3D
         Check(tracker.TotalAntimatter == 19 && tracker.PlayerControlledAntimatter == 19, "Player contact leaves claimed antimatter in world accounting");
 
         var hub = Add(new FactionBase { InitialStoredAntimatter = 0 }, new Vector3(-12, 2.5f, 0));
-        var drone = Add(new CollectorDrone { CarryCapacity = 1 }, orb.GlobalPosition + Vector3.Up * 4.5f);
+        var drone = Add(new CollectorDrone { CarryCapacity = 30 }, orb.GlobalPosition + Vector3.Up * 4.5f);
         await Frames(240);
         tracker.Refresh();
         Check(hub.StoredAntimatter == 19 && drone.CarriedCount == 0 && player.EnergyCapacity == claimed + 19, "Drone alone collects claimed antimatter and delivers storage-backed energy limit");

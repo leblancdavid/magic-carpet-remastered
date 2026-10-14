@@ -25,6 +25,8 @@ public partial class RivalPilotController : Node
     private Node3D? _goal;
     private float _age, _think, _researchTimer, _deadline, _stall, _lastDistance = float.PositiveInfinity;
     private float _nextAttack, _attackAtGoal = -1, _nextRecovery;
+    private float _routeProbe, _jumpRetry;
+    private Vector3 _escapeHeading;
     private readonly Dictionary<ulong, float> _ignored = new();
     private readonly HashSet<ulong> _knownWrecks = new();
     private static readonly string[] PreferredItems = { "plasma-bolt", "energy-shield", "dash", "pulse-burst" };
@@ -101,13 +103,14 @@ public partial class RivalPilotController : Node
     }
 
     private void Stop() => _ship.SetAutonomousControls(Vector3.Zero, -_ship.GlobalBasis.Z);
-    private void ClearGoal() { _goal = null; _think = 0; _stall = 0; }
+    private void ClearGoal() { _goal = null; _think = 0; _stall = 0; _escapeHeading = Vector3.Zero; }
     private bool Allowed(Node3D actor) => !actor.IsQueuedForDeletion() && (!_ignored.TryGetValue(actor.GetInstanceId(), out float until) || until <= _age);
 
     private void SetGoal(PilotTask task, Node3D goal)
     {
         if (Task == task && _goal == goal) return;
         Task = task; _goal = goal; _lastDistance = float.PositiveInfinity; _stall = 0;
+        _escapeHeading = Vector3.Zero; _routeProbe = 0;
         _deadline = _age + 25 + _arena.SurfaceDistance(_ship.GlobalPosition, goal.GlobalPosition) / Math.Max(1, _ship.MoveSpeed) * 2;
         _attackAtGoal = -1;
     }
@@ -186,8 +189,18 @@ public partial class RivalPilotController : Node
     public bool TryOrderProject(string id)
     {
         if (_ship.Health <= 0 || GetTree().Paused || _ship.HomeBase is not { IsDestroyed: false } home) return false;
+        if (BaseOrders.IsOrder(id) && home.Construction.UpgradeRank(BaseOrders.Capability(id)) == 0)
+            id = UpgradeCatalog.ProjectId(BaseOrders.Capability(id), 1);
         var definition = home.Construction.Catalog.FirstOrDefault(p => p.Id == id);
-        if (definition == null || home.StoredAntimatter - definition.Cost < StorageReserve || !home.Construction.TryStart(id, out _)) return false;
+        if (definition == null || home.StoredAntimatter - definition.Cost < StorageReserve) return false;
+        bool placed;
+        if (BaseOrders.IsOrder(id))
+        {
+            var targets = BaseOrders.Targets(home, id).ToArray();
+            placed = targets.Length > 0 && home.Construction.TryStartOrder(id, targets[0], out _);
+        }
+        else placed = home.Construction.TryStart(id, out _);
+        if (!placed) return false;
         OrdersPlaced++; return true;
     }
 
@@ -251,7 +264,19 @@ public partial class RivalPilotController : Node
         {
             if (_lastDistance - distance > 0.75f) { _stall = 0; _lastDistance = distance; } else _stall += elapsed;
             Vector3 direction = _arena.DirectionTo(_ship.GlobalPosition, _goal!.GlobalPosition);
-            if (_stall > 6) direction = (direction + direction.Cross(_arena.UpAt(_ship.GlobalPosition)) * 0.6f).Normalized();
+            _routeProbe -= elapsed; _jumpRetry -= elapsed;
+            if (_routeProbe <= 0)
+            {
+                _escapeHeading = EscapeHeading(direction);
+                _routeProbe = _stall > 1.5f ? 0.75f : 1;
+            }
+            if (_escapeHeading.LengthSquared() > 0.01f)
+                direction = _arena.Tangent(_escapeHeading, _ship.GlobalPosition).Normalized();
+            if (_stall > 2 && _jumpRetry <= 0)
+            {
+                _ship.TryActivateJump();
+                _jumpRetry = 3;
+            }
             if (_stall > 12)
             { _ignored[_goal!.GetInstanceId()] = _age + 30; if (Task == PilotTask.Attack) EndAttack(); ClearGoal(); Stop(); return; }
             movement = direction * Mathf.Clamp((distance - arrive) / 35, 0, 1);
@@ -259,7 +284,41 @@ public partial class RivalPilotController : Node
         else _stall = 0;
         movement += _arena.UpAt(_ship.GlobalPosition) * Mathf.Clamp((6 - _arena.Clearance(_ship.GlobalPosition)) * 0.2f, -1, 1);
         _ship.SetAutonomousControls(movement, aim - _ship.AimOrigin);
-        if (distance > 90 && _ship.Energy >= Math.Max(12, _ship.EnergyCapacity * 0.5f)) _ship.TryActivateBooster();
+        if (distance > 90 && _stall < 1.5f && _ship.Energy >= Math.Max(12, _ship.EnergyCapacity * 0.5f)) _ship.TryActivateBooster();
+    }
+
+    private Vector3 EscapeHeading(Vector3 direct)
+    {
+        Vector3 start = _ship.GlobalPosition, up = _arena.UpAt(start);
+        Vector3 best = direct;
+        float bestScore = float.PositiveInfinity;
+        // Bounded local lookahead, refreshed rather than probing terrain every frame.
+        foreach (float angle in new[] { 0f, 30, -30, 60, -60, 90, -90, 120, -120, 180 })
+        {
+            Vector3 heading = direct.Rotated(up, Mathf.DegToRad(angle));
+            float previous = _arena.SurfaceHeight(start), worst = 0;
+            for (int step = 1; step <= 4; step++)
+            {
+                float height = _arena.SurfaceHeight(start + heading * (step * 2));
+                worst = Mathf.Max(worst, (height - previous) / 2);
+                previous = height;
+            }
+            if (worst > Mathf.Tan(Mathf.DegToRad(_ship.MaximumHoverSlopeDegrees - 3))) continue;
+            Vector3 end = _arena.OnSurface(start + heading * 8, 2);
+            using var ray = PhysicsRayQueryParameters3D.Create(start, end);
+            ray.Exclude = new Godot.Collections.Array<Rid> { _ship.GetRid() };
+            using var hit = _ship.GetWorld3D().DirectSpaceState.IntersectRay(ray);
+            // The straight chord can intersect a convex slope that the sampled
+            // hover route follows safely; only solid actors obstruct that route.
+            if (hit.Count > 0 && !hit["collider"].As<Node3D>().IsInGroup("deformable_terrain")) continue;
+            float score = _arena.SurfaceDistance(end, _goal!.GlobalPosition)
+                + Mathf.Abs(angle) * 0.015f + worst * 2;
+            // When blocked, prefer continuing the detour rather than alternating sides.
+            if (_stall > 1.5f && _escapeHeading.LengthSquared() > 0.01f)
+                score += (1 - heading.Dot(_escapeHeading.Normalized())) * 4;
+            if (score < bestScore) { bestScore = score; best = heading; }
+        }
+        return best;
     }
 
     private void EndAttack() { _nextAttack = _age + AttackIntervalSeconds; _attackAtGoal = -1; }

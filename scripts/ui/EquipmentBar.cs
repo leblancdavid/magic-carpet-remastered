@@ -8,6 +8,7 @@ public partial class EquipmentBar : VBoxContainer
 {
     private readonly UiTile[] _slots = new UiTile[4];
     private readonly ColorRect[] _cooldown = new ColorRect[4];
+    private readonly Label[] _pending = new Label[4];
     private readonly bool[] _selected = new bool[4];
     private readonly bool[] _styled = new bool[4];
     private Label _builtIns = null!;
@@ -29,6 +30,10 @@ public partial class EquipmentBar : VBoxContainer
             _slots[i].ButtonDown += () => _ship?.TrySelectEquipmentFromInterface(slot);
             _cooldown[i] = new ColorRect { Name = "CooldownOverlay", Color = new Color(0.02f, 0.04f, 0.07f, 0.85f), MouseFilter = MouseFilterEnum.Ignore, Visible = false };
             _slots[i].AddChild(_cooldown[i]);
+            _pending[i] = new Label { Name = "PendingLoadout", Text = "↻", MouseFilter = MouseFilterEnum.Ignore,
+                TooltipText = "Loadout update pending: return home", Modulate = new Color(1, 0.7f, 0.25f) };
+            _slots[i].AddChild(_pending[i]); _pending[i].SetAnchorsAndOffsetsPreset(LayoutPreset.TopRight);
+            _pending[i].OffsetLeft = -22; _pending[i].OffsetRight = -5; _pending[i].OffsetTop = 2;
         }
         _builtIns = new Label { Name = "BuiltInIndicators", HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore };
         _builtIns.AddThemeFontSizeOverride("font_size", 12); AddChild(_builtIns); Refresh();
@@ -53,6 +58,8 @@ public partial class EquipmentBar : VBoxContainer
                     : $"Slot {i + 1} · {item.RankedName}\n{item.Description}\n{item.EnergyCost} energy · {item.CooldownSeconds:0.##}s base cooldown\n"
                         + $"{state}\n{i + 1} selects · LMB activates · Tab cycles. Cursor click selects only.", _ship.Health <= 0);
             _slots[i].Glyph.Modulate = unavailable ? new Color(0.85f, 0.5f, 0.3f) : Colors.White;
+            _pending[i].Visible = _ship.IsLoadoutSlotPending(i);
+            if (_pending[i].Visible) _slots[i].TooltipText += $"\nPending: {_ship.PlannedEquipmentSlots[i] ?? "Empty"}. Return home to synchronize equipment and researched levels.";
             if (unavailable && cooldown <= 0) _slots[i].State.Modulate = new Color(1, 0.65f, 0.32f);
             bool selected = _ship.SelectedEquipmentSlot == i;
             if (!_styled[i] || selected != _selected[i])
@@ -62,6 +69,6 @@ public partial class EquipmentBar : VBoxContainer
             float height = 32 * Mathf.Clamp(cooldown / Mathf.Max(0.01f, full), 0, 1);
             _cooldown[i].Position = new Vector2(7, 7 + 32 - height); _cooldown[i].Size = new Vector2(Mathf.Max(0, _slots[i].Size.X - 14), height);
         }
-        _builtIns.Text = "1–4 select · LMB fire · RMB Claim\nWASD move · Shift boost · Space jump · F3 help";
+        _builtIns.Text = _ship.HasPendingLoadout ? "LOADOUT UPDATE · Return home\n1–4 select · LMB fire · RMB Claim" : "1–4 select · LMB fire · RMB Claim\nWASD move · Shift boost · Space jump · F3 help";
     }
 }

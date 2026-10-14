@@ -66,19 +66,14 @@ public partial class EquipmentProgressionChecks : Node3D
                 Check(!home.Construction.TryStart(project, out _), "Completed ranks cannot be repurchased");
             }
             player.GlobalPosition = home.GlobalPosition + Vector3.Up * 6;
-            // Exercise the integrated row's explicit pending-rank application.
+            // Entering the home area applies the pending researched level without a GUI action.
             ui.Refresh();
             Find<TabContainer>(ui, "ProjectTabs").CurrentTab = 3;
             for (int i = 0; i < 3; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            var install = Find<Button>(ui, "ApplyRank_plasma-bolt");
             var shipScroll = (ScrollContainer)Find<TabContainer>(ui, "ProjectTabs").GetChild(3);
-            shipScroll.EnsureControlVisible(install);
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Vector2 point = install.GetGlobalRect().GetCenter();
-            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Position = point, GlobalPosition = point, Pressed = true }, true);
-            GetViewport().PushInput(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Position = point, GlobalPosition = point, Pressed = false }, true);
-            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
-            Check(player.GetEquipmentRank("plasma-bolt") == 2 && player.PlasmaBoltDamage == 18, "GUI applies pending rank at home");
+            player._PhysicsProcess(0);
+            Check(player.GetEquipmentRank("plasma-bolt") == 2 && player.PlasmaBoltDamage == 18 && Find<Button>(ui, "ApplyRank_plasma-bolt") == null,
+                "Home automatically applies pending rank with no Apply button");
             Check(ui.InstallEquipment("pulse-burst", 1) && ui.InstallEquipment("energy-shield", 2) && ui.InstallEquipment("dash", 3), "Four mixed items install");
             int paid = home.StoredAntimatter;
             Check(ui.InstallEquipment("guardian-drone", 1) && player.EquipmentSlots.Count(id => id != null) == 4,
@@ -159,7 +154,7 @@ public partial class EquipmentProgressionChecks : Node3D
             Check(player.GetOwnedEquipmentRank("plasma-bolt") == 3 && player.GetEquipmentRank("plasma-bolt") == 3 && player.EquipmentSlots[3] == "guardian-drone",
                 "Death/respawn retains owned ranks and loadout");
             Cast(player, "CastClaimEquipment");
-            Check(player.Energy == player.EnergyCapacity - 2 && GetChildren().OfType<ClaimProjectile>().Any(), "Built-in Claim still casts outside four slots");
+            Check(player.Energy == player.EnergyCapacity - 1 && GetChildren().OfType<ClaimProjectile>().Any(), "Built-in Claim costs one energy outside four slots");
             Check(player.TryRemoveEquipment(0), "Home removal works");
             Cast(player, "CycleQuickEquipment");
             Check(player.PrimaryEquipmentName != "Plasma Bolt III", "Tab skips removed equipment");

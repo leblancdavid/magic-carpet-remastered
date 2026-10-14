@@ -30,7 +30,7 @@ public partial class StrategicPoint : Node3D
         StrategicPointRole.Extractor => $"+{IncomePerSecond:0.#} antimatter/s (room permitting)",
         StrategicPointRole.Research => $"+{ResearchBonus * 100:0}% project speed",
         _ => Drone == null ? "Collector activates on first capture" : GodotObject.IsInstanceValid(Drone) && !Drone.IsQueuedForDeletion()
-            ? $"Station drone{(Drone.StationSuspended ? " · suspended" : "")} · {Drone.CarriedCount} cargo objects" : "Station drone destroyed"
+            ? $"Station drone{(Drone.StationSuspended ? " · suspended" : "")} · {Drone.CarriedAntimatter} A cargo" : "Station drone destroyed"
     };
     public string StatusText => $"{Role} · {Ownership} · {BenefitText}\n"
         + (IsContested || Claimant != AntimatterOwnership.Neutral ? $"{CaptureStage} · {Claimant} {CaptureProgress:P0}" : "Remain in ring to capture");
@@ -60,13 +60,22 @@ public partial class StrategicPoint : Node3D
     public override void _PhysicsProcess(double delta)
     {
         bool player = false, enemy = false;
+        float playerRate = 0, enemyRate = 0;
         foreach (Node node in GetTree().GetNodesInGroup("pilots"))
             if (node is ShipFlightController ship && ship.Health > 0 && InRange(ship))
-            { if (ship.IsPlayerControlled) player = true; else enemy = true; }
+            { if (ship.IsPlayerControlled) { player = true; playerRate = 1; } else { enemy = true; enemyRate = 1; } }
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
             if (node is EnemyEcosystemEnemy pilot && pilot.Role == EnemyEcosystemEnemy.EnemyRole.RivalShip
-                && pilot.Health > 0 && InRange(pilot)) enemy = true;
-        Advance(delta, player, enemy);
+                && pilot.Health > 0 && InRange(pilot)) { enemy = true; enemyRate = 1; }
+        bool humanPresent = player;
+        foreach (Node node in GetTree().GetNodesInGroup("base_tactical_drone"))
+            if (node is BaseTacticalDrone drone && drone.CanCapture && InRange(drone))
+            {
+                if (drone.Ownership == AntimatterOwnership.Player) { player = true; playerRate = Math.Max(playerRate, 0.5f); }
+                else { enemy = true; enemyRate = Math.Max(enemyRate, 0.5f); }
+            }
+        Advance(delta, player, enemy, playerRate, enemyRate);
+        PlayerPresent = humanPresent; // Remote scouts must not open the ship's local capture HUD.
         _label.Visible = GetTree().GetFirstNodeInGroup("player") is ShipFlightController observer
             && observer.Health > 0 && _arena.SurfaceDistance(GlobalPosition, observer.GlobalPosition) <= CaptureRadius + 12;
         // Follow authoritative terrain, including live deformation.
@@ -77,7 +86,7 @@ public partial class StrategicPoint : Node3D
         && _arena.SurfaceDistance(GlobalPosition, actor.GlobalPosition) <= CaptureRadius
         && Mathf.Abs(_arena.Clearance(actor.GlobalPosition)) <= _arena.MaxFlightClearance + 2;
 
-    internal void Advance(double delta, bool playerPresent, bool enemyPresent)
+    internal void Advance(double delta, bool playerPresent, bool enemyPresent, double playerRate = 1, double enemyRate = 1)
     {
         if (GetTree().Paused || !double.IsFinite(delta) || delta <= 0) return;
         playerPresent &= BaseFor(AntimatterOwnership.Player) is { IsDestroyed: false };
@@ -88,11 +97,14 @@ public partial class StrategicPoint : Node3D
         // tick spans both takeover stages. The new owner starts next tick.
         bool draining = !IsContested && (Ownership == AntimatterOwnership.Player && enemyPresent
             || Ownership == AntimatterOwnership.Enemy && playerPresent);
-        AdvanceIncome(draining ? Math.Min(delta, (1 - CaptureProgress) * Math.Max(0.01, CaptureSeconds)) : delta);
+        double drainRate = Ownership == AntimatterOwnership.Player ? enemyRate : playerRate;
+        AdvanceIncome(draining ? Math.Min(delta, (1 - CaptureProgress) * Math.Max(0.01, CaptureSeconds) / Math.Max(0.01, drainRate)) : delta);
         if (!IsContested)
         {
             var present = playerPresent ? AntimatterOwnership.Player : enemyPresent ? AntimatterOwnership.Enemy : AntimatterOwnership.Neutral;
-            double work = delta / Math.Max(0.01, CaptureSeconds);
+            double work = delta / Math.Max(0.01, CaptureSeconds)
+                * (present == AntimatterOwnership.Player ? Math.Clamp(playerRate, 0, 1)
+                    : present == AntimatterOwnership.Enemy ? Math.Clamp(enemyRate, 0, 1) : 1);
             if (present == AntimatterOwnership.Neutral || present == Ownership)
             {
                 CaptureProgress = Math.Max(0, CaptureProgress - work * (present == Ownership && present != AntimatterOwnership.Neutral
@@ -130,7 +142,8 @@ public partial class StrategicPoint : Node3D
             || BaseFor(Ownership) is not { IsDestroyed: false } hub) { _incomeFraction = 0; return; }
         int available = hub.AvailableStorage;
         if (available == 0) { _incomeFraction = 0; return; }
-        double accrued = _incomeFraction + delta * Math.Max(0, IncomePerSecond);
+        double accrued = _incomeFraction + delta * Math.Max(0, IncomePerSecond)
+            * (1 + 0.1 * hub.Construction.UpgradeRank("extractor-optimization", true));
         int request = (int)Math.Min(available, Math.Floor(accrued));
         GeneratedAntimatter += hub.DepositAntimatter(request);
         _incomeFraction = hub.AvailableStorage == 0 ? 0 : accrued - Math.Floor(accrued);

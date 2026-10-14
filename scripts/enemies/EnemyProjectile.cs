@@ -112,12 +112,15 @@ public partial class EnemyProjectile : Area3D
         if (body is EnemyEcosystemEnemy enemy
             && (_rivalShot ? enemy.IsTerritorial : enemy.Role == EnemyEcosystemEnemy.EnemyRole.RivalShip))
             enemy.ApplyDamage(Damage, IsInstanceValid(_owner) ? _owner : null);
+        if (body is BaseTacticalDrone or BaseStrikeDrone or Equipment.GuardianDrone
+            && Equipment.FactionCombat.CanDamage(body, _rivalShot ? AntimatterOwnership.Enemy : AntimatterOwnership.Neutral))
+            Equipment.FactionCombat.Damage(body, Damage, IsInstanceValid(_owner) ? _owner : null);
 
         // Territorial casters only fight pilots. A stray shot does not turn
         // ordinary habitat combat into a base siege.
         if (_rivalShot && body is FactionBase hub && hub.IsPlayerBase)
         {
-            hub.ApplyDamage(Damage);
+            hub.ApplyDamage(Damage, IsInstanceValid(_owner) ? _owner : null);
         }
 
         QueueFree();

@@ -30,6 +30,15 @@ public sealed class BaseConstruction
     public ConstructionProject? GetActive(ConstructionSlot slot) => ValidSlot(slot) ? _slots[(int)slot] : null;
     public bool IsCompleted(string id) => _completed.Contains(id);
     public IEnumerable<ConstructionDefinition> Catalog => _catalog.Values;
+    public int UpgradeRank(string id, bool active = false)
+    {
+        var item = UpgradeCatalog.Find(id);
+        if (item == null || !item.Playable) return 0;
+        if (active && (_base.IsDestroyed || (item.Slot != ConstructionSlot.Ship && _base.Tier < item.Tier))) return 0;
+        int rank = id == "plasma-bolt" ? 1 : 0;
+        for (int level = 1; level <= 3; level++) if (_completed.Contains(UpgradeCatalog.ProjectId(id, level))) rank = level;
+        return rank;
+    }
 
     public bool Register(ConstructionDefinition definition)
     {
@@ -61,27 +70,38 @@ public sealed class BaseConstruction
 
     public bool TryStart(string id, out string reason)
     {
+        if (BaseOrders.IsOrder(id)) { reason = "Select a target using Launch / Deploy"; return false; }
         reason = GetStartReason(id);
         if (reason.Length > 0) return false;
         return Start(_catalog[id], 0, false, out reason);
+    }
+
+    public bool TryStartOrder(string id, Godot.Node3D? target, out string reason)
+    {
+        if (!BaseOrders.IsOrder(id)) { reason = "Not a deployment order"; return false; }
+        reason = GetStartReason(id);
+        if (reason.Length == 0) reason = BaseOrders.TargetReason(_base, id, target);
+        if (reason.Length > 0) return false;
+        return Start(_catalog[id], 0, false, out reason, target);
     }
 
     public string GetStartReason(string id)
     {
         if (!_catalog.TryGetValue(id, out var definition)) return "Unknown project";
         if (!definition.Repeatable && _completed.Contains(id)) return "Completed";
-        string reason = ValidateStart(definition);
-        return reason.Length > 0 ? reason : _base.ProjectUnavailableReason(id);
+        return ValidateStart(definition);
     }
 
     public string GetNextTierStartReason() => NextTierDefinition() is { } definition
         ? ValidateStart(definition) : "Maximum tier / base destroyed";
 
     public bool IsEffectActive(string id) => _completed.Contains(id)
-        && _catalog.TryGetValue(id, out var definition) && !_base.IsDestroyed && _base.Tier >= definition.RequiredTier;
+        && _catalog.TryGetValue(id, out var definition) && !_base.IsDestroyed
+        && (definition.Slot == ConstructionSlot.Ship || _base.Tier >= definition.RequiredTier);
 
     private string ValidateStart(ConstructionDefinition definition)
     {
+        if (_base.GetTree().Paused) return "Gameplay paused";
         if (_base.IsDestroyed) return "Base destroyed";
         if (_slots[(int)definition.Slot] != null) return "Slot occupied";
         if (_base.Tier < definition.RequiredTier) return $"Requires tier {definition.RequiredTier}";
@@ -92,12 +112,12 @@ public sealed class BaseConstruction
         return string.Empty;
     }
 
-    private bool Start(ConstructionDefinition definition, int targetTier, bool rebuild, out string reason)
+    private bool Start(ConstructionDefinition definition, int targetTier, bool rebuild, out string reason, Godot.Node3D? orderedTarget = null)
     {
         reason = ValidateStart(definition);
         if (reason.Length > 0) return false;
         if (!_base.TrySpendAntimatter(definition.Cost)) { reason = "Insufficient stored antimatter"; return false; }
-        _slots[(int)definition.Slot] = new ConstructionProject(++_nextInstanceId, definition, targetTier, rebuild);
+        _slots[(int)definition.Slot] = new ConstructionProject(++_nextInstanceId, definition, targetTier, rebuild, orderedTarget);
         LastStatus = $"Started {definition.Name}";
         reason = string.Empty;
         return true;
@@ -125,13 +145,16 @@ public sealed class BaseConstruction
             if (project == null) continue;
             project.Advance(projectDelta);
             if (project.Progress < 1) continue;
+            if (BaseOrders.IsOrder(project.Definition.Id)
+                && BaseOrders.TargetReason(_base, project.Definition.Id, project.OrderedTarget, false).Length > 0)
+            { Cancel((ConstructionSlot)i, project.InstanceId); continue; }
             // Tier changes from damage destroy projects synchronously before this tick.
             if (project.TargetTier > 0 && !_base.TryCompleteTierUpgrade(project.TargetTier)) continue;
             _slots[i] = null;
             project.Finish(ConstructionState.Completed);
             CompletedInvestment += project.PaidAntimatter;
             if (project.TargetTier == 0 && !project.Definition.Repeatable) _completed.Add(project.Definition.Id);
-            if (project.TargetTier == 0) _base.ApplyProjectCompletion(project.Definition.Id);
+            if (project.TargetTier == 0 && BaseOrders.IsOrder(project.Definition.Id)) BaseOrders.Complete(_base, project);
             LastStatus = $"Completed {project.Definition.Name}";
         }
     }

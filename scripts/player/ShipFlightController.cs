@@ -79,13 +79,14 @@ public partial class ShipFlightController : CharacterBody3D
     [Export] public float Drag { get; set; } = 9.0f;
     [Export] public float BankDegrees { get; set; } = 24.0f;
     [Export] public float CameraSmoothing { get; set; } = 10.0f;
-    [Export] public float BankSmoothing { get; set; } = 8.0f;
+    [Export] public float BankSmoothing { get; set; } = 4.5f;
+    private float _bankInput;
     [Export] public float MouseSensitivity { get; set; } = 0.0025f;
     [Export] public float MinimumAltitude { get; set; } = 2.0f;
     [Export] public int JumpEnergyCost { get; set; } = 2;
     [Export] public float JumpHeight { get; set; } = 4;
     [Export] public float HoverGravity { get; set; } = 18;
-    [Export] public float MaximumHoverSlopeDegrees { get; set; } = 40;
+    [Export] public float MaximumHoverSlopeDegrees { get; set; } = 65;
     private readonly ShipHoverMotion _hover = new();
     private float _jumpBuffer;
     public bool IsHoverSupported => _hover.Supported;
@@ -135,14 +136,23 @@ public partial class ShipFlightController : CharacterBody3D
 [Export] public int SummonEquipmentEnergyCost { get; set; } = 24;
     [Export] public float SummonEquipmentCooldownSeconds { get; set; } = 8.0f;
     [Export] public float SummonDistance { get; set; } = 5.0f;
-    [Export] public int ClaimEquipmentEnergyCost { get; set; } = 2;
+    [Export] public int ClaimEquipmentEnergyCost { get; set; } = 1;
     [Export] public float ClaimEquipmentCooldownSeconds { get; set; } = 0.4f;
     [Export] public float EquipmentInstallationRadius { get; set; } = 18;
     private readonly string?[] _equipmentSlots = { "plasma-bolt", null, null, null };
+    private readonly string?[] _plannedEquipmentSlots = { "plasma-bolt", null, null, null };
     private static readonly string[] EquipmentSelectionActions = { "select_equipment_1", "select_equipment_2", "select_equipment_3", "select_equipment_4" };
     private int _selectedEquipmentSlot;
     public int SelectedEquipmentSlot => _selectedEquipmentSlot;
     public System.Collections.Generic.IReadOnlyList<string?> EquipmentSlots => System.Array.AsReadOnly(_equipmentSlots);
+    public System.Collections.Generic.IReadOnlyList<string?> PlannedEquipmentSlots => System.Array.AsReadOnly(_plannedEquipmentSlots);
+    public bool IsEquipmentPlanned(string id) => _plannedEquipmentSlots.Contains(id);
+    public bool HasPendingLoadout
+    {
+        get { for (int i = 0; i < 4; i++) if (IsLoadoutSlotPending(i)) return true; return false; }
+    }
+    public bool IsLoadoutSlotPending(int slot) => slot >= 0 && slot < 4 && (_equipmentSlots[slot] != _plannedEquipmentSlots[slot]
+        || (_equipmentSlots[slot] is { } id && GetOwnedEquipmentRank(id) > GetEquipmentRank(id)));
     public bool IsEquipmentInstalled(string id) => _equipmentSlots.Contains(id);
     public bool CanInstallEquipment => Health > 0 && !GetTree().Paused && IsInstanceValid(_homeBase)
         && !_homeBase!.IsDestroyed && (_arena?.SurfaceDistance(GlobalPosition, _homeBase.GlobalPosition)
@@ -166,40 +176,51 @@ public partial class ShipFlightController : CharacterBody3D
             : slot < 0 || slot >= 4 ? "Choose one of four slots."
             : GetOwnedEquipmentRank(id) == 0 ? "Research this item first." : string.Empty;
         if (reason.Length > 0) return false;
-        // Moving an already installed item never duplicates it.
-        for (int i = 0; i < 4; i++) if (_equipmentSlots[i] == id) _equipmentSlots[i] = null;
-        _equipmentSlots[slot] = id;
-        FindEquipment(id)!.InstallRank(GetOwnedEquipmentRank(id));
-        SelectInstalledEquipment();
+        for (int i = 0; i < 4; i++) if (_plannedEquipmentSlots[i] == id) _plannedEquipmentSlots[i] = null;
+        _plannedEquipmentSlots[slot] = id;
+        TrySynchronizeLoadout();
         return true;
     }
 
     public bool TryRemoveEquipment(int slot)
     {
         if (!CanInstallEquipment || slot < 0 || slot >= 4) return false;
-        _equipmentSlots[slot] = null;
-        SelectInstalledEquipment();
+        _plannedEquipmentSlots[slot] = null;
+        TrySynchronizeLoadout();
         return true;
     }
 
     public bool TryToggleEquipment(string id, out string reason)
     {
-        reason = !CanInstallEquipment ? "Return home while alive to change equipped items."
+        reason = Health <= 0 || GetTree().Paused ? "Plan equipment while alive in live gameplay."
             : GetOwnedEquipmentRank(id) == 0 ? "Research this item first."
-            : !IsEquipmentInstalled(id) && _equipmentSlots.All(item => item != null) ? "Turn off an item first; at most four can be equipped." : string.Empty;
+            : !IsEquipmentPlanned(id) && _plannedEquipmentSlots.All(item => item != null) ? "Turn off an item first; at most four can be planned." : string.Empty;
         if (reason.Length > 0) return false;
-        string? selected = _equipmentSlots[_selectedEquipmentSlot];
-        bool remove = IsEquipmentInstalled(id);
-        var enabled = _equipmentSlots.Where(item => item != null && item != id).ToHashSet();
-        if (!remove)
-        {
-            enabled.Add(id);
-            FindEquipment(id)!.InstallRank(GetOwnedEquipmentRank(id));
-        }
+        bool remove = IsEquipmentPlanned(id);
+        var enabled = _plannedEquipmentSlots.Where(item => item != null && item != id).ToHashSet();
+        if (!remove) enabled.Add(id);
         var ordered = ShipEquipmentCatalog.ItemIds.Where(item => enabled.Contains(item)).ToArray();
-        for (int i = 0; i < 4; i++) _equipmentSlots[i] = i < ordered.Length ? ordered[i] : null;
+        for (int i = 0; i < 4; i++) _plannedEquipmentSlots[i] = i < ordered.Length ? ordered[i] : null;
+        TrySynchronizeLoadout();
+        return true;
+    }
+
+    public bool TrySynchronizeLoadout()
+    {
+        if (!CanInstallEquipment || _primaryEquipment == null || !HasPendingLoadout) return false;
+        // Validate the whole plan before changing any active slot.
+        foreach (string? id in _plannedEquipmentSlots)
+            if (id != null && (GetOwnedEquipmentRank(id) == 0 || FindEquipment(id) == null)) return false;
+        string? selected = _equipmentSlots[_selectedEquipmentSlot];
+        for (int i = 0; i < 4; i++)
+        {
+            _equipmentSlots[i] = _plannedEquipmentSlots[i];
+            if (_equipmentSlots[i] is { } id) FindEquipment(id)!.InstallRank(GetOwnedEquipmentRank(id));
+        }
         int selection = System.Array.IndexOf(_equipmentSlots, selected);
         _selectedEquipmentSlot = selected != null && selection >= 0 ? selection : 0;
+        SelectInstalledEquipment();
+        _waitForEquipmentRelease = true;
         return true;
     }
 
@@ -227,7 +248,7 @@ public partial class ShipFlightController : CharacterBody3D
     }
     public float EnergyRechargePerSecond => EnergyCapacity * EnergyRegenFractionPerSecond
         * (IsInstanceValid(_homeBase) ? _homeBase!.EnergyRechargeMultiplier : 1) * Boons.Multiplier("recharge");
-    public float EffectiveClaimRange => IsInstanceValid(_homeBase) && _homeBase!.Construction.IsEffectActive("claim-range") ? 150 : 120;
+    public float EffectiveClaimRange => 120 + 30 * (IsInstanceValid(_homeBase) ? _homeBase!.Construction.UpgradeRank("claim-range", true) : 0);
     public int Health { get; private set; } = 100;
     public float Speed => Velocity.Length();
     public float AltitudeAboveTerrain => _arena == null ? GlobalPosition.Y : _arena.Elevation(GlobalPosition) - _arena.HeightAt(GlobalPosition);
@@ -284,6 +305,7 @@ public string SummonEquipmentName => _summonEquipment?.RankedName ?? "Guardian D
     private AntimatterSource? _antimatterSource;
     private float _yaw;
     private float _appliedYaw;
+    private float _turnRate;
     private Vector3 LocalUp => _arena?.UpAt(GlobalPosition) ?? Vector3.Up;
     private float _pitch = -0.2f;
     private float _fireCooldown;
@@ -350,7 +372,7 @@ private EquipmentDefinition _summonEquipment = null!;
         _mobilityEquipment = new EquipmentDefinition("dash", "Dash", EquipmentKind.Mobility, MobilityEquipmentEnergyCost, MobilityEquipmentCooldownSeconds, "Dash quickly in the aimed direction.");
 _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", EquipmentKind.Summoning, SummonEquipmentEnergyCost, SummonEquipmentCooldownSeconds, "Summon a temporary ally that attacks nearby enemies.");
         _terrainEquipment = new EquipmentDefinition("terrain-shape", "Terrain Shape", EquipmentKind.Terrain, TerrainEquipmentEnergyCost, TerrainEquipmentCooldownSeconds, "Shape terrain using the selected terrain mode.");
-        _claimEquipment = new EquipmentDefinition("claim", "Claim", EquipmentKind.Economy, ClaimEquipmentEnergyCost, ClaimEquipmentCooldownSeconds, "Fire a terrain-following bolt to claim neutral or rival antimatter.");
+        _claimEquipment = new EquipmentDefinition("claim", "Claim", EquipmentKind.Economy, ClaimEquipmentEnergyCost, ClaimEquipmentCooldownSeconds, "Fire a penetrating terrain-following bolt to claim all neutral or rival antimatter along its path.");
 
         if (IsPlayerControlled)
         {
@@ -454,6 +476,7 @@ _summonEquipment = new EquipmentDefinition("guardian-drone", "Guardian Drone", E
             if (IsPlayerControlled) { _camera.HOffset = 0; _camera.VOffset = 0; }
             return;
         }
+        TrySynchronizeLoadout();
         RecoverHealth(deltaF);
         _discoveryFeedbackTimer = Mathf.Max(0, _discoveryFeedbackTimer - deltaF);
         _fireCooldown = Mathf.Max(0.0f, _fireCooldown - deltaF);
@@ -472,6 +495,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         if (GameplayInputBlocked) _waitForEquipmentRelease = true;
         else if (IsPlayerControlled && _waitForEquipmentRelease && !Input.IsActionPressed("activate_primary") && !Input.IsActionPressed("activate_claim")) _waitForEquipmentRelease = false;
 
+        Vector3 previousForward = -GlobalBasis.Z;
         if (!IsPlayerControlled)
         {
             Vector3 forward = (_arena?.Tangent(_autonomousAim, GlobalPosition) ?? new Vector3(_autonomousAim.X, 0, _autonomousAim.Z)).Normalized();
@@ -484,8 +508,9 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
             _appliedYaw = _yaw;
         }
         else Rotation = new Vector3(0.0f, _yaw, 0.0f);
-        if (IsPlayerControlled) _cameraPivot.Rotation = new Vector3(_pitch, 0.0f, 0.0f);
-        UpdateCamera(deltaF);
+        if (deltaF > 0)
+            _turnRate = -Mathf.Atan2(previousForward.Cross(-GlobalBasis.Z).Dot(LocalUp),
+                previousForward.Dot(-GlobalBasis.Z)) / deltaF;
 
         Vector3 localInput = Vector3.Zero;
         if (!GameplayInputBlocked)
@@ -522,6 +547,11 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         }
         if (IsPlayerControlled) GameAudio.Instance?.SetFlightIntensity(Mathf.Clamp(Velocity.Length() / MoveSpeed, 0.0f, 1.0f));
         UpdateShipBank(deltaF);
+        if (IsPlayerControlled)
+        {
+            _cameraPivot.Rotation = new Vector3(_pitch, 0, 0);
+            UpdateCamera(deltaF);
+        }
         if (_arena != null) _arena.MoveBody(this); else MoveAndSlide();
 
         // The ocean has no solid collider. Treat its plane as a landing surface,
@@ -659,6 +689,9 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         Energy = EnergyCapacity;
         Velocity = Vector3.Zero;
         _autonomousMovement = Vector3.Zero;
+        _turnRate = 0;
+        _bankInput = 0;
+        _shipVisual.Rotation = Vector3.Zero;
         LastAttacker = null;
         _shieldTimer = 0;
         _boosterTimer = _boosterCooldown = 0;
@@ -674,6 +707,7 @@ _terrainEquipmentCooldown = Mathf.Max(0.0f, _terrainEquipmentCooldown - deltaF);
         ConfigureHover();
         _hover.Reset(_arena, GlobalPosition);
         StatusMessage = "Respawned at your base";
+        TrySynchronizeLoadout();
         _feedbackTimer = 2.0f;
     }
 
@@ -932,7 +966,9 @@ private void CycleQuickEquipment()
 
         SpendEnergy(_claimEquipment.EnergyCost);
         Vector3 direction = AimDirection;
-        var projectile = new ClaimProjectile { Name = "ClaimProjectile", MaxRange = EffectiveClaimRange, Ownership = Ownership };
+        var projectile = new ClaimProjectile { Name = "ClaimProjectile", MaxRange = EffectiveClaimRange, Ownership = Ownership,
+            HitRadius = 1.3f + 0.3f * (IsInstanceValid(_homeBase) ? _homeBase!.Construction.UpgradeRank("claim-range", true) : 0),
+            LifetimeSeconds = Mathf.Max(4, EffectiveClaimRange / 48f + 0.05f) };
         projectile.AntimatterClaimed += OnAntimatterClaimed;
         GetParent().AddChild(projectile);
         projectile.GlobalPosition = AimOrigin + direction * 1.5f;
@@ -1183,6 +1219,10 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
         foreach (Node node in GetTree().GetNodesInGroup("pilots"))
             if (node is ShipFlightController ship && FactionCombat.CanDamage(ship, Ownership) && ship.GlobalPosition.DistanceTo(center) <= radius)
             { FactionCombat.Damage(ship, damage, this); hits++; }
+        foreach (string group in new[] { "base_tactical_drone", "base_strike_drone", "guardian-drone" })
+            foreach (Node node in GetTree().GetNodesInGroup(group))
+                if (node is Node3D unit && FactionCombat.CanDamage(unit, Ownership) && unit.GlobalPosition.DistanceTo(center) <= radius)
+                { FactionCombat.Damage(unit, damage, this); hits++; }
 
         return hits;
     }
@@ -1240,6 +1280,7 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
         {
             _camera.LookAt(_cameraPivot.GlobalPosition, LocalUp);
         }
+        _camera.RotateObjectLocal(Vector3.Back, _shipVisual.Rotation.Z * (10f / Mathf.Max(1, BankDegrees)));
 
         if (IsInvulnerable)
         {
@@ -1253,16 +1294,20 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
         }
         else if (_feedbackTimer <= 0.0f)
         {
-            _shipMaterial.AlbedoColor = _shipMaterial.AlbedoColor.Lerp(new Color(0.38f, 0.16f, 0.82f), Mathf.Clamp(10.0f * delta, 0.0f, 1.0f));
+            _shipMaterial.AlbedoColor = _shipMaterial.AlbedoColor.Lerp(IsPlayerControlled
+                ? new Color(0.38f, 0.16f, 0.82f) : new Color(0.8f, 0.18f, 0.12f), Mathf.Clamp(10.0f * delta, 0.0f, 1.0f));
         }
     }
 
     private void UpdateShipBank(float delta)
     {
         Vector3 localVelocity = GlobalBasis.Inverse() * Velocity;
-        float targetRoll = Mathf.DegToRad(-Mathf.Clamp(localVelocity.X / MoveSpeed, -1.0f, 1.0f) * BankDegrees);
+        float speedWeight = Mathf.Clamp(Speed / MoveSpeed, 0, 1);
+        float turn = Mathf.Clamp(_turnRate / 2.5f, -1, 1) * speedWeight;
+        float smoothingWeight = 1 - Mathf.Exp(-Mathf.Max(0, BankSmoothing) * delta);
+        _bankInput = Mathf.Lerp(_bankInput, Mathf.Clamp(turn - localVelocity.X / MoveSpeed * 0.6f, -1, 1), smoothingWeight);
+        float targetRoll = Mathf.DegToRad(-_bankInput * BankDegrees);
         float targetPitch = Mathf.DegToRad(Mathf.Clamp(localVelocity.Z / MoveSpeed, -1.0f, 1.0f) * 9.0f);
-        float smoothingWeight = Mathf.Clamp(BankSmoothing * delta, 0.0f, 1.0f);
         _shipVisual.Rotation = new Vector3(
             Mathf.LerpAngle(_shipVisual.Rotation.X, targetPitch, smoothingWeight),
             0.0f,
@@ -1272,16 +1317,29 @@ foreach (Node node in GetTree().GetNodesInGroup("simple_monster"))
     private void AddShipVisual()
     {
         _shipVisual = new MeshInstance3D { Name = "ShipVisual" };
-        _shipVisual.Mesh = new BoxMesh { Size = new Vector3(2.0f, 0.12f, 3.0f) };
+        _shipVisual.Mesh = HovercraftHull.Create();
         _shipVisual.Position = new Vector3(0.0f, -0.35f, 0.0f);
 
         _shipMaterial = new StandardMaterial3D
         {
-            AlbedoColor = new Color(0.38f, 0.16f, 0.82f),
+            AlbedoColor = IsPlayerControlled ? new Color(0.38f, 0.16f, 0.82f) : new Color(0.8f, 0.18f, 0.12f),
             Roughness = 0.65f
         };
         _shipVisual.MaterialOverride = _shipMaterial;
         AddChild(_shipVisual);
+        var thrusterMaterial = new StandardMaterial3D
+        {
+            AlbedoColor = IsPlayerControlled ? Colors.Cyan : Colors.Orange,
+            EmissionEnabled = true,
+            Emission = IsPlayerControlled ? Colors.Cyan : Colors.Orange
+        };
+        foreach (float x in new[] { -0.7f, 0.7f })
+            _shipVisual.AddChild(new MeshInstance3D
+            {
+                Name = "RearThruster", Position = new Vector3(x, 0, 1.16f),
+                Mesh = new BoxMesh { Size = new Vector3(0.32f, 0.16f, 0.12f) },
+                MaterialOverride = thrusterMaterial
+            });
 
         var collision = new CollisionShape3D
         {

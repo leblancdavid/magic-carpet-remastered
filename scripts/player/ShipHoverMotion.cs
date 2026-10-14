@@ -9,7 +9,8 @@ public sealed class ShipHoverMotion
     public float HoverHeight { get; set; } = 2;
     public float Gravity { get; set; } = 18;
     public float JumpHeight { get; set; } = 4;
-    public float MaximumSlopeDegrees { get; set; } = 40;
+    public float MaximumSlopeDegrees { get; set; } = 65;
+    public float LateralGrip { get; set; } = 1.8f;
     public float MaximumClimbSpeed { get; set; } = 10;
     public float AirControl { get; set; } = 0.35f;
     public bool Supported { get; private set; }
@@ -65,11 +66,32 @@ public sealed class ShipHoverMotion
             desiredHorizontal -= uphill * Mathf.Max(0, desiredHorizontal.Dot(uphill));
             horizontal -= uphill * Mathf.Max(0, horizontal.Dot(uphill));
         }
-        float climb = gradient.Dot(desiredHorizontal);
-        if (climb > MaximumClimbSpeed) desiredHorizontal *= MaximumClimbSpeed / climb;
+        // Limit only uphill travel: crossing a steep slope need not crawl too.
+        if (gradient.LengthSquared() > 0.001f)
+        {
+            Vector3 uphill = gradient.Normalized();
+            float requested = Mathf.Max(0, desiredHorizontal.Dot(uphill));
+            float slope = Mathf.RadToDeg(Mathf.Atan(gradient.Length()));
+            float limit = Mathf.Min(requested * Mathf.Lerp(1, 0.3f,
+                Mathf.Clamp((slope - 20) / Mathf.Max(1, MaximumSlopeDegrees - 20), 0, 1)),
+                MaximumClimbSpeed / gradient.Length());
+            desiredHorizontal -= uphill * (requested - limit);
+        }
         float rate = desiredHorizontal.LengthSquared() > 0.001f ? acceleration : drag;
         if (!Supported) rate *= desiredHorizontal.LengthSquared() > 0.001f ? AirControl : 0.1f;
-        horizontal = boosting ? desiredHorizontal : horizontal.MoveToward(desiredHorizontal, rate * delta);
+        if (desiredHorizontal.LengthSquared() > 0.001f)
+        {
+            Vector3 heading = desiredHorizontal.Normalized();
+            float along = horizontal.Dot(heading);
+            Vector3 lateral = horizontal - heading * along;
+            float grip = LateralGrip * (Supported ? 1 : AirControl);
+            float next = boosting ? desiredHorizontal.Length()
+                : Mathf.MoveToward(along, desiredHorizontal.Length(), rate * delta);
+            float speedLimit = Mathf.Max(horizontal.Length(), desiredHorizontal.Length());
+            horizontal = heading * next + lateral * Mathf.Exp(-grip * delta);
+            if (horizontal.Length() > speedLimit) horizontal = horizontal.Normalized() * speedLimit;
+        }
+        else horizontal = horizontal.MoveToward(Vector3.Zero, rate * delta);
         surfaceVelocity = Mathf.Clamp(gradient.Dot(horizontal), -MaximumClimbSpeed, MaximumClimbSpeed);
         float radialAcceleration = -Gravity;
         if (Supported)

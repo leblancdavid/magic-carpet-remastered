@@ -61,6 +61,7 @@ public partial class AntimatterPickup : RigidBody3D
     private float _growthStartRadius;
     private float _growthElapsed;
     private float _dropDelayRemaining;
+    private Vector3 _dropVelocity;
     private ulong _supportFrame = ulong.MaxValue;
     private ulong _supportRevision;
     private Vector3 _supportPosition;
@@ -119,7 +120,7 @@ public partial class AntimatterPickup : RigidBody3D
         {
             _dropDelayRemaining -= (float)delta;
             if (_dropDelayRemaining > 0.00001f) return;
-            LaunchScatter(ClearDropPosition(), Vector3.Zero);
+            LaunchScatter(ClearDropPosition(), _dropVelocity);
         }
         _mergeGraceRemaining = Mathf.Max(0, _mergeGraceRemaining - (float)delta);
         UpdateMergeGrowth((float)delta);
@@ -388,12 +389,13 @@ public partial class AntimatterPickup : RigidBody3D
     {
         SpillAt(position);
         LinearVelocity = velocity;
-        _mergeGraceRemaining = 0.8f;
+        _mergeGraceRemaining = velocity.LengthSquared() > 0 ? 1.5f : 0.8f;
     }
 
-    public void ScheduleDrop(Vector3 position, float delaySeconds)
+    public void ScheduleDrop(Vector3 position, float delaySeconds, Vector3 velocity = default)
     {
-        LaunchScatter(position, Vector3.Zero);
+        _dropVelocity = velocity;
+        LaunchScatter(position, velocity);
         if (delaySeconds <= 0) return;
         // The reserved fragment is already counted by WorldAntimatterTracker, but
         // cannot interact with gameplay until its own pause-aware release tick.

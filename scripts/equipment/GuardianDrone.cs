@@ -14,6 +14,8 @@ public partial class GuardianDrone : CharacterBody3D
     [Export] public float AttackCooldownSeconds { get; set; } = 0.75f;
     [Export] public int Damage { get; set; } = 12;
     public Node3D? OwnerPilot { get; set; }
+    public int Health { get; private set; } = 30;
+    public AntimatterOwnership Ownership => _ownership;
 
     private StandardMaterial3D _material = null!;
     private float _lifeRemaining;
@@ -33,6 +35,7 @@ public partial class GuardianDrone : CharacterBody3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (Health <= 0 || IsQueuedForDeletion() || GetTree().Paused) return;
         float deltaF = (float)delta;
         _lifeRemaining -= deltaF;
         _attackCooldown = Mathf.Max(0.0f, _attackCooldown - deltaF);
@@ -82,6 +85,13 @@ public partial class GuardianDrone : CharacterBody3D
         _arena?.ClampFlightBody(this);
     }
 
+    public void ApplyDamage(int damage)
+    {
+        if (damage <= 0 || Health <= 0) return;
+        Health = Mathf.Max(0, Health - damage);
+        if (Health == 0) QueueFree();
+    }
+
     private Node3D? FindNearestTarget()
     {
         Node3D? best = null;
@@ -107,6 +117,10 @@ public partial class GuardianDrone : CharacterBody3D
             if (node is ShipFlightController ship && FactionCombat.CanDamage(ship, _ownership)
                 && GlobalPosition.DistanceTo(ship.GlobalPosition) < bestDistance)
             { best = ship; bestDistance = GlobalPosition.DistanceTo(ship.GlobalPosition); }
+        foreach (string group in new[] { "base_tactical_drone", "base_strike_drone", "guardian-drone" })
+            foreach (Node node in GetTree().GetNodesInGroup(group))
+                if (node is Node3D unit && FactionCombat.CanDamage(unit, _ownership) && GlobalPosition.DistanceTo(unit.GlobalPosition) < bestDistance)
+                { best = unit; bestDistance = GlobalPosition.DistanceTo(unit.GlobalPosition); }
 
         return best;
     }

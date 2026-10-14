@@ -1,6 +1,7 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Player;
 using MagicCarpetRemastered.Scripts.World;
+using MagicCarpetRemastered.Scripts.Equipment;
 
 namespace MagicCarpetRemastered.Scripts.Enemies;
 
@@ -25,7 +26,7 @@ public sealed class NeutralTerritory
     private float _alertRemaining;
     private float _reacquireDelay;
     private readonly System.Collections.Generic.List<Node3D> _pilots = new();
-    private static readonly string[] PilotGroups = { "pilots", "legacy_rival_pilot" };
+    private static readonly string[] PilotGroups = { "pilots", "legacy_rival_pilot", "base_tactical_drone", "base_strike_drone", "guardian-drone" };
     private float _pilotRefresh;
 
     public NeutralTerritory(EnemyEcosystemEnemy body, HeightmapArena? arena, Vector3 home)
@@ -41,7 +42,9 @@ public sealed class NeutralTerritory
 
     public static bool IsLivingPilot(Node3D? actor) => GodotObject.IsInstanceValid(actor) && !actor!.IsQueuedForDeletion()
         && (actor is ShipFlightController { Health: > 0 }
-            || actor is EnemyEcosystemEnemy { Role: EnemyEcosystemEnemy.EnemyRole.RivalShip, Health: > 0 });
+            || actor is EnemyEcosystemEnemy { Role: EnemyEcosystemEnemy.EnemyRole.RivalShip, Health: > 0 }
+            || actor is BaseTacticalDrone { Health: > 0 } || actor is BaseStrikeDrone { Health: > 0 }
+            || actor is GuardianDrone { Health: > 0 });
 
     public float Distance(Vector3 from, Vector3 to) => _arena?.SurfaceDistance(from, to)
         ?? new Vector2(from.X - to.X, from.Z - to.Z).Length();
@@ -96,6 +99,7 @@ public sealed class NeutralTerritory
                 _pilots.Clear();
                 foreach (string group in PilotGroups)
                 {
+                    if (group != "pilots" && group != "legacy_rival_pilot" && _body.GetTree().GetFirstNodeInGroup(group) == null) continue;
                     using var actors = (Godot.Collections.Array)_body.GetTree().GetNodesInGroup(group);
                     foreach (Variant actor in actors) if (actor.As<Node>() is Node3D pilot) _pilots.Add(pilot);
                 }
@@ -139,14 +143,14 @@ public sealed class NeutralTerritory
         }
         if (_wanderRemaining > 0 && distance > 2) return;
         bool flying = _body.Role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm;
-        _pauseRemaining = _wanderRemaining > 0 ? Range(flying ? 0.2f : 1, flying ? 1.5f : 4) : 0;
-        _wanderRemaining = Range(7, 16);
-        _wanderSpeed = Range(flying ? 0.4f : 0.25f, flying ? 0.7f : 0.5f);
+        _pauseRemaining = _wanderRemaining > 0 ? Range(0.2f, flying ? 0.8f : 1.5f) : 0;
+        _wanderRemaining = Range(12, 26);
+        _wanderSpeed = Range(flying ? 0.5f : 0.35f, flying ? 0.85f : 0.7f);
         Vector3 up = _arena?.UpAt(Home) ?? Vector3.Up;
         for (int attempt = 0; attempt < 8; attempt++)
         {
             Vector3 tangent = _forward.Rotated(up, Range(0, Mathf.Tau));
-            float radius = Range(0.2f, 1) * Mathf.Min(_body.PatrolRadius, _body.HabitatLeashRadius * 0.6f);
+            float radius = Range(0.45f, 1) * Mathf.Min(_body.PatrolRadius * 2.5f, _body.HabitatLeashRadius * 0.6f);
             Vector3 destination = _arena?.IsSpherical == true
                 ? _arena.OnSurface(_arena.PlanetCenter + new Quaternion(up.Cross(tangent), radius / _arena.PlanetRadius) * up * _arena.PlanetRadius)
                 : Home + tangent * radius;

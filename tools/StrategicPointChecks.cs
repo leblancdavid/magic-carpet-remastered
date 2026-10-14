@@ -111,7 +111,7 @@ public partial class StrategicPointChecks : Node3D
                 var cargo = new AntimatterPickup { AntimatterAmount = 12, Ownership = AntimatterOwnership.Player,
                     Position = arena.OnSurface(origin, 1) }; room.AddChild(cargo); cargo.Freeze = true;
                 Invoke(drone, "Scoop", cargo);
-                Check(drone.CarriedCount == 1 && !cargo.IsAvailable, "Station drone carries real attached cargo");
+                Check(drone.CarriedAntimatter == 12 && !cargo.IsAvailable, "Station drone carries real internal AM cargo");
                 var tracker = new WorldAntimatterTracker(); room.AddChild(tracker); tracker.Refresh(); int total = tracker.TotalAntimatter;
                 Check(tracker.SiteGeneratedAntimatter == extractor.GeneratedAntimatter, "World accounting reports accepted extractor supply separately from transfers");
                 logistics.Advance(10, false, true);
@@ -123,7 +123,7 @@ public partial class StrategicPointChecks : Node3D
                 Check(!drone.StationSuspended, "Final capture resumes station work");
                 tracker.Refresh();
                 Check(ReferenceEquals(logistics.Drone, drone) && !drone.UsePlayerAntimatter && drone.CarriedCount == 1
-                    && cargo.Ownership == AntimatterOwnership.Enemy && cargo.AntimatterAmount == 12 && tracker.TotalAntimatter == total,
+                    && drone.CarriedAntimatter == 12 && tracker.TotalAntimatter == total,
                     "Capture steals same drone/all cargo without resource creation or detachment");
                 Check(drone.IsInGroup("enemy_drone") && !drone.IsInGroup("player_drone"), "Drone ownership groups update on transfer");
                 var stalePickup = new AntimatterPickup { Ownership = AntimatterOwnership.Player, Position = arena.OnSurface(origin, 1) };
@@ -132,14 +132,14 @@ public partial class StrategicPointChecks : Node3D
                 stalePickup.Free();
                 drone.GlobalPosition = home.GlobalPosition + arena.UpAt(home.GlobalPosition) * drone.HoverHeight;
                 Invoke(drone, "HandleReturning", 0f);
-                Check(cargo.AntimatterAmount == 12, "Returning at old home after transfer cannot dock/deposit there");
+                Check(drone.CarriedAntimatter == 12, "Returning at old home after transfer cannot dock/deposit there");
                 int oldStorage = home.StoredAntimatter;
                 Invoke(drone, "DepositAll");
-                Check(cargo.AntimatterAmount == 12 && home.StoredAntimatter == oldStorage, "Full new base retains stolen cargo and prevents old-base deposit");
+                Check(drone.CarriedAntimatter == 12 && home.StoredAntimatter == oldStorage, "Full new base retains stolen cargo and prevents old-base deposit");
                 rival.WithdrawAntimatter(5); Invoke(drone, "DepositAll");
-                Check(cargo.AntimatterAmount == 7 && drone.CarriedCount == 1 && rival.AvailableStorage == 0, "Partial deposit retains exact remainder aboard");
+                Check(drone.CarriedAntimatter == 7 && rival.AvailableStorage == 0, "Partial deposit retains exact remainder aboard");
                 logistics.Advance(20, true, false);
-                Check(ReferenceEquals(logistics.Drone, drone) && cargo.Ownership == AntimatterOwnership.Player && cargo.AntimatterAmount == 7,
+                Check(ReferenceEquals(logistics.Drone, drone) && drone.UsePlayerAntimatter && drone.CarriedAntimatter == 7,
                     "Repeated recapture preserves drone and remaining cargo");
                 int roomBefore = home.AvailableStorage; Invoke(drone, "DepositAll");
                 Check(home.AvailableStorage == roomBefore - 7 && drone.CarriedCount == 0, "Recaptured cargo deposits only into current home");

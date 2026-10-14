@@ -2,6 +2,8 @@
 
 ## Stronger-pack playtest follow-up (2026-10-12)
 
+**2026-10-13 movement follow-up:** shared drift and 65° progressive uphill traversal now apply to both ships. Rival navigation probes ten local headings over eight metres every 0.75–1s, avoids excessive slope/solid actors, keeps a stalled detour preference and attempts the normal paid jump after two seconds with three-second retry spacing. Twelve-second abort/thirty-second goal suppression remain. An actual-controller 56° crater escape is verified; global routing and sustained deformation/obstacle resilience still need acceptance. See `PLAYTEST_FLIGHT_DROPS.md`.
+
 Live Medium is now radius 300 with broader neutral aggro and same-habitat damage retaliation. Recovery goals are committed against local threat reacquisition until the existing home recharge threshold; no free healing/funding is added. The unassisted opening verifier waits for both Shield installation and an owned site within its existing bounded budget. Final headless run passes **97** checks (including **90** controlled mechanics checks), with real paid orders, installed Shield and owned-site capture. Earlier accelerated runs missed the owned-site deadline even while researching/installing and surviving; repeated defense/salvage/recovery pressure and frame-based accelerated observation remain reliability/balance follow-ups alongside slope/obstacle routing. Do not treat a passing opening or terrain-only access success as full-match rival acceptance.
 
 ## Status (2026-10-11)

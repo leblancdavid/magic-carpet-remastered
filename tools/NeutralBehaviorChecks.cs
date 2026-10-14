@@ -204,9 +204,9 @@ public partial class NeutralBehaviorChecks : Node3D
                     _room.AddChild(resource); resource.SetPhysicsProcess(false); resource.Freeze = true;
                     var ledger = new WorldAntimatterTracker(); _room.AddChild(ledger); ledger.SetProcess(false); ledger.Refresh(); int supplied = ledger.TotalAntimatter;
                     scavenger._PhysicsProcess(0); ledger.Refresh();
-                    Check(resource.AntimatterAmount == 0 && scavenger.AntimatterReserve == 9 && ledger.TotalAntimatter == supplied,
+                    Check(resource.AntimatterAmount == 0 && scavenger.AntimatterReserve == scavenger.NeutralAntimatterValue + 9 && ledger.TotalAntimatter == supplied,
                         $"Local scavenger steals {owner} resource with exact conservation");
-                    Check(ledger.NeutralCreatureAntimatter == 9, "Scavenging cannot subsidize either faction");
+                    Check(ledger.NeutralCreatureAntimatter == scavenger.NeutralAntimatterValue + 9, "Scavenging adds stolen reserves to intrinsic reward without subsidizing either faction");
                     scavenger.ApplyDamage(1000); ledger.Refresh();
                     Check(ledger.TotalAntimatter == supplied && ledger.NeutralCreatureAntimatter == 0, "Scavenger death transfers reserve to neutral drops once");
                     scavenger.Free(); resource.Free(); ledger.Free();
@@ -254,12 +254,12 @@ public partial class NeutralBehaviorChecks : Node3D
                         excursion = Mathf.Max(excursion, wander.Distance(start, roamer.GlobalPosition));
                     }
                     else paused = true;
-                    Check(wander.Distance(roamer.GlobalPosition, wander.Home) <= roamer.PatrolRadius + 1,
+                    Check(wander.Distance(roamer.GlobalPosition, wander.Home) <= Mathf.Min(roamer.PatrolRadius * 2.5f, roamer.HabitatLeashRadius * 0.6f) + 1,
                         "Random roaming stays within its habitat's patrol footprint");
                 }
                 Check(headings.Count > 60 && paused && headings.Any(h => h.Dot(headings[0]) < 0),
                     $"Idle swarms move, pause and change direction rather than tracing one fixed circle: spherical {spherical}, steps {headings.Count}, paused {paused}, reverse {headings.Any(h => h.Dot(headings[0]) < 0)}");
-                Check(excursion > 1, "Idle wandering changes position with distant pilots");
+                Check(excursion > roamer.PatrolRadius, "Idle wandering travels beyond the former small patrol footprint");
                 roamer.Free(); replay.Free();
 
                 _room.QueueFree(); await Frames(10);
@@ -300,7 +300,11 @@ public partial class NeutralBehaviorChecks : Node3D
                 && initial.Count(e => e.HabitatId.StartsWith("wild-")) > initial.Length / 2,
                 "Most encounters are random wild groups distributed over at least ten regions");
             Check(initial.Any(e => e.IsHeavy && e.Health == 150) && initial.Where(e => e.Role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm)
-                .All(e => e.Health == 16 && e.AntimatterReserve == 3), "Heavy beasts and easy low-reward swarm members are distinct");
+                .All(e => e.Health == 16 && e.AntimatterReserve == 6), "Heavy beasts and easy low-reward swarm members are distinct");
+            Check(initial.All(e => e.AntimatterReserve == (e.IsHeavy ? 72
+                : e.Role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm ? 6
+                : e.Role == EnemyEcosystemEnemy.EnemyRole.GroundBeast ? 36 : 20)),
+                "All live habitat mob roles carry doubled intrinsic rewards");
             Check(initial.Where(e => e.Role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm).GroupBy(e => e.HabitatId).Any(g => g.Count() >= 6),
                 "Each size contains full easy swarms of at least six rather than thinning every group to pairs");
             Check(initial.All(e => !e.IsRaider && arena.SurfaceDistance(e.GlobalPosition, home.GlobalPosition) >= director.EffectiveBaseExclusion
@@ -330,18 +334,18 @@ public partial class NeutralBehaviorChecks : Node3D
             game.GetNode<ShipFlightController>("RivalPilot").GlobalPosition = rival.GlobalPosition;
             int populationBefore = all.Count(e => e.IsTerritorial && e.HabitatId == depleted);
             victim.ApplyDamage(1000); depletedGroup[1].ApplyDamage(1000); await Frames(3);
-            director._PhysicsProcess(19);
+            director._PhysicsProcess(34);
             Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == depleted) == populationBefore - 2,
-                "Depleted habitat does not replenish before its 20-second recovery delay");
+                "Depleted habitat does not replenish before its 35-second recovery delay");
             director._PhysicsProcess(1);
             Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == depleted) == populationBefore - 1,
                 "Depleted habitat replenishes one member independently after recovery delay");
-            director._PhysicsProcess(4);
+            director._PhysicsProcess(7);
             Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == depleted) == populationBefore - 1,
                 "Group does not respawn all remaining members at once");
             director._PhysicsProcess(1);
             Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == depleted) == populationBefore,
-                "Remaining member returns five seconds after the first");
+                "Remaining member returns eight seconds after the first");
             foreach (var e in game.GetChildren().OfType<EnemyEcosystemEnemy>()) e.SetPhysicsProcess(false);
             // Guard replacement follows either faction's ownership, not player
             // proximity or the visible capture ring. Living guards remain.
@@ -361,7 +365,7 @@ public partial class NeutralBehaviorChecks : Node3D
             guarded.Advance(10, true, false); director._PhysicsProcess(0.5);
             player.GlobalPosition = home.GlobalPosition;
             game.GetNode<ShipFlightController>("RivalPilot").GlobalPosition = rival.GlobalPosition;
-            director._PhysicsProcess(19);
+            director._PhysicsProcess(34);
             Check(game.GetChildren().OfType<EnemyEcosystemEnemy>().Count(e => e.Health > 0 && e.HabitatId == guardId) == guards.Length - 1,
                 "Neutralization restarts a full guard recovery delay");
             director._PhysicsProcess(1);
@@ -400,8 +404,8 @@ public partial class NeutralBehaviorChecks : Node3D
                 Position = arena.OnSurface(rival.GlobalPosition + rival.GlobalBasis.X * 6, 1.1f) };
             game.AddChild(ordinary); ordinary.SetPhysicsProcess(false);
             game.GetNode<ShipFlightController>("RivalPilot").GlobalPosition = PlanetLayout.Position(arena, game.Layout.Landmarks[0].Up, 8);
-            rivalHp = rival.Health; ordinary._PhysicsProcess(2);
-            Check(rival.Health == rivalHp, "An ordinary sieger does not automatically ram nearby bases");
+            rivalHp = rival.Health; ordinary._PhysicsProcess(0);
+            Check(rival.Health == rivalHp - ordinary.ContactDamage, "An ordinary neutral attacks a base it contacts");
             ordinary.Free();
             var stray = new EnemyProjectile { Damage = 10 }; game.AddChild(stray); stray.SetPhysicsProcess(false);
             stray.Launch(Vector3.Forward, initial[0]); homeHp = home.Health; Invoke(stray, "OnBodyEntered", home);

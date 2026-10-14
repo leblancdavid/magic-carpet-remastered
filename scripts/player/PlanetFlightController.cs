@@ -35,7 +35,7 @@ public partial class PlanetFlightController : Node3D
         AddChild(_visual);
         _visual.AddChild(new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(2.6f, 0.12f, 3.6f) },
+            Mesh = HovercraftHull.Create(),
             MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.45f, 0.12f, 0.65f) }
         });
         _cameraPivot = new Node3D();

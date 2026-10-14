@@ -13,7 +13,7 @@ public partial class PlanetTerrain : Node3D
     private sealed record Edit(Vector3 Up, float Radius, float Amount, bool Flatten);
     private sealed class Patch
     {
-        public int Face, Resolution, DesiredResolution;
+        public int Face, Resolution, DesiredResolution, FineResolution;
         public float X, Y, Span = 1;
         public Patch? Parent;
         public readonly List<Patch> Tiles = new();
@@ -388,26 +388,45 @@ public partial class PlanetTerrain : Node3D
 
     public void RefreshDetail()
     {
-        List<Vector3> observers = new();
+        List<(Vector3 Up, float Range, bool Ship)> observers = new();
         foreach (string group in new[] { "player", "rival_ship", "loose_antimatter", "ecosystem_enemy", "simple_monster", "drone", "guardian-drone" })
             foreach (Node node in GetTree().GetNodesInGroup(group))
                 if (node is Node3D actor && !actor.IsQueuedForDeletion() && node is not AntimatterPickup { IsAvailable: false })
-                    observers.Add(Arena.UpAt(actor.GlobalPosition));
+                    observers.Add((Arena.UpAt(actor.GlobalPosition),
+                        group is "player" or "rival_ship" ? 125 : 12, group is "player" or "rival_ship"));
         foreach (Patch patch in _patches)
         {
-            bool nearby = observers.Count == 0 && patch.Up.DistanceTo(Vector3.Up) * Arena.PlanetRadius < 180 + patch.Bound;
-            foreach (Vector3 observer in observers)
-                if (patch.Up.DistanceTo(observer) * Arena.PlanetRadius < (patch.Tiles.Count > 0 ? 125 : 100) + patch.Bound) { nearby = true; break; }
+            // Seeded games don't spend startup work refining an arbitrary north pole.
+            // Game warms the actual actor layout after both factions are created.
+            bool nearby = observers.Count == 0 && !Arena.GenerateSeededLayout
+                && patch.Up.DistanceTo(Vector3.Up) * Arena.PlanetRadius < 180 + patch.Bound;
+            bool actorSupport = false;
+            foreach (var observer in observers)
+                if (patch.Up.DistanceTo(observer.Up) * Arena.PlanetRadius <
+                    (observer.Ship && patch.FineResolution < Mathf.CeilToInt(Arena.PlanetRadius / 16) * 2
+                        ? 100 : observer.Range) + patch.Bound)
+                {
+                    actorSupport = true;
+                    if (observer.Ship) { nearby = true; break; }
+                }
             // Fixed world-space resolution (about 2 units at face center).
-            int resolution = nearby ? Mathf.CeilToInt(Arena.PlanetRadius / 16) * 2 : 4;
+            // Distant actors need local support, not a 125m high-detail visual bubble.
+            int resolution = nearby ? Mathf.CeilToInt(Arena.PlanetRadius / 16) * 2
+                : actorSupport ? Mathf.Clamp(Mathf.CeilToInt(Arena.PlanetRadius / 128) * 2, 4, 8) : 4;
             patch.DesiredResolution = resolution;
-            if (resolution > 4)
+            if (resolution > 8)
             {
                 _dirty.Remove(patch);
                 if (patch.Tiles.Count == 0) PrepareTiles(patch, resolution);
             }
             else if (patch.Tiles.Count > 0 || patch.Resolution != resolution) _dirty.Add(patch);
         }
+    }
+
+    public void CompleteInitialDetail()
+    {
+        RefreshDetail();
+        while (_dirty.Count > 0) RebuildDirty();
     }
 
     public int Deform(Vector3 up, float radius, float amount, bool flatten)
@@ -502,6 +521,7 @@ public partial class PlanetTerrain : Node3D
                 }
                 selected.Tiles.Clear();
                 selected.TilesPublished = false;
+                selected.FineResolution = 0;
             }
             rebuilt++;
             if ((Time.GetTicksUsec() - start) / 1000.0 >= RebuildBudgetMilliseconds) break;
@@ -531,8 +551,9 @@ public partial class PlanetTerrain : Node3D
     private void PrepareTiles(Patch parent, int resolution)
     {
         // Pick a divisor, preserving every vertex of the original fine grid.
-        int divisions = Mathf.CeilToInt((float)resolution / MaxTileResolution);
+        int divisions = Mathf.Max(2, Mathf.CeilToInt((float)resolution / MaxTileResolution));
         while (resolution % divisions != 0) divisions++;
+        parent.FineResolution = resolution;
         float span = 1f / divisions;
         for (int y = 0; y < divisions; y++)
         for (int x = 0; x < divisions; x++)

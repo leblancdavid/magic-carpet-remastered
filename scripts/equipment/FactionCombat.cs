@@ -13,6 +13,9 @@ public static class FactionCombat
         EnemyEcosystemEnemy { Role: EnemyEcosystemEnemy.EnemyRole.RivalShip } => AntimatterOwnership.Enemy,
         FactionBase hub => hub.IsPlayerBase ? AntimatterOwnership.Player : AntimatterOwnership.Enemy,
         CollectorDrone drone => drone.UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy,
+        BaseTacticalDrone drone => drone.Ownership,
+        BaseStrikeDrone drone => drone.IsPlayerOwned ? AntimatterOwnership.Player : AntimatterOwnership.Enemy,
+        GuardianDrone drone => drone.Ownership,
         _ => AntimatterOwnership.Neutral
     };
 
@@ -26,6 +29,9 @@ public static class FactionCombat
             SimpleMonster monster => monster.Health > 0,
             FactionBase hub => !hub.IsDestroyed,
             CollectorDrone drone => drone.Health > 0,
+            BaseTacticalDrone drone => drone.Health > 0,
+            BaseStrikeDrone drone => drone.Health > 0,
+            GuardianDrone drone => drone.Health > 0,
             _ => false
         };
         return alive && (OwnershipOf(target) == AntimatterOwnership.Neutral || OwnershipOf(target) != attacker);
@@ -39,8 +45,11 @@ public static class FactionCombat
             case ShipFlightController ship: ship.ApplyDamage(damage, attacker); break;
             case EnemyEcosystemEnemy enemy: enemy.ApplyDamage(damage, attacker); break;
             case SimpleMonster monster: monster.ApplyDamage(damage); break;
-            case FactionBase hub: hub.ApplyDamage(damage); break;
+            case FactionBase hub: hub.ApplyDamage(damage, attacker); break;
             case CollectorDrone drone: drone.ApplyDamage(damage); break;
+            case BaseTacticalDrone drone: drone.ApplyDamage(damage); break;
+            case BaseStrikeDrone drone: drone.ApplyDamage(damage); break;
+            case GuardianDrone drone: drone.ApplyDamage(damage); break;
         }
         if (damage > 0 && before > HealthOf(target) && GodotObject.IsInstanceValid(attacker) && attacker is ShipFlightController pilot)
             pilot.RecordCombatDamage();
@@ -53,6 +62,9 @@ public static class FactionCombat
         SimpleMonster monster => monster.Health,
         FactionBase hub => hub.Health,
         CollectorDrone drone => drone.Health,
+        BaseTacticalDrone drone => drone.Health,
+        BaseStrikeDrone drone => drone.Health,
+        GuardianDrone drone => drone.Health,
         _ => 0
     };
 }

@@ -204,7 +204,7 @@ public partial class PlanetGameplayChecks : Node3D
             foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter")) if (node is AntimatterPickup orb) orb.QueueFree();
             await Frames(2);
             AntimatterPickup cargo = Add(new AntimatterPickup { AntimatterAmount = 10, Ownership = AntimatterOwnership.Player }, Offset(underside, 15, 800, Vector3.Right), 0.5f);
-            CollectorDrone drone = Add(new CollectorDrone { CarryCapacity = 1, MoveSpeed = 20, MaxSeekRadius = 80 }, Offset(underside, 12, 800, Vector3.Right), 5);
+            CollectorDrone drone = Add(new CollectorDrone { CarryCapacity = 30, MoveSpeed = 20, MaxSeekRadius = 80 }, Offset(underside, 12, 800, Vector3.Right), 5);
             _arena.RefreshPlanetDetail();
             int storedBefore = home.StoredAntimatter;
             await Frames(180);
@@ -217,6 +217,7 @@ public partial class PlanetGameplayChecks : Node3D
             Check(!discovery.TryCollect(_player), "Legacy signals cannot bypass research on the globe");
             _player.GlobalPosition = _arena.OnSurface(home.GlobalPosition, 6);
             home.TryCompleteTierUpgrade(2);
+            home.TryCompleteTierUpgrade(3); home.TryCompleteTierUpgrade(4);
             foreach (string id in new[] { "plasma-bolt", "energy-shield", "dash", "guardian-drone", "pulse-burst" })
             {
                 home.DepositAntimatter(200);
@@ -310,6 +311,9 @@ public partial class PlanetGameplayChecks : Node3D
                 "Real pilot altitude stays surface relative on distant hemisphere");
             flyingPilot.QueueFree(); await Frames(2);
 
+            // Restore the original tier-I damage-accounting fixture after the
+            // revised tier-IV Guardian research. Installed equipment survives.
+            home.ApplyDamage(home.Health - 140);
             home.DepositAntimatter(50);
             int economicTotal = home.StoredAntimatter + LooseTotal();
             home.ApplyDamage(70);

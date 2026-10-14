@@ -10,6 +10,7 @@ public partial class UiTile : Button
     public Label Detail { get; } = new();
     public Label State { get; } = new();
     public Label TierBadge { get; } = new();
+    public Label Stars { get; } = new();
     public ProgressBar BuildProgress { get; } = new();
     public Button CancelButton { get; } = new();
     public bool Compact { get; set; }
@@ -46,6 +47,9 @@ public partial class UiTile : Button
             label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             label.AddThemeFontSizeOverride("font_size", label == Title ? 14 : 12); column.AddChild(label);
         }
+        Stars.Name = "UpgradeStars"; Stars.MouseFilter = MouseFilterEnum.Ignore;
+        Stars.HorizontalAlignment = HorizontalAlignment.Center; Stars.Visible = false;
+        Stars.AddThemeFontSizeOverride("font_size", 14); column.AddChild(Stars);
         TierBadge.Name = "RequiredTier"; TierBadge.MouseFilter = MouseFilterEnum.Ignore;
         TierBadge.AddThemeFontSizeOverride("font_size", 12); TierBadge.HorizontalAlignment = HorizontalAlignment.Right;
         AddChild(TierBadge); TierBadge.SetAnchorsAndOffsetsPreset(LayoutPreset.TopRight);
@@ -69,6 +73,12 @@ public partial class UiTile : Button
         Title.Text = title; Detail.Text = detail; State.Text = state; TooltipText = tooltip; Disabled = disabled;
         Glyph.Modulate = disabled ? new Color(0.5f, 0.58f, 0.62f) : Colors.White;
         State.Modulate = disabled ? new Color(0.7f, 0.73f, 0.76f) : new Color(0.5f, 0.9f, 0.9f);
+    }
+    public void SetStars(int rank)
+    {
+        Stars.Visible = rank > 0;
+        Stars.Text = new string('★', System.Math.Clamp(rank, 0, 3));
+        Stars.Modulate = rank == 1 ? new Color(0.8f, 0.5f, 0.25f) : rank == 2 ? new Color(0.8f, 0.85f, 0.9f) : new Color(1, 0.8f, 0.2f);
     }
     public override Control _MakeCustomTooltip(string forText)
     {

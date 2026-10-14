@@ -89,18 +89,10 @@ public partial class ClaimProjectile : Node3D
                 }
             }
 
-            AntimatterPickup? hit = FindFirstHit(previous, next);
             GlobalPosition = next;
-            if (hit != null)
-            {
-                int amount = hit.AntimatterAmount;
-                hit.ReassignOwnership(Ownership);
-                EquipmentImpactPool.Prepare(GetTree().CurrentScene).Emit(hit.GlobalPosition,
-                    new Color(0.2f, 0.9f, 1, 0.85f), new Color(0.05f, 0.7f, 1), 0.28f, 0.4f, 2.2f);
-                QueueFree();
-                AntimatterClaimed?.Invoke(amount);
-                return;
-            }
+            // Ownership changes immediately, so overlapping sweeps cannot claim
+            // the same sphere twice. Keep sweeping after every successful hit.
+            ClaimAlongPath(previous, next);
 
             Vector3 motion = next - previous;
             if (motion.LengthSquared() > 0.0001f)
@@ -118,10 +110,8 @@ public partial class ClaimProjectile : Node3D
         }
     }
 
-    private AntimatterPickup? FindFirstHit(Vector3 from, Vector3 to)
+    private void ClaimAlongPath(Vector3 from, Vector3 to)
     {
-        AntimatterPickup? first = null;
-        float firstEntry = float.PositiveInfinity;
         Vector3 segment = to - from;
         float lengthSquared = segment.LengthSquared();
         AntimatterNeighborhood.Query(GetTree(), (from + to) * 0.5f, HitRadius + segment.Length() * 0.5f, _candidates);
@@ -155,12 +145,11 @@ public partial class ClaimProjectile : Node3D
                     continue;
                 }
             }
-            if (entry < firstEntry)
-            {
-                firstEntry = entry;
-                first = pickup;
-            }
+            int amount = pickup.AntimatterAmount;
+            pickup.ReassignOwnership(Ownership);
+            EquipmentImpactPool.Prepare(GetTree().CurrentScene).Emit(pickup.GlobalPosition,
+                new Color(0.2f, 0.9f, 1, 0.85f), new Color(0.05f, 0.7f, 1), 0.28f, 0.4f, 2.2f);
+            AntimatterClaimed?.Invoke(amount);
         }
-        return first;
     }
 }

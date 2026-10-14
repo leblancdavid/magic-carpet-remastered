@@ -34,6 +34,24 @@ public partial class EncounterLoadChecks : Node3D
                 var director = game.GetNode<EnemyEcosystemDirector>("EnemyEcosystemDirector");
                 var initial = game.GetChildren().OfType<EnemyEcosystemEnemy>().ToArray();
                 Check(initial.Length == director.InitialWaveCount, "Seeded dense world reaches its population target");
+                bool deployments = OS.GetCmdlineUserArgs().Contains("--deployments");
+                if (deployments)
+                {
+                    // Explicitly funded performance fixture, not an economy or
+                    // unassisted opening result. Use the real paid order path.
+                    foreach (var home in game.GetChildren().OfType<FactionBase>())
+                        foreach (string capability in new[] { "scout-drone", "attack-drone", "defensive-drone" })
+                        {
+                            home.DepositAntimatter(10000);
+                            Check(home.Construction.TryStart(UpgradeCatalog.ProjectId(capability, 1), out _), "Profile researches actual drone capability");
+                            home.Construction.Advance(30); home.DepositAntimatter(10000);
+                            string order = BaseOrders.OrderId(capability);
+                            var targets = BaseOrders.Targets(home, order).ToArray();
+                            Check(targets.Length > 0 && home.Construction.TryStartOrder(order, targets[0], out _), "Profile starts a paid selected-target deployment");
+                            home.Construction.Advance(10);
+                        }
+                    Check(game.GetChildren().OfType<BaseTacticalDrone>().Count() == 6, "Both factions have scout, attack and defensive units in the workload");
+                }
                 var heavy = initial.First(e => e.IsHeavy);
                 // Watch a heavy encounter through the normal player camera,
                 // leaving damage, pilot deaths and objective respawns live.
@@ -41,6 +59,8 @@ public partial class EncounterLoadChecks : Node3D
                 arena.Orient(ship, arena.DirectionTo(ship.GlobalPosition, heavy.GlobalPosition));
                 ship._PhysicsProcess(0); arena.RefreshPlanetDetail();
                 for (int i = 0; i < 120; i++) await Frame();
+                int startingDrops = game.GetChildren().OfType<AntimatterPickup>().Count();
+                ulong physicsStart = Engine.GetPhysicsFrames();
                 var wall = new double[480]; var process = new double[480]; var physics = new double[480];
                 var clock = Stopwatch.StartNew(); long allocated = GC.GetTotalAllocatedBytes();
                 for (int i = 0; i < wall.Length; i++)
@@ -54,10 +74,12 @@ public partial class EncounterLoadChecks : Node3D
                     "Live replacements preserve the population ceiling");
                 Check(game.GetChildren().OfType<AntimatterPickup>().All(p => p.AntimatterAmount >= 0), "Combat drops retain nonnegative resource amounts");
                 Array.Sort(wall); Array.Sort(process); Array.Sort(physics);
-                GD.Print($"Encounter load R{arena.PlanetRadius}: {initial.Length} initial / {director.HabitatCount} habitats; "
+                GD.Print($"Encounter load R{arena.PlanetRadius}{(deployments ? " + six funded deployments" : "")}: {initial.Length} initial / {director.HabitatCount} habitats; "
                     + $"{wall.Length} samples ({DisplayServer.GetName()}), wall p95/max {wall[455]:0.00}/{wall[^1]:0.00} ms; "
                     + $"process p95/max {process[455]:0.00}/{process[^1]:0.00}, physics {physics[455]:0.00}/{physics[^1]:0.00} ms; "
-                    + $"allocated {(GC.GetTotalAllocatedBytes() - allocated) / 1048576.0:0.0} MiB");
+                    + $"allocated {(GC.GetTotalAllocatedBytes() - allocated) / 1048576.0:0.0} MiB; "
+                    + $"physics steps {Engine.GetPhysicsFrames() - physicsStart}, drops {startingDrops}→{game.GetChildren().OfType<AntimatterPickup>().Count()}, "
+                    + $"units {game.GetChildren().OfType<BaseTacticalDrone>().Count()}, terrain pending {arena.GetNode<PlanetTerrain>("PlanetTerrain").PendingPatchCount}");
                 if (DisplayServer.GetName() != "headless")
                 {
                     await ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);

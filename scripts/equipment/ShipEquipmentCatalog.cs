@@ -19,16 +19,8 @@ public static class ShipEquipmentCatalog
 
     public static void Register(BaseConstruction construction)
     {
-        string[] names = { "Plasma Bolt", "Pulse Burst", "Energy Shield", "Dash", "Guardian Drone" };
-        int[] tiers = { 1, 1, 1, 1, 2 };
-        int[] costs = { 15, 25, 20, 20, 40 };
-        for (int i = 0; i < ItemIds.Length; i++)
-        for (int rank = ItemIds[i] == "plasma-bolt" ? 2 : 1; rank <= MaximumRank; rank++)
-        {
-            string? prerequisite = rank > 1 && !(i == 0 && rank == 2) ? ProjectId(ItemIds[i], rank - 1) : null;
-            construction.Register(new(ProjectId(ItemIds[i], rank), $"{names[i]} rank {rank}", ConstructionSlot.Ship,
-                costs[i] * rank * (rank == 1 ? 3 : 4), 30 + rank * 30, System.Math.Min(5, tiers[i] + rank - 1), prerequisite,
-                Description: EffectSummary(ItemIds[i], rank) + " Owned permanently on completion. Return home to install; upgrades do not apply remotely."));
-        }
+        foreach (var id in ItemIds)
+            for (int rank = id == "plasma-bolt" ? 2 : 1; rank <= MaximumRank; rank++)
+                construction.Register(UpgradeCatalog.Definition(UpgradeCatalog.Find(id)!, rank));
     }
 }

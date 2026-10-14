@@ -56,7 +56,8 @@ public partial class CameraFriendlyFireChecks : Node3D
                 "Player plasmaBolt cannot damage home hub or spill its antimatter");
             var rivalShot = Shot(player, rival.GlobalPosition);
             Invoke(rivalShot, "OnBodyEntered", rival);
-            Check(rival.Health == rival.MaxHealth - rivalShot.Damage, "Player plasmaBolt still damages rival hub");
+            Check(rival.Health == rival.MaxHealth - Mathf.Max(1, Mathf.RoundToInt(rivalShot.Damage * 0.2f)),
+                "Player Plasma still damages rival hub with the current base resistance");
 
             var friendly = new CollectorDrone { Position = new Vector3(0, 20, -40) };
             var hostile = new CollectorDrone { UsePlayerAntimatter = false, Position = new Vector3(0, 20, 40) };
@@ -82,7 +83,7 @@ public partial class CameraFriendlyFireChecks : Node3D
             AddChild(enemyShot);
             enemyShot.SetPhysicsProcess(false);
             Invoke(enemyShot, "OnBodyEntered", home);
-            Check(home.Health == home.MaxHealth - enemyShot.Damage, "Enemy attacks can still damage home hub");
+            Check(home.Health == home.MaxHealth, "Neutral projectile collateral cannot damage faction bases");
             GD.Print($"Camera/friendly-fire checks passed: {_checks} assertions.");
             GetTree().Quit();
         }

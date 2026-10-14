@@ -29,6 +29,18 @@ public partial class UiIcon : Control
             case "claim-range": Ring(9); Line(16, 2, 16, 10); Line(16, 22, 16, 30); Line(2, 16, 10, 16); Line(22, 16, 30, 16); break;
             case "strike-drone": Line(16, 3, 27, 24); Line(27, 24, 16, 20); Line(16, 20, 5, 24); Line(5, 24, 16, 3); Line(12, 25, 12, 30); Line(20, 25, 20, 30); break;
             case "base": DrawRect(new Rect2(5, 15, 22, 13), Ink, false, 2); DrawRect(new Rect2(11, 6, 10, 9), Ink, false, 2); Line(16, 2, 16, 6); break;
+            case "scout-drone": Ring(7); Ring(12); Line(16, 16, 27, 6); Line(4, 27, 10, 22); break;
+            case "attack-drone": Line(16, 3, 28, 25); Line(28, 25, 16, 20); Line(16, 20, 4, 25); Line(4, 25, 16, 3); Line(16, 11, 16, 25); break;
+            case "defensive-drone": Ring(10); DrawRect(new Rect2(12, 10, 8, 12), Ink, false, 2); Line(16, 5, 16, 10); Line(16, 22, 16, 28); break;
+            case "drone-command-relay": Line(16, 8, 16, 28); Line(9, 28, 23, 28); DrawArc(new Vector2(16, 14), 10, -Mathf.Pi * 0.85f, -Mathf.Pi * 0.15f, 12, Ink, 2, true); Ring(3); break;
+            case "pulse-turret": DrawRect(new Rect2(7, 21, 18, 7), Ink, false, 2); Line(16, 21, 16, 10); Line(16, 10, 27, 4); Line(19, 14, 29, 8); break;
+            case "cargo-compression": DrawRect(new Rect2(9, 9, 14, 14), Ink, false, 2); Line(2, 16, 8, 16); Line(24, 16, 30, 16); Line(16, 2, 16, 8); Line(16, 24, 16, 30); break;
+            case "scoop-array": DrawArc(new Vector2(16, 10), 12, 0, Mathf.Pi, 20, Ink, 2, true); Line(8, 29, 8, 20); Line(24, 29, 24, 20); Ring(3); break;
+            case "base-armor":
+            case "collector-armor": DrawPolyline(new[] { new Vector2(5, 8), new Vector2(16, 3), new Vector2(27, 8), new Vector2(24, 24), new Vector2(16, 29), new Vector2(8, 24), new Vector2(5, 8) }, Ink, 2, true); DrawRect(new Rect2(11, 11, 10, 10), Ink, false, 2); break;
+            case "site-fortification": Ring(12); Line(8, 21, 8, 11); Line(16, 21, 16, 7); Line(24, 21, 24, 11); Line(5, 23, 27, 23); break;
+            case "dock-automation": DrawRect(new Rect2(4, 21, 24, 7), Ink, false, 2); Line(16, 3, 16, 19); Line(10, 13, 16, 19); Line(16, 19, 22, 13); break;
+            case "extractor-optimization": Ring(10); Line(16, 3, 16, 11); Line(16, 21, 16, 30); Line(3, 16, 11, 16); Line(21, 16, 30, 16); Ring(4); break;
             default: DrawRect(new Rect2(6, 6, 20, 20), new Color(Ink, 0.4f), false, 1); Line(12, 16, 20, 16); break;
         }
     }

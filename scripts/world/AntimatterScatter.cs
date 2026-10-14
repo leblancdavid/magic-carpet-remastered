@@ -9,10 +9,11 @@ public static class AntimatterScatter
     public const float DropIntervalSeconds = 0.05f;
     public static void Spawn(Node parent, Vector3 origin, int amount,
         AntimatterOwnership ownership = AntimatterOwnership.Neutral, float minimumRadius = 0,
-        string name = "ScatteredAntimatter")
+        string name = "ScatteredAntimatter", bool mobDrop = false)
     {
         if (amount <= 0) return;
-        int count = Mathf.Min(128, (amount - 1) / 2 + 1);
+        int count = mobDrop ? Mathf.Min(64, Mathf.CeilToInt(amount * 0.75f))
+            : Mathf.Min(128, (amount - 1) / 2 + 1);
         // Random integer cuts partition the reserve exactly, with no zero-sized
         // fragments or work proportional to a potentially enormous antimatter total.
         var cuts = new HashSet<int>();
@@ -75,9 +76,9 @@ public static class AntimatterScatter
             } while (overlaps);
             parent.AddChild(orb);
             placed.Add(orb);
-            // No outward/upward impulse: gravity drops the loose cluster from
-            // its release height (radially inward on a spherical world).
-            orb.ScheduleDrop(position, i * DropIntervalSeconds);
+            Vector3 velocity = mobDrop ? outward * (float)GD.RandRange(1.5f, 3.5f)
+                + up * (float)GD.RandRange(0.8f, 1.8f) : Vector3.Zero;
+            orb.ScheduleDrop(position, i * (mobDrop ? 0.09f : DropIntervalSeconds), velocity);
         }
     }
 }

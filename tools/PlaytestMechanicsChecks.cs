@@ -83,8 +83,8 @@ public partial class PlaytestMechanicsChecks : Node3D
         foreach (Node node in GetTree().GetNodesInGroup("loose_antimatter"))
         {
             if (node is not AntimatterPickup orb || orb.IsQueuedForDeletion()) continue;
-            Check(orb.AntimatterAmount >= 1 && orb.AntimatterAmount <= 9 && orb.LinearVelocity.IsZeroApprox(),
-                $"Neutral death fragments retain randomized amounts and drop without launch impulse (amount {orb.AntimatterAmount}, velocity {orb.LinearVelocity})");
+            Check(orb.AntimatterAmount >= 1 && orb.AntimatterAmount <= 5 && orb.LinearVelocity.Length() > 1,
+                $"Neutral death fragments retain positive randomized amounts and gentle launch velocity (amount {orb.AntimatterAmount}, velocity {orb.LinearVelocity})");
         }
         var rival = Add(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.RivalShip });
         Check(rival.AntimatterReserve == 0, "Pilot respawn template has no minted reserve");

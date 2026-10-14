@@ -77,7 +77,7 @@ public partial class Game : Node3D
         }
         AddChild(new BaseManagement { Name = "BaseManagement" });
         AddChild(new BoonChoices { Name = "BoonChoices" });
-        _arena.RefreshPlanetDetail();
+        _arena.CompleteInitialPlanetDetail();
         ProcessMode = ProcessModeEnum.Pausable;
         foreach (Node child in GetChildren())
         {
@@ -173,21 +173,8 @@ public partial class Game : Node3D
 
     private void CreateDrones()
     {
-        AddChild(new CollectorDrone
-        {
-            Name = "PlayerDrone",
-            UsePlayerAntimatter = true,
-            Position = UseSphericalWorld ? BesideBase(_playerBase, new Vector3(-12, 0, 4), 5) : AboveTerrain(-16, 4, 5),
-            MaxSeekRadius = UseSphericalWorld ? Mathf.Pi * _arena.PlanetRadius : 46
-        });
-
-        AddChild(new CollectorDrone
-        {
-            Name = "EnemyDrone",
-            UsePlayerAntimatter = false,
-            Position = UseSphericalWorld ? BesideBase(_enemyBase, new Vector3(-12, 0, 4), 5) : AboveTerrain(16, -8, 5),
-            MaxSeekRadius = UseSphericalWorld ? Mathf.Pi * _arena.PlanetRadius : 46
-        });
+        AddChild(new HomeCollectorFleet { Name = "PlayerCollectorFleet", Home = _playerBase });
+        AddChild(new HomeCollectorFleet { Name = "EnemyCollectorFleet", Home = _enemyBase });
     }
 
     private void CreateAntimatterPickups()

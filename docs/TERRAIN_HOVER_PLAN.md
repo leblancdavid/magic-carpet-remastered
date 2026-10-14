@@ -2,6 +2,8 @@
 
 ## Approved direction — 2026-10-12
 
+**Latest implemented follow-up (2026-10-13):** shared 65° slope support with progressive uphill-only slowdown, moderate lateral drift, turn/slip ship banking and camera roll, triangular hovercraft hulls and bounded rival local recovery. Generation still measures the historical **3–5% above 40°** rough-land budget; 40° is now a terrain classification rather than the live traversal cap. Startup warms the actual actor layout with ship-focused fine detail. See `PLAYTEST_FLIGHT_DROPS.md`; broader routing and hands-on acceptance remain next.
+
 Hands-on feedback supersedes the former large-world travel baseline. Keep genuine spherical curvature first; evaluate it in motion before considering rendering distortion. Follow-up playtesting rejected radius 100: use **Small 200 / Medium 300 / Large 400 / XL 500 m radii**, Medium default. Hover freely over oceans. Ship movement uses ground-hugging suspension with momentum, radial gravity and paid jumping. Dramatic terrain must influence routes. Rival combat gets **Easy / Normal / Hard**, Normal default. Increase meaningful encounter density using habitats and role-specific groups.
 
 **Approved accessibility correction, 2026-10-12:** most land must be easy to traverse, with mountains/roughness restricted to occasional regions. Targets: at least **85% of land below 20°**, at most **5% above the 40° hover limit**, and connected practical opening routes through ordinary hovering. Oceans are excluded from those land-percentage denominators. Fix terrain/approaches before implementing rival pathfinding.

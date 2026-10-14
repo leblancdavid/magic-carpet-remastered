@@ -1,5 +1,32 @@
 # Project Learnings
 
+## Tier Grids, Planned Equipment And Paid Deployments (2026-10-13)
+
+- Separate the approved UI tree from playable payment definitions. Pending types can explain their roles/unlock tiers, but should have no payable project until an effect exists. One upgrade tile should buy its next sequential star, not mix research with repeatable production; store explicit type/rank metadata on immutable project definitions.
+- Keep active and planned loadouts separate. Apply the entire validated plan/latest owned ranks at home, preserving selected-item identity, energy and every cooldown. Latch held fire through automatic changes. An installed-rank mismatch is pending even if the planned item ID is unchanged; undoing a plan must clear HUD markers.
+- Production orders must snapshot a selected target, validate faction/knowledge/liveness/match membership before spending, and revalidate eligibility at completion. Refund invalidated production exactly once through the existing paid snapshot/overflow path. Remove old implicit research-completion attack hooks so an upgrade cannot fire at a hidden opponent.
+- Capture contribution is a rate per side, not an actor count: ship 1, scouts 0.5, max within a side, either opposing side contests. Apply the rate to neutralization timing as well as capture, including the prior-owner income cutoff on long ticks. Keep actual human presence separate from scout presence so remote drones cannot open a local capture HUD.
+- Remember scouted point locations with actor-free markers. Their distant live ownership/benefits remain hidden. Deployed units need shared faction-aware projectile/area damage, local acquisition/leash checks and immediate retreat on site loss; returning defenders should keep protecting home rather than silently disappearing.
+- A larger maximum projectile range is ineffective if its lifetime still truncates travel. Derive enough bounded lifetime for the researched range and test range, width and lifetime together.
+- Profile deployed actors using an explicitly funded fixture through real research/payment/production, and label it as performance evidence, not an unassisted economic result. Fixed rendered sample counts can cover very different simulated/wall durations when physics catch-up saturates; report physics steps, resource-body counts and terrain backlog before comparing workload figures.
+
+## Internal Cargo And Retaliatory Defenses (2026-10-13)
+
+- When physical pickup nodes become internal cargo, add the cargo to world accounting explicitly and remove the transferred amount from the pickup atomically. Ownership follows the hauler, partial spheres remain available, storage overflow stays internal, and death resets cargo before spawning neutral drops. Test transfers through theft, partial deposits and disposal, not just successful collection.
+- Separate home fleet entitlement from arbitrary/station collectors. Tier loss must retire loaded extras only after delivery, while actual destruction uses a replacement delay. Avoid node-count policies that delete valuable cargo or steal logistics ownership.
+- A penetrating resource projectile should query once per short swept segment and change each eligible ownership immediately; repeatedly finding one hit wastes dense-neighborhood work. Existing swept intersection/range/lifetime checks remain valuable after first-hit termination is removed.
+- Smooth noisy steering/slip demand as well as visual roll. Exponential easing gives similar responses across 30/60/120Hz; test first-frame onset and steering reversal rather than only final bank limits.
+- Retaliatory base weapons need damage-source attribution and bounded live attacker memory. Do not scan every neutral as a target or fire through terrain; test peaceful targets, actual obstruction, range, cooldown, pause and destroyed bases. Avoid per-mob per-tick temporary arrays when adding contact checks.
+
+## Cold Worlds, Momentum And Salvage (2026-10-13)
+
+- Profile the first minute and same-seed fresh-scene restarts explicitly. A warmed encounter window can hide thousands of queued terrain builds. In seeded worlds, do not refine an arbitrary observer fallback before the actual starts/actors exist; complete initial actor support before handing over gameplay.
+- Separate ship-visible fine terrain from distant actor support. Dense distributed populations can make broad per-mob detail requests effectively refine the entire planet. Retain analytic support checks and safe collider publication, and test native physics cost as well as mesh counts: higher-resolution wide support-shape experiments reduced the queue but worsened frame times.
+- Keep generation roughness classification independent of the traversal rule: raising ship slope support from 40° to 65° need not flatten terrain or redefine the accepted 3–5% rough-land distribution. Limit uphill velocity rather than slowing every direction across a slope.
+- Responsive look and inertial travel are separate quantities. Apply acceleration along the requested heading and decay lateral slip independently; transport momentum around spherical curvature. Bank visual/camera roll without banking the collision solver or changing the camera's forward aiming axis.
+- A straight terrain ray chord can hit a convex climb that a supported hover route safely follows. Combine local slope samples with solid-actor obstruction checks rather than rejecting every terrain hit as a wall.
+- Store a delayed fragment's launch velocity explicitly. A release path that resets velocity to zero silently discards outward scatter; pending fragments must still count immediately in resource accounting. More resource value, more fragments and a longer release interval multiply workload, so verify simultaneous kills and exact conservation through merging.
+
 ## Centered HUD, Quiet Recovery And Seeded Wandering (2026-10-13)
 
 - A shared layout must drive both native HUD controls and custom-drawn radar; centering only the weapons leaves the complete group visibly off-centre. Validate the union's midpoint and radar/base-HP alignment at normal/small canvas sizes.

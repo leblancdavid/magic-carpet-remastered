@@ -22,7 +22,12 @@ public partial class CompactUiChecks : Node3D
         Vector2 point = button.GetGlobalRect().GetCenter();
         GetViewport().PushInput(new InputEventMouseButton { Position = point, GlobalPosition = point, ButtonIndex = MouseButton.Left, Pressed = pressed }, true);
     }
-    private async Task Click(Button button) { Mouse(button, true); Mouse(button, false); await Frames(2); }
+    private async Task Click(Button button)
+    {
+        for (Node? parent = button.GetParent(); parent != null; parent = parent.GetParent())
+            if (parent is ScrollContainer scroll) { scroll.EnsureControlVisible(button); await Frames(2); break; }
+        Mouse(button, true); Mouse(button, false); await Frames(2);
+    }
     private static T Find<T>(Node node, string name) where T : Node => (T)node.FindChild(name, true, false);
     public override void _Ready() => Callable.From(() => { _ = Run(); }).CallDeferred();
 
@@ -87,20 +92,20 @@ public partial class CompactUiChecks : Node3D
             Check(tabs.GetTabCount() == 4 && ui.FindChild("ActiveProjects", true, false) == null
                 && Find<UiTile>(ui, "Order_Tier").GetGlobalRect().End.Y < tabs.GetGlobalRect().Position.Y,
                 "Four project tabs sit under header upgrade button without a separate active-project strip");
-            var repair = Find<UiTile>(ui, "Order_repair-matrix"); var gridUpgrade = Find<UiTile>(ui, "Order_energy-grid");
-            Check(repair.Glyph.IconId == "repair-matrix" && repair.Title.Text.Contains("Repair") && repair.Detail.Text.Contains("70 A") && !repair.Detail.Text.Contains(" M"),
+            var repair = Find<UiTile>(ui, "Order_repair-matrix"); var gridUpgrade = Find<UiTile>(ui, "Order_base-armor");
+            Check(repair.Glyph.IconId == "repair-matrix" && repair.Title.Text.Contains("Repair") && repair.Detail.Text.Contains("40 A") && !repair.Detail.Text.Contains(" M"),
                 "Upgrade tile shows original glyph and antimatter-only cost");
-            Check(gridUpgrade.Disabled && gridUpgrade.TooltipText.Contains("Requires tier 2") && gridUpgrade.TooltipText.Contains("140 antimatter"),
+            Check(gridUpgrade.Disabled && gridUpgrade.TooltipText.Contains("Requires tier 2") && gridUpgrade.TooltipText.Contains("70 antimatter"),
                 "Unavailable tiles preserve exact tier/cost reasons in tooltip");
             Check(gridUpgrade.TierBadge.Text == "II" && gridUpgrade.SelfModulate.A < 1,
                 "Unavailable upgrades are faded and show the Roman required-tier badge");
             var tooltip = repair._MakeCustomTooltip(repair.TooltipText);
-            Check(tooltip.GetChild<Label>(0).CustomMinimumSize.X == 310 && tooltip.GetChild<Label>(0).Text.Contains("60s"), "Custom tooltips bound width and include duration"); tooltip.Free();
+            Check(tooltip.GetChild<Label>(0).CustomMinimumSize.X == 310 && tooltip.GetChild<Label>(0).Text.Contains("30s"), "Custom tooltips bound width and include duration"); tooltip.Free();
             home.DepositAntimatter(1000); ui.Refresh();
             int before = home.StoredAntimatter;
             await Click(repair);
             var project = home.Construction.GetActive(ConstructionSlot.Defense)!;
-            Check(project != null && home.StoredAntimatter == before - 70 && repair.Disabled,
+            Check(project != null && home.StoredAntimatter == before - 40 && repair.Disabled,
                 "Actual icon tile click starts one paid project and disables duplicate order");
             ui.Refresh(); Check(repair.State.Text.Contains("Building") && repair.BuildProgress.Visible, "Active tile has overlaid progress state");
             home.SetPhysicsProcess(true); double elapsed = project!.ElapsedSeconds; await Frames(8); home.SetPhysicsProcess(false);
@@ -111,37 +116,47 @@ public partial class CompactUiChecks : Node3D
             if (DisplayServer.GetName() != "headless") await Capture("CompactActiveBuild.png");
             await Click(repair.CancelButton);
             Check(project.State == ConstructionState.Cancelled && home.StoredAntimatter == before, "Compact cancellation preserves exact antimatter refund");
+            for (int rank = 1; rank <= 3; rank++)
+            {
+                home.DepositAntimatter(1000); ui.Refresh(); await Click(repair); home.Construction.Advance(100); ui.Refresh();
+                Check(repair.Stars.Text == new string('★', rank), "One tile advances sequential bronze/silver/gold stars");
+                Check(rank == 1 ? repair.Stars.Modulate.R > repair.Stars.Modulate.G
+                    : rank == 2 ? repair.Stars.Modulate.B >= repair.Stars.Modulate.R : repair.Stars.Modulate.R > repair.Stars.Modulate.B,
+                    "Completed stars have bronze/silver/gold colors");
+            }
             // Purchase and install a complete four-slot loadout through ordinary APIs.
+            home.DepositAntimatter(1000);
             Check(ui.OrderNextTier() && Find<UiTile>(ui, "Order_Tier").BuildProgress.Visible,
                 "Header upgrade button displays its paid construction overlay");
             home.Construction.Advance(60);
+            home.TryCompleteTierUpgrade(3); home.TryCompleteTierUpgrade(4);
             foreach (string id in new[] { "energy-shield", "dash", "pulse-burst" })
             {
                 home.DepositAntimatter(1000); Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId(id, 1)), "Tile catalog retains shared equipment research"); home.Construction.Advance(60);
             }
             tabs.CurrentTab = 3; ui.Refresh(); await Frames(4);
             Check(ui.FindChild("ShipSections", true, false) == null, "Ship equipment uses one integrated view");
-            var install = Find<UiTile>(ui, "Equip_energy-shield");
-            Check(!install.Disabled && install.TooltipText.Contains("row order"), "Row toggle explains automatic key assignment");
-            await Click(install); Check(ship.EquipmentSlots[1] == "energy-shield" && install.ButtonPressed, "Viewport click equips and checks the row toggle");
+            var install = Find<Button>(ui, "Equip_energy-shield");
+            Check(!install.Disabled && install.TooltipText.Contains("row order"), "Equipment button explains automatic key assignment");
+            await Click(install); Check(ship.EquipmentSlots[1] == "energy-shield" && install.ButtonPressed, "Viewport click equips automatically at home");
             Check(ui.ToggleEquipment("dash") && ui.ToggleEquipment("pulse-burst"), "Mixed equipment still occupies only four shared slots");
             Check(ship.EquipmentSlots.SequenceEqual(new[] { "plasma-bolt", "pulse-burst", "energy-shield", "dash" }), "Automatic slots follow displayed row order");
-            home.DepositAntimatter(1000); Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId("guardian-drone", 1)), "Fifth item can be researched"); home.Construction.Advance(60); ui.Refresh();
-            Check(Find<UiTile>(ui, "Equip_guardian-drone").Disabled && !ui.ToggleEquipment("guardian-drone"), "Fifth toggle cannot replace an item silently");
+            home.DepositAntimatter(1000); Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId("guardian-drone", 1)), "Fifth item can be researched at tier IV"); home.Construction.Advance(100); ui.Refresh();
+            Check(Find<Button>(ui, "Equip_guardian-drone").Disabled && !ui.ToggleEquipment("guardian-drone"), "Fifth toggle cannot replace an item silently");
             ui.SetOpen(false); ship.TrySelectEquipmentFromInterface(2); ui.SetOpen(true);
             Check(ui.ToggleEquipment("pulse-burst") && ship.SelectedEquipmentSlot == 1 && ship.EquipmentSlots[1] == "energy-shield", "Compaction preserves selected item identity");
             Check(ui.ToggleEquipment("pulse-burst") && ship.SelectedEquipmentSlot == 2, "Reinsertion preserves selected item identity");
             home.DepositAntimatter(1000); Check(ui.OrderProject(ShipEquipmentCatalog.ProjectId("energy-shield", 2)), "Equipped ranks can be researched"); home.Construction.Advance(90); ui.Refresh();
-            var apply = Find<Button>(ui, "ApplyRank_energy-shield");
-            Check(apply.Visible && ship.GetEquipmentRank("energy-shield") == 1, "Completed rank awaits explicit application in its row");
-            await Click(apply); Check(ship.GetEquipmentRank("energy-shield") == 2 && !apply.Visible, "Row apply action installs completed rank without changing loadout");
+            Check(ui.FindChild("ApplyRank_energy-shield", true, false) == null && ship.HasPendingLoadout, "Completed rank awaits automatic home synchronization with no Apply button");
+            ship._PhysicsProcess(0); ui.Refresh(); Check(ship.GetEquipmentRank("energy-shield") == 2, "Home tick automatically installs completed rank without changing loadout");
             Vector3 homePosition = ship.GlobalPosition; ship.GlobalPosition += ship.GlobalBasis.X * 80; ui.Refresh();
-            Check(install.Disabled && install.TooltipText.Contains("Return home"), "Remote install stays visibly unavailable with explanation");
+            Check(!install.Disabled && install.TooltipText.Contains("return home"), "Remote equipment planning stays available with installation explanation");
             ship.GlobalPosition = homePosition; ui.Refresh();
             if (DisplayServer.GetName() != "headless")
             {
                 await Capture("CompactResearch.png");
-                var locked = Find<UiTile>(ui, "Order_equipment-plasma-bolt-3");
+                var locked = Find<UiTile>(ui, "Order_phase-dash");
+                ((ScrollContainer)tabs.GetChild(3)).EnsureControlVisible(locked); await Frames(3);
                 Vector2 hover = locked.GetGlobalRect().GetCenter();
                 GetViewport().PushInput(new InputEventMouseMotion { Position = hover, GlobalPosition = hover }, true);
                 await ToSignal(GetTree().CreateTimer(0.9), SceneTreeTimer.SignalName.Timeout); await Capture("CompactTooltip.png");
@@ -188,15 +203,23 @@ public partial class CompactUiChecks : Node3D
                 var panel = Find<PanelContainer>(ui, "ManagementPanel");
                 Check(panel.GetGlobalRect().Size.X <= GetViewport().GetVisibleRect().Size.X + 1
                     && panel.GetGlobalRect().End.Y <= GetViewport().GetVisibleRect().Size.Y + 1, "Management bounds stay within viewport");
-                var researchTable = Find<GridContainer>(ui, "EquipmentResearchTable");
-                Check(researchTable.Columns == 4, "Research preserves fixed item and rank columns");
-                Check(researchTable.GetChild<Label>(0).Size.Y < 32 && researchTable.GetChild<Label>(0).Size.X >= 136,
-                    "Research column headings have readable non-collapsed widths");
-                var rankTwo = Find<UiTile>(ui, "Order_equipment-energy-shield-2");
-                var rankThree = Find<UiTile>(ui, "Order_equipment-energy-shield-3");
-                Check(rankTwo.GetGlobalRect().Position.Y == rankThree.GetGlobalRect().Position.Y
-                    && rankTwo.GetGlobalRect().End.X <= rankThree.GetGlobalRect().Position.X,
-                    "Equipment ranks remain aligned horizontally within each item row");
+                var shipTab = tabs.GetChild(3); var researchTable = Find<GridContainer>(shipTab, "TierGrid_1");
+                Check(researchTable.Columns == 4 && researchTable.GetChildCount() == 4, "Ship rows contain four upgrade types instead of rank columns");
+                for (int tab = 0; tab < 4; tab++)
+                {
+                    tabs.CurrentTab = tab; await Frames(2);
+                    for (int tier = 1; tier <= 5; tier++)
+                    {
+                        var row = Find<GridContainer>(tabs.GetChild(tab), $"TierGrid_{tier}");
+                        var cells = row.GetChildren().OfType<VBoxContainer>().Select(cell => cell.GetChild<UiTile>(0)).ToArray();
+                        Check(cells.All(tile => Mathf.Abs(tile.GetGlobalRect().Position.Y - cells[0].GetGlobalRect().Position.Y) < 1)
+                            && cells.Last().GetGlobalRect().End.X <= panel.GetGlobalRect().End.X,
+                            "Tier row columns remain aligned inside management bounds");
+                    }
+                }
+                tabs.CurrentTab = 3; ((ScrollContainer)tabs.GetChild(3)).ScrollVertical = 0; await Frames(2);
+                Check(Find<UiTile>(ui, "Order_particle-beam").Disabled && Find<UiTile>(ui, "Order_particle-beam").TooltipText.Contains("not yet playable"),
+                    "Future content is visibly pending and cannot take payment");
                 if (DisplayServer.GetName() != "headless") await Capture($"CompactUi{size.X}.png");
                 ui.SetOpen(false);
             }

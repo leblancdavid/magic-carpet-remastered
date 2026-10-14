@@ -31,9 +31,9 @@ public partial class FactionBase : StaticBody3D
     public int Tier { get; private set; } = 1;
     public int HighestPurchasedTier { get; private set; } = 1;
     public BaseConstruction Construction { get; private set; } = null!;
-    public float EnergyRechargeMultiplier => Construction.IsEffectActive("energy-grid") ? 1.25f : 1;
-    public float CollectorSpeedMultiplier => Construction.IsEffectActive("collector-drive") ? 1.25f : 1;
-    public float EffectiveRepairHealthPerSecond => RepairHealthPerSecond * (Construction.IsEffectActive("repair-matrix") ? 1.5f : 1);
+    public float EnergyRechargeMultiplier => 1 + 0.15f * Construction.UpgradeRank("energy-grid", true);
+    public float CollectorSpeedMultiplier => 1 + 0.15f * Construction.UpgradeRank("collector-drive", true);
+    public float EffectiveRepairHealthPerSecond => RepairHealthPerSecond * (1 + 0.25f * Construction.UpgradeRank("repair-matrix", true));
     public long RefundedAntimatter { get; private set; }
     public long InvestmentSpilledAntimatter { get; private set; }
     public long NetCommittedAntimatter => SpentAntimatter - RefundedAntimatter - InvestmentSpilledAntimatter;
@@ -50,6 +50,7 @@ public partial class FactionBase : StaticBody3D
     private float _secondsSinceHit;
     private float _repairAccumulator;
     private int _healthPerTier = 400;
+    private BaseDefense _defense = null!;
 
     private StandardMaterial3D _baseMaterial = null!;
     private StandardMaterial3D _towerMaterial = null!;
@@ -69,6 +70,8 @@ public partial class FactionBase : StaticBody3D
         BaseProjectCatalog.Register(Construction);
         StoredAntimatter = Mathf.Clamp(InitialStoredAntimatter, 0, EffectiveStorageCapacity);
         BuildBaseVisuals();
+        _defense = new BaseDefense { Name = "BaseDefense" };
+        AddChild(_defense);
         UpdateEconomy();
     }
 
@@ -180,27 +183,7 @@ public partial class FactionBase : StaticBody3D
             minimumRadius: 6, name: "ConstructionInvestmentSpill");
     }
 
-    public string ProjectUnavailableReason(string id)
-    {
-        if (id != "strike-drone") return string.Empty;
-        var target = GetTree().GetFirstNodeInGroup(IsPlayerBase ? "enemy_base" : "player_base") as FactionBase;
-        return target == null || target.IsDestroyed || target.IsQueuedForDeletion() ? "No surviving rival base" : string.Empty;
-    }
-
-    internal void ApplyProjectCompletion(string id)
-    {
-        if (id != "strike-drone") return;
-        var target = GetTree().GetFirstNodeInGroup(IsPlayerBase ? "enemy_base" : "player_base") as FactionBase;
-        if (target == null || target.IsDestroyed || target.IsQueuedForDeletion()) return;
-        var arena = GetTree().GetFirstNodeInGroup("heightmap_arena") as HeightmapArena;
-        Vector3 start = GlobalPosition + GlobalBasis.X * 8 + GlobalBasis.Y * 4;
-        var drone = new BaseStrikeDrone { Name = "BaseStrikeDrone", Target = target, Position = GetParent<Node3D>().ToLocal(start),
-            IsPlayerOwned = IsPlayerBase };
-        GetParent().AddChild(drone);
-        if (arena != null) drone.GlobalPosition = arena.OnSurface(start, 6);
-    }
-
-    public void ApplyDamage(int amount)
+    public void ApplyDamage(int amount, Node3D? attacker = null)
     {
         if (amount <= 0 || IsDestroyed)
         {
@@ -208,6 +191,9 @@ public partial class FactionBase : StaticBody3D
         }
 
         int previousTier = Tier;
+        _defense.NotifyAttack(attacker);
+        int armorRank = Construction.UpgradeRank("base-armor", true);
+        if (armorRank > 0) amount = Mathf.Max(1, Mathf.RoundToInt(amount * (1 - 0.05f * (armorRank + 1))));
         Health = Mathf.Max(0, Health - amount);
         Tier = Health == 0 ? 0 : Mathf.Min(Tier, (Health - 1) / _healthPerTier + 1);
         MaxHealth = Mathf.Max(_healthPerTier, Tier * _healthPerTier);

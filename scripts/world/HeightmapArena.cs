@@ -90,6 +90,7 @@ public partial class HeightmapArena : Node3D
         else Orient(body);
     }
     public void RefreshPlanetDetail() => _planet?.RefreshDetail();
+    public void CompleteInitialPlanetDetail() => _planet?.CompleteInitialDetail();
     public void PreparePlanetLayout(PlanetLayout layout)
     {
         _planet?.PrepareLayout(layout);

@@ -98,7 +98,7 @@ public partial class RivalFactionChecks : Node3D
                 Check(enemy.Construction.TryStartNextTier(out _), "Rival tier requires a paid project"); enemy.Construction.Advance(60);
                 enemy.DepositAntimatter(1000);
                 int beforeOrder = enemy.StoredAntimatter;
-                Check(ai.TryOrderProject("equipment-energy-shield-1") && enemy.StoredAntimatter == beforeOrder - 60,
+                Check(ai.TryOrderProject("equipment-energy-shield-1") && enemy.StoredAntimatter == beforeOrder - 40,
                     "AI orders use ordinary research payment and prerequisites");
                 enemy.Construction.Advance(60);
                 Check(rival.GetOwnedEquipmentRank("energy-shield") == 1 && rival.GetEquipmentRank("energy-shield") == 0,
@@ -114,7 +114,9 @@ public partial class RivalFactionChecks : Node3D
                 enemy.WithdrawAntimatter(1000); enemy.DepositAntimatter(20);
                 Check(!ai.TryOrderProject("collector-drive") && enemy.StoredAntimatter == 20, "AI research policy retains its minimum energy storage reserve");
                 enemy.DepositAntimatter(1000);
-                Check(ai.TryOrderProject("equipment-guardian-drone-1"), "Rival can research the same guardian equipment"); enemy.Construction.Advance(60);
+                Check(!ai.TryOrderProject("equipment-guardian-drone-1"), "Guardian now requires tier IV for either faction");
+                enemy.TryCompleteTierUpgrade(3); enemy.TryCompleteTierUpgrade(4); enemy.DepositAntimatter(1000);
+                Check(ai.TryOrderProject("equipment-guardian-drone-1"), "Rival can research the same tier-IV guardian equipment"); enemy.Construction.Advance(100);
                 rival.GlobalPosition = Point(10); rival.TryInstallEquipment("guardian-drone", 3, out _); rival._PhysicsProcess(100);
                 player.GlobalPosition = Point(25); rival.SetAutonomousControls(Vector3.Zero, player.GlobalPosition - rival.AimOrigin);
                 rival.TryActivateEquipmentSlot(3); var guardian = room.GetChildren().OfType<GuardianDrone>().Single(); guardian.SetPhysicsProcess(false);

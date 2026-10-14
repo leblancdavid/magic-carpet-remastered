@@ -21,6 +21,7 @@ public sealed record MapMarker(Vector3 Up, string Title, MapMarkerKind Kind, Col
         if (Actor is EnemyEcosystemEnemy enemy && enemy.Health <= 0) return false;
         if (Actor is ShipFlightController { IsPlayerControlled: false, Health: <= 0 }) return false;
         if (Actor is CollectorDrone drone && drone.Health <= 0) return false;
+        if (Actor is BaseTacticalDrone { Health: <= 0 } or BaseStrikeDrone { Health: <= 0 } or Equipment.GuardianDrone { Health: <= 0 }) return false;
         if (Actor is EquipmentDiscovery discovery && discovery.IsCollected) return false;
         if (Actor is ExplorationWreck wreck && wreck.IsCollected) return false;
         up = arena.UpAt(Actor.GlobalPosition);
@@ -44,6 +45,15 @@ public partial class WorldNavigation : Node
     private readonly List<MapMarker> _markers = new();
     private Vector3 _homeUp = Vector3.Up;
     private readonly Dictionary<ulong, Vector3> _discoveredBases = new();
+    private readonly Dictionary<ulong, Vector3> _discoveredPoints = new();
+    public void DiscoverPoint(StrategicPoint point)
+    {
+        if (GodotObject.IsInstanceValid(point) && !point.IsQueuedForDeletion()) _discoveredPoints[point.GetInstanceId()] = Arena.UpAt(point.GlobalPosition);
+    }
+    public bool IsKnownTarget(Node3D target) => target is FactionBase { IsPlayerBase: true }
+        || target is StrategicPoint { Ownership: AntimatterOwnership.Player } || Nearby(target)
+        || target is FactionBase && _discoveredBases.ContainsKey(target.GetInstanceId())
+        || target is StrategicPoint && _discoveredPoints.ContainsKey(target.GetInstanceId());
     private float _timer;
 
     public override void _Ready()
@@ -113,11 +123,20 @@ public partial class WorldNavigation : Node
                     hub.IsDestroyed ? "Ruins" : $"{hub.Health} HP · {hub.StoredAntimatter} antimatter", true);
             }
         foreach (Node node in GetTree().GetNodesInGroup("strategic_point"))
-            if (node is StrategicPoint point && !point.IsQueuedForDeletion() && (point.Ownership == AntimatterOwnership.Player || Nearby(point)))
+            if (node is StrategicPoint point && !point.IsQueuedForDeletion())
+            {
+                if (Nearby(point) || point.Ownership == AntimatterOwnership.Player) DiscoverPoint(point);
+                else
+                {
+                    if (_discoveredPoints.TryGetValue(point.GetInstanceId(), out var up))
+                        _markers.Add(new MapMarker(up, "Capture point · discovered location", MapMarkerKind.StrategicPoint, Colors.Gray) { AlwaysVisible = true });
+                    continue;
+                }
                 Add(point, point.StatusText.Replace('\n', ' '), MapMarkerKind.StrategicPoint,
                     point.IsContested ? Colors.Orange : point.Ownership == AntimatterOwnership.Player ? new Color(0.15f, 0.85f, 1)
                     : point.Ownership == AntimatterOwnership.Enemy ? new Color(1, 0.25f, 0.3f) : Colors.LightGray,
                     alwaysVisible: point.Ownership == AntimatterOwnership.Player);
+            }
         foreach (Node node in GetTree().GetNodesInGroup("world_landmark"))
         {
             if (node is not WorldLandmark landmark || landmark.IsQueuedForDeletion()) continue;
@@ -155,8 +174,14 @@ public partial class WorldNavigation : Node
         {
             if (node is not CollectorDrone drone || drone.IsQueuedForDeletion() || drone.Health <= 0 || !Nearby(drone)) continue;
             Add(drone, drone.UsePlayerAntimatter ? "Your drone" : "Rival drone", MapMarkerKind.Drone,
-                drone.UsePlayerAntimatter ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.3f, 0.4f), $"{drone.CarriedCount} cargo objects");
+                drone.UsePlayerAntimatter ? new Color(0.15f, 0.85f, 1) : new Color(1, 0.3f, 0.4f), $"{drone.CarriedAntimatter} A cargo");
         }
+        foreach (string group in new[] { "base_tactical_drone", "base_strike_drone", "guardian-drone" })
+            foreach (Node node in GetTree().GetNodesInGroup(group))
+                if (node is Node3D drone && !drone.IsQueuedForDeletion() && Nearby(drone))
+                    Add(drone, drone is BaseTacticalDrone tactical ? $"{tactical.Role} drone · {tactical.Health} HP"
+                        : drone is BaseStrikeDrone ? "Strike drone" : "Guardian drone",
+                        MapMarkerKind.Drone, Equipment.FactionCombat.OwnershipOf(drone) == AntimatterOwnership.Player ? Colors.Cyan : Colors.OrangeRed);
         foreach (Node node in GetTree().GetNodesInGroup("ecosystem_enemy"))
             if (node is EnemyEcosystemEnemy enemy && !enemy.IsQueuedForDeletion() && enemy.Health > 0 && Nearby(enemy))
                 Add(enemy, enemy.RoleText, MapMarkerKind.Enemy, enemy.Role == EnemyEcosystemEnemy.EnemyRole.RivalShip ? new Color(1, 0.25f, 0.5f) : Colors.Black, enemy.BehaviorText);
@@ -174,6 +199,7 @@ public partial class WorldNavigation : Node
         if (marker.Actor is StrategicPoint point)
             return point.Ownership == AntimatterOwnership.Player || Nearby(point);
         if (marker.Kind == MapMarkerKind.RivalBase) return true;
+        if (marker.Kind == MapMarkerKind.StrategicPoint && marker.Actor == null && marker.AlwaysVisible) return true;
         return Arena.PlanetRadius * Mathf.Acos(Mathf.Clamp(Arena.UpAt(Player.GlobalPosition).Dot(up), -1, 1)) <= LocalRevealRange;
     }
 

@@ -17,7 +17,7 @@ public partial class SimpleMonster : CharacterBody3D
     [Export] public float RangedAttackMaxDistance { get; set; } = 24.0f;
     [Export] public float RangedAttackCooldownSeconds { get; set; } = 2.4f;
     [Export] public float RangedAttackWindupSeconds { get; set; } = 0.45f;
-    [Export] public int AntimatterDroppedOnDeath { get; set; } = 15;
+    [Export] public int AntimatterDroppedOnDeath { get; set; } = 30;
     [Export] public float AntimatterContestRadius { get; set; } = 14.0f;
     [Export] public float AntimatterContestIntervalSeconds { get; set; } = 1.0f;
     [Export] public int AntimatterContestAmount { get; set; } = 4;
@@ -136,7 +136,7 @@ public partial class SimpleMonster : CharacterBody3D
 
         int amount = _antimatterReserve;
         _antimatterReserve = 0;
-        AntimatterScatter.Spawn(GetParent(), GlobalPosition, amount, name: "DroppedAntimatter");
+        AntimatterScatter.Spawn(GetParent(), GlobalPosition, amount, name: "DroppedAntimatter", mobDrop: true);
     }
 
     private void SpawnDeathBurst()

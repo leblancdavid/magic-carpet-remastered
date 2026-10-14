@@ -192,6 +192,9 @@ public partial class CombatPerformanceChecks : Node3D
             AddChild(arena);
             var terrain = arena.GetChildren().OfType<PlanetTerrain>().Single();
             Vector3 point = arena.PlanetCenter + Vector3.Up * 500;
+            // Isolate deformation timing from the minimum seabed-height clamp.
+            arena.FlattenTerrain(point, 12, arena.WaterHeight + 3);
+            while (terrain.PendingPatchCount > 0) terrain._Process(0);
             float before = arena.HeightAt(point);
             timer.Restart();
             arena.ApplyCrater(point, 4.5f, 2);

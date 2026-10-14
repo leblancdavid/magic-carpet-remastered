@@ -102,7 +102,7 @@ public partial class AntimatterLoopChecks : Node3D
         var player = AddActor(new ShipFlightController());
         player.GlobalPosition = new Vector3(100, 20, 100);
         var hub = AddActor(new FactionBase { InitialStoredAntimatter = 0 });
-        var drone = AddActor(new CollectorDrone { CarryCapacity = 2 });
+        var drone = AddActor(new CollectorDrone { CarryCapacity = 30 });
         drone.GlobalPosition = new Vector3(8, 4.5f, 0);
         var first = AddActor(new AntimatterPickup { Ownership = AntimatterOwnership.Player, AntimatterAmount = 8 });
         first.GlobalPosition = new Vector3(8, 0, 0);
@@ -130,15 +130,15 @@ public partial class AntimatterLoopChecks : Node3D
         total = tracker.TotalAntimatter;
         Invoke(drone, "DepositAll");
         tracker.Refresh();
-        Check(hub.StoredAntimatter == hub.AntimatterStorageCapacity && partial.AntimatterAmount == 6, "Partial hub deposit removes accepted amount");
-        Check(partial.IsCarried && partial.Ownership == AntimatterOwnership.Player && drone.CarriedCount == 1, "Partial delivery retains owned cargo while full");
+        Check(hub.StoredAntimatter == hub.AntimatterStorageCapacity && drone.CarriedAntimatter == 6, "Partial hub deposit removes accepted amount");
+        Check(partial.AntimatterAmount == 0 && drone.CarriedAntimatter == 6, "Partial delivery retains internal cargo while full");
         Check(tracker.TotalAntimatter == total, "Partial hub deposit conserves antimatter");
 
         var waiting = AddActor(new AntimatterPickup { Ownership = AntimatterOwnership.Player, AntimatterAmount = 3 });
         Invoke(drone, "Scoop", waiting);
         Check(!waiting.IsCarried, "Full storage prevents another scoop");
         Invoke(drone, "DepositAll");
-        Check(partial.AntimatterAmount == 6 && drone.CarriedCount == 1, "Repeated full deposits preserve cargo");
+        Check(drone.CarriedAntimatter == 6, "Repeated full deposits preserve cargo");
         Check(hub.TrySpendAntimatter(6), "Payment opens storage room");
         Invoke(drone, "DepositAll");
         Check(partial.AntimatterAmount == 0 && drone.CarriedCount == 0 && hub.StoredAntimatter == hub.AntimatterStorageCapacity,
@@ -160,7 +160,7 @@ public partial class AntimatterLoopChecks : Node3D
         var tracker = AddActor(new WorldAntimatterTracker());
         int total = tracker.TotalAntimatter;
         orb._PhysicsProcess(1.0 / 60);
-        Check(orb.GlobalPosition.Y < drone.GlobalPosition.Y, "Cargo sits below drone mesh");
+        Check(orb.AntimatterAmount == 0 && drone.CarriedAntimatter == 17, "Cargo is internal rather than visible hanging spheres");
         drone.ApplyDamage(drone.MaxHealth);
         tracker.Refresh();
         Check(orb.AntimatterAmount == 0 && orb.IsQueuedForDeletion() && drone.CarriedCount == 0, "Pop consumes cargo exactly once for fragmentation");
@@ -186,7 +186,7 @@ public partial class AntimatterLoopChecks : Node3D
         var cargo = AddActor(new AntimatterPickup { AntimatterAmount = withdrawn });
         tracker.Refresh();
         Check(withdrawn == 15 && player.EnergyCapacity == 45 && tracker.TotalAntimatter == 120, "Withdrawal lowers energy limit while transferred physical antimatter stays accounted");
-        var drone = AddActor(new CollectorDrone { CarryCapacity = 1 });
+        var drone = AddActor(new CollectorDrone { CarryCapacity = 30 });
         cargo.ReassignOwnership(AntimatterOwnership.Player);
         Invoke(drone, "Scoop", cargo);
         Invoke(drone, "DepositAll");
@@ -212,7 +212,7 @@ public partial class AntimatterLoopChecks : Node3D
         bolt.GlobalPosition = spill.GlobalPosition;
         bolt.Launch(Vector3.Right);
         bolt._PhysicsProcess(0.1);
-        Check(spill.Ownership == AntimatterOwnership.Player && bolt.IsQueuedForDeletion(), "Actual claim bolt can reclaim a hub spill");
+        Check(spill.Ownership == AntimatterOwnership.Player && !bolt.IsQueuedForDeletion(), "Actual claim bolt can reclaim a hub spill and continue");
         Invoke(drone, "Scoop", spill);
         Invoke(drone, "DepositAll");
         tracker.Refresh();
@@ -310,7 +310,7 @@ public partial class AntimatterLoopChecks : Node3D
         Check(pilot.AntimatterReserve == 0 && hub.StoredAntimatter == 19, "Pilot docks after collection cooldown");
         pilot.GlobalPosition = new Vector3(100, 0, 0);
 
-        var thief = AddActor(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.AntimatterThief });
+        var thief = AddActor(new EnemyEcosystemEnemy { Role = EnemyEcosystemEnemy.EnemyRole.AntimatterThief, NeutralAntimatterValue = 0 });
         var owned = AddActor(new AntimatterPickup { Ownership = AntimatterOwnership.Player, AntimatterAmount = 15 });
         thief._PhysicsProcess(0.01);
         thief._PhysicsProcess(thief.AttackCooldownSeconds + 0.01);
@@ -413,17 +413,17 @@ public partial class AntimatterLoopChecks : Node3D
         bolt.AntimatterClaimed += amount => claimed += amount;
         bolt._PhysicsProcess(0.3);
         tracker.Refresh();
-        Check(near.Ownership == AntimatterOwnership.Player && near.AntimatterAmount == 17 && claimed == 17, "Swept hit claims first rival globe without consuming its antimatter");
-        Check(farther.Ownership == AntimatterOwnership.Neutral && offPath.Ownership == AntimatterOwnership.Neutral && carried.Ownership == AntimatterOwnership.Neutral, "Bolt ignores off-path/carried globes and stops at first hit");
-        Check(bolt.IsQueuedForDeletion() && tracker.TotalAntimatter == total && tracker.PlayerControlledAntimatter == playerTotal + 17, "Claim conserves world antimatter and terminates bolt");
+        Check(near.Ownership == AntimatterOwnership.Player && near.AntimatterAmount == 17 && claimed == 26, "Swept hits claim both rival and neutral globes without consuming antimatter");
+        Check(farther.Ownership == AntimatterOwnership.Player && offPath.Ownership == AntimatterOwnership.Neutral && carried.Ownership == AntimatterOwnership.Neutral, "Bolt penetrates resources but ignores off-path/carried globes");
+        Check(!bolt.IsQueuedForDeletion() && tracker.TotalAntimatter == total && tracker.PlayerControlledAntimatter == playerTotal + 26, "Claim conserves world antimatter and continues after impact");
         bolt._PhysicsProcess(0.3);
-        Check(claimed == 17, "Claim cannot repeat after impact");
+        Check(claimed == 26, "Already claimed spheres cannot repeat credit");
 
         bolt = AddActor(new ClaimProjectile());
         bolt.GlobalPosition = new Vector3(7, 0.9f, 0);
         bolt.Launch(Vector3.Right);
         bolt._PhysicsProcess(0.1);
-        Check(farther.Ownership == AntimatterOwnership.Player && bolt.IsQueuedForDeletion(), "Neutral globe is also claimable by bolt impact");
+        Check(farther.Ownership == AntimatterOwnership.Player && !bolt.IsQueuedForDeletion(), "Already owned globe never blocks a new Claim sweep");
 
         bolt = AddActor(new ClaimProjectile { MaxRange = 3 });
         bolt.GlobalPosition = new Vector3(0, 10, -10);

@@ -15,8 +15,8 @@ public partial class EnemyEcosystemDirector : Node
     [Export] public int GenerationSeed { get; set; }
     private readonly RandomNumberGenerator _random = new();
     public override void _ExitTree() => _random.Dispose();
-    [Export] public float SpawnIntervalSeconds { get; set; } = 5;
-    [Export] public float ReplenishDelaySeconds { get; set; } = 20;
+    [Export] public float SpawnIntervalSeconds { get; set; } = 8;
+    [Export] public float ReplenishDelaySeconds { get; set; } = 35;
     [Export] public int MaxActiveEnemies { get; set; } = 24;
     [Export] public int InitialWaveCount { get; set; } = 24;
     [Export] public int MaximumPerHabitat { get; set; } = 10;
@@ -270,8 +270,8 @@ public partial class EnemyEcosystemDirector : Node
             landOnly: habitat.Site == null && role != EnemyEcosystemEnemy.EnemyRole.FlyingSwarm)) return false;
         GetParent().AddChild(new EnemyEcosystemEnemy { Name = $"{role}Enemy", Role = role,
             Position = GetParent<Node3D>().ToLocal(position), HabitatPosition = habitat.Position, HabitatId = habitat.Id,
-            IsHeavy = habitat.Heavy, WanderSeed = unchecked((int)_random.Randi()), NeutralAntimatterValue = habitat.Heavy ? 36 : role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm ? 3
-                : role == EnemyEcosystemEnemy.EnemyRole.GroundBeast ? 18 : 10 });
+            IsHeavy = habitat.Heavy, WanderSeed = unchecked((int)_random.Randi()), NeutralAntimatterValue = habitat.Heavy ? 72 : role == EnemyEcosystemEnemy.EnemyRole.FlyingSwarm ? 6
+                : role == EnemyEcosystemEnemy.EnemyRole.GroundBeast ? 36 : 20 });
         RefreshCounts();
         int population = HabitatPopulation(habitat);
         _lastPopulation[habitat.Id] = population;

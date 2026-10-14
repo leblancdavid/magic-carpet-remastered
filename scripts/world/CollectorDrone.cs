@@ -1,7 +1,6 @@
 using Godot;
 using MagicCarpetRemastered.Scripts.Audio;
 using MagicCarpetRemastered.Scripts.Equipment;
-using System.Collections.Generic;
 
 namespace MagicCarpetRemastered.Scripts.World;
 
@@ -17,7 +16,7 @@ public partial class CollectorDrone : Node3D
     [Export] public bool UsePlayerAntimatter { get; set; } = true;
     [Export] public float MoveSpeed { get; set; } = 10.0f;
     [Export] public float ScoopRadius { get; set; } = 2.2f;
-    [Export] public int CarryCapacity { get; set; } = 3;
+    [Export] public int CarryCapacity { get; set; } = 30;
     [Export] public float HomeRadius { get; set; } = 1.8f;
     [Export] public float MaxSeekRadius { get; set; } = 46.0f;
     [Export] public float DockDelaySeconds { get; set; } = 0.6f;
@@ -26,7 +25,14 @@ public partial class CollectorDrone : Node3D
 
     public int Health { get; private set; }
     public bool StationSuspended { get; set; }
-    public int CarriedCount => _carried.Count;
+    public bool Retiring { get; set; }
+    public int CarriedAntimatter { get; private set; }
+    public int EffectiveCarryCapacity => CarryCapacity + 10 * (_base?.Construction.UpgradeRank("cargo-compression", true) ?? 0);
+    public float EffectiveScoopRadius => ScoopRadius * (1 + 0.25f * (_base?.Construction.UpgradeRank("scoop-array", true) ?? 0));
+    public float EffectiveDockDelay => DockDelaySeconds * (1 - 0.2f * (_base?.Construction.UpgradeRank("dock-automation", true) ?? 0));
+    // Legacy diagnostics use this only as an empty/loaded flag. Cargo is AM,
+    // not a collection of attached physical objects.
+    public int CarriedCount => CarriedAntimatter > 0 ? 1 : 0;
 
     public bool TransferTo(FactionBase destination)
     {
@@ -35,8 +41,6 @@ public partial class CollectorDrone : Node3D
         UsePlayerAntimatter = destination.IsPlayerBase;
         AddToGroup(UsePlayerAntimatter ? "player_drone" : "enemy_drone");
         _base = destination;
-        foreach (var pickup in _carried)
-            pickup.ReassignOwnership(UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy);
         _homeAnchor = destination.GlobalPosition;
         _homeAnchorSet = true;
         _dockTimer = 0;
@@ -47,7 +51,6 @@ public partial class CollectorDrone : Node3D
     }
 
     private DroneState _state = DroneState.Seeking;
-    private readonly List<AntimatterPickup> _carried = new();
     private FactionBase? _base;
     private StandardMaterial3D _material = null!;
     private float _dockTimer;
@@ -93,6 +96,12 @@ public partial class CollectorDrone : Node3D
             return;
         }
 
+        if (Retiring)
+        {
+            if (CarriedAntimatter == 0) { QueueFree(); return; }
+            _state = DroneState.Returning;
+        }
+
         switch (_state)
         {
             case DroneState.Seeking:
@@ -119,6 +128,7 @@ public partial class CollectorDrone : Node3D
             return;
         }
 
+        amount = Mathf.Max(1, Mathf.RoundToInt(amount * (1 - 0.15f * (_base?.Construction.UpgradeRank("collector-armor", true) ?? 0))));
         Health = Mathf.Max(0, Health - amount);
         GameAudio.Instance?.PlayHit();
         UpdateHealthColor();
@@ -163,7 +173,7 @@ public partial class CollectorDrone : Node3D
         {
             Vector3 scoopPosition = best.GlobalPosition + (_arena?.UpAt(best.GlobalPosition) ?? Vector3.Up) * HoverHeight;
             MoveToward(scoopPosition, delta);
-            if (GlobalPosition.DistanceTo(scoopPosition) <= ScoopRadius)
+            if (GlobalPosition.DistanceTo(scoopPosition) <= EffectiveScoopRadius)
             {
                 Scoop(best);
             }
@@ -184,17 +194,15 @@ public partial class CollectorDrone : Node3D
     private void Scoop(AntimatterPickup pickup)
     {
         if (_base == null || _base.IsDestroyed || _base.AvailableStorage == 0
-            || CarriedCount >= CarryCapacity || !pickup.IsAvailable
+            || CarriedAntimatter >= EffectiveCarryCapacity || !pickup.IsAvailable
             || pickup.Ownership != (UsePlayerAntimatter ? AntimatterOwnership.Player : AntimatterOwnership.Enemy))
         {
             return;
         }
 
-        Vector3 offset = new Vector3((CarriedCount - 1) * 1.0f, -1.7f, 0.0f);
-        pickup.BeginCarry(this, offset);
-        _carried.Add(pickup);
+        CarriedAntimatter += pickup.TakeAntimatter(Mathf.Min(pickup.AntimatterAmount, EffectiveCarryCapacity - CarriedAntimatter));
 
-        if (CarriedCount >= CarryCapacity)
+        if (CarriedAntimatter >= EffectiveCarryCapacity)
         {
             _state = DroneState.Returning;
         }
@@ -213,7 +221,7 @@ public partial class CollectorDrone : Node3D
         if (GlobalPosition.DistanceTo(dockPosition) <= HomeRadius)
         {
             DepositAll();
-            _dockTimer = DockDelaySeconds;
+            _dockTimer = EffectiveDockDelay;
             _state = DroneState.Docked;
         }
     }
@@ -224,26 +232,13 @@ public partial class CollectorDrone : Node3D
         {
             return;
         }
-        for (int i = _carried.Count - 1; i >= 0; i--)
-        {
-            AntimatterPickup pickup = _carried[i];
-            int accepted = _base.DepositAntimatter(pickup.AntimatterAmount);
-            pickup.TakeAntimatter(accepted);
-            // Retain owned cargo at home until room opens; never neutralize or
-            // repeatedly re-scoop capacity overflow.
-            if (pickup.AntimatterAmount == 0) _carried.RemoveAt(i);
-        }
+        CarriedAntimatter -= _base.DepositAntimatter(CarriedAntimatter);
     }
 
     private void Pop()
     {
-        int amount = 0;
-        foreach (AntimatterPickup pickup in _carried)
-        {
-            amount += pickup.TakeAntimatter(pickup.AntimatterAmount);
-        }
-
-        _carried.Clear();
+        int amount = CarriedAntimatter;
+        CarriedAntimatter = 0;
         AntimatterScatter.Spawn(GetParent(), GlobalPosition, amount, name: "DroneAntimatterSpill");
 
         var burst = new EquipmentImpactBurst

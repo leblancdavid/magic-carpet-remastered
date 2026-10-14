@@ -26,7 +26,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
     [Export] public int ContactDamage { get; set; } = 6;
     [Export] public int RangedDamage { get; set; } = 8;
     [Export] public int AntimatterReserve { get; set; } = 0;
-    [Export] public int NeutralAntimatterValue { get; set; } = 12;
+    [Export] public int NeutralAntimatterValue { get; set; } = 24;
     [Export] public float AwarenessRadius { get; set; } = 25.0f;
     [Export] public float RetaliationRadius { get; set; } = 65;
     [Export] public float DisengagementRadius { get; set; } = 85;
@@ -106,7 +106,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             AttackRadius = 3.2f; GroundClearance = 1.3f;
             foreach (Node child in GetChildren()) if (child is Node3D body) body.Scale *= 1.7f;
         }
-        if (Role is not (EnemyRole.AntimatterThief or EnemyRole.RivalShip))
+        if (Role != EnemyRole.RivalShip)
         {
             AntimatterReserve += Mathf.Max(0, NeutralAntimatterValue);
         }
@@ -309,7 +309,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             }
             if (IsRaider && IsInstanceValid(RaidTarget) && !RaidTarget!.IsDestroyed)
                 return MoveBaseAttacker(HorizontalDirectionTo(RaidTarget.GlobalPosition), HorizontalDistanceTo(RaidTarget.GlobalPosition));
-            if (Role == EnemyRole.AntimatterThief && Territory.State == NeutralTerritory.BehaviorState.Patrol && AntimatterReserve < 12)
+            if (Role == EnemyRole.AntimatterThief && Territory.State == NeutralTerritory.BehaviorState.Patrol && AntimatterReserve < NeutralAntimatterValue + 12)
             {
                 AcquireTargetOrb(preferPlayerOwned: true);
                 if (IsInstanceValid(_targetOrb) && IsEligibleOrb(_targetOrb!))
@@ -565,6 +565,17 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         {
             TryRamBase();
         }
+        else if (IsTerritorial && !IsRaider && _attackCooldown <= 0)
+        {
+            // Ordinary neutrals attack either base only on local contact; they
+            // retain their habitat rather than acquiring a global siege goal.
+            FactionBase? nearest = null;
+            float distance = AttackRadius + 4;
+            ConsiderContactBase(_playerBase, ref nearest, ref distance);
+            ConsiderContactBase(_enemyBase, ref nearest, ref distance);
+            if (nearest != null)
+            { nearest.ApplyDamage(ContactDamage, this); _attackCooldown = AttackCooldownSeconds; }
+        }
 
         TryDamagePlayerOnContact();
 
@@ -589,6 +600,15 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
         }
 
         return CanShoot(CombatTarget);
+    }
+
+    private void ConsiderContactBase(FactionBase? hub, ref FactionBase? nearest, ref float distance)
+    {
+        if (!IsInstanceValid(hub) || hub!.IsDestroyed) return;
+        float candidate = HorizontalDistanceTo(hub.GlobalPosition);
+        if (candidate > distance || Mathf.Abs((_arena?.Elevation(GlobalPosition) ?? GlobalPosition.Y)
+            - (_arena?.Elevation(hub.GlobalPosition) ?? hub.GlobalPosition.Y)) > 8) return;
+        nearest = hub; distance = candidate;
     }
 
     private bool CanShoot(Node3D? target)
@@ -643,7 +663,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
     private void TryAbsorbLooseAntimatter()
     {
-        if (IsTerritorial && (Territory?.State != NeutralTerritory.BehaviorState.Patrol || AntimatterReserve >= 12)) return;
+        if (IsTerritorial && (Territory?.State != NeutralTerritory.BehaviorState.Patrol || AntimatterReserve >= NeutralAntimatterValue + 12)) return;
         if (ShouldRetreat() || _targetOrb == null || !IsInstanceValid(_targetOrb) || !_targetOrb.IsAvailable)
         {
             return;
@@ -741,7 +761,7 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             return;
         }
 
-        RaidTarget.ApplyDamage(ContactDamage);
+        RaidTarget.ApplyDamage(ContactDamage, this);
         _attackCooldown = AttackCooldownSeconds;
     }
 
@@ -785,6 +805,9 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
 
         if (target is ShipFlightController ship) ship.ApplyDamage(ContactDamage, this);
         else if (target is EnemyEcosystemEnemy pilot) pilot.ApplyDamage(ContactDamage, this);
+        else if (target is BaseTacticalDrone drone) drone.ApplyDamage(ContactDamage);
+        else if (target is BaseStrikeDrone strike) strike.ApplyDamage(ContactDamage);
+        else if (target is GuardianDrone guardian) guardian.ApplyDamage(ContactDamage);
         _playerContactCooldown = PlayerContactCooldownSeconds;
     }
 
@@ -919,7 +942,8 @@ public partial class EnemyEcosystemEnemy : CharacterBody3D
             : AntimatterOwnership.Neutral;
         int amount = AntimatterReserve;
         AntimatterReserve = 0;
-        AntimatterScatter.Spawn(GetParent(), GlobalPosition, amount, dropOwnership, name: "EnemyAntimatterDrop");
+        AntimatterScatter.Spawn(GetParent(), GlobalPosition, amount, dropOwnership, name: "EnemyAntimatterDrop",
+            mobDrop: Role != EnemyRole.RivalShip);
     }
 
     private int GetBaseHealth()
